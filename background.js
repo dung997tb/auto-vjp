@@ -3701,6 +3701,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
   }
   if(msg.action==="aiGenerateGroupPost"){
     (async()=>{
+      // firstEmpty khai NGOÀI try: catch bên dưới đọc nó để gắn mã AI_EMPTY —
+      // khai trong try là catch chạm ReferenceError và mất luôn sendResponse.
+      let firstEmpty=false;
       try{
         if(typeof msg.prompt==="string"&&msg.prompt.includes("{language}"))msg.prompt=await withPostLanguage(msg.prompt);
         const cfg=await chrome.storage.sync.get(["aiProvider","aiApiKey","aiModel","aiCustomUrl","aiKeys"]),own=msg.aiConfig||{};
@@ -3709,7 +3712,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
         // meta-free hỏi qua tab meta.ai nên miễn kiểm tra key (repair nhiều lượt
         // nối tiếp qua hàng đợi chung nên mỗi nhóm sẽ chậm hơn API).
         if(!key&&provider!=="meta-free") throw new Error(t("bg.noKeyProv",{provider:provider}));
-        let content="",firstEmpty=false;
+        let content="";
         const background=msg.background&&typeof msg.background==="object"?msg.background:{};
         const profileContext=await getActiveStyleContext(msg.styleProfileId||"");
         const gctx=(msg.groupContext&&typeof msg.groupContext==="object")?msg.groupContext:null;
