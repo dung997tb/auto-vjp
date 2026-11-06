@@ -143,6 +143,23 @@
 
     let username = await usernameFromReplyInspect();
     if (!username) {
+      // Chốt chặn tự cứu: nếu đang ở trang gốc '/' mà tài liệu trông RỖNG
+      // (không anchor hồ sơ, không script rehydration, body gần như không
+      // có chữ) thì đây là trang gốc headless không render app — quét tiếp
+      // chỉ fail oan. Tự chuyển sang /foryou rồi KẾT THÚC instance này
+      // KHÔNG gửi báo cáo: kernel sẽ inject instance mới trên URL mới vì
+      // key guard inject gắn theo URL, instance mới quét và báo cáo như
+      // thường. Rủi ro đã cân: nếu inject lại không xảy ra, run sẽ kết
+      // thúc uncertain bởi watchdog thay vì failed — chấp nhận được so
+      // với fail oan trên trang rỗng. Chỉ áp dụng đúng 1 lần cho
+      // pathname '/' — đang ở /foryou hay trang khác thì giữ nguyên luồng.
+      const looksEmpty = !document.querySelector('a[href^="/@"]')
+        && !document.querySelector('script#__UNIVERSAL_DATA_FOR_REHYDRATION__')
+        && (document.body?.innerText || '').trim().length < 50;
+      if (looksEmpty && location.pathname === '/') {
+        location.replace('https://www.tiktok.com/foryou');
+        return;
+      }
       // Nguồn 3 (rehydration) thử TRƯỚC, nguồn 2 (anchor) dự phòng sau:
       // rehydration ở nhánh app-context > user là tín hiệu định danh chắc
       // nhất (đúng 1 uniqueId của chính mình), anchor chỉ là heuristic DOM
