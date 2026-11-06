@@ -811,6 +811,26 @@ function bindEvents() {
     await send({ action: 'autovjp.setPaused', paused: $('pausedToggle').checked });
     refresh();
   });
+
+  // (2.11.7) Ảnh mặc định khi bài không có ảnh: key storage sync
+  // `autovjpDefaultImageUrl` — helper phía trang modules/shared/
+  // default-image.js (AVJP.defaultImage) đọc trực tiếp lúc đăng; để trống
+  // = xoá key, automator dùng asset gói sẵn assets/default-preview.png.
+  chrome.storage.sync.get(['autovjpDefaultImageUrl']).then(s => {
+    $('defaultImageUrlInput').value = String(s.autovjpDefaultImageUrl || '');
+  }).catch(() => {});
+  $('defaultImageUrlInput').addEventListener('change', async () => {
+    const value = $('defaultImageUrlInput').value.trim();
+    try {
+      if (value) await chrome.storage.sync.set({ autovjpDefaultImageUrl: value });
+      else await chrome.storage.sync.remove(['autovjpDefaultImageUrl']);
+      setMessage($('defaultImageUrlResult'),
+        value ? 'Đã lưu URL ảnh mặc định.' : 'Đã xoá URL — dùng ảnh mặc định của Auto vjp.',
+        'success');
+    } catch (e) {
+      setMessage($('defaultImageUrlResult'), `Không lưu được: ${e.message || e}`, 'error');
+    }
+  });
   $('probeBtn').addEventListener('click', runProbe);
   $$('.js-probe').forEach(btn => btn.addEventListener('click', runProbe));
   $('refreshBtn').addEventListener('click', refresh);

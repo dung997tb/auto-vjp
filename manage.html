@@ -60,6 +60,11 @@
           <span>Tạm dừng nhận việc</span>
           <span class="switch-wrap"><input type="checkbox" id="pausedToggle"><span class="switch-ui" aria-hidden="true"></span></span>
         </label>
+        <div class="field">
+          <label for="defaultImageUrlInput">Ảnh mặc định khi bài không có ảnh (URL — để trống dùng ảnh mặc định của Auto vjp)</label>
+          <input type="url" id="defaultImageUrlInput" placeholder="https://… (để trống = ảnh mặc định của Auto vjp)" autocomplete="off" spellcheck="false">
+        </div>
+        <p id="defaultImageUrlResult" class="tool-result" aria-live="polite"></p>
         <button id="probeBtn" class="btn btn-soft btn-block" type="button">Chạy kiểm tra vòng đời</button>
         <p id="probeResult" class="tool-result" aria-live="polite"></p>
         <button id="nurtureBtn" class="btn btn-soft btn-block" type="button">Nuôi TikTok (phiên mẫu)</button>
