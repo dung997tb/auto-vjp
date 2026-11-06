@@ -4,9 +4,10 @@
 // accountScanUtils.sendDiscovery(context, ...) như IG/Threads. (b) Nhận diện
 // username chỉ dựa vào sự kiện reply-inspect của reply-bridge — bridge không
 // được inject trong task quét nên vòng lặp 30 lần đó vô ích; nay nhận diện đa
-// nguồn: reply-inspect (thử ngắn, phòng khi bridge có mặt) -> anchor hồ sơ
-// của chính mình trong nav/header/sidebar -> dữ liệu rehydration. Mọi đường
-// thoát đều gửi đúng 1 lần, kể cả khi lỗi — không treo im lặng.
+// nguồn: reply-inspect (thử ngắn, phòng khi bridge có mặt) -> dữ liệu
+// rehydration (nguồn định danh chắc nhất, thử trước) -> anchor hồ sơ của
+// chính mình trong nav/header/sidebar (dự phòng). Mọi đường thoát đều gửi
+// đúng 1 lần, kể cả khi lỗi — không treo im lặng.
 (async function() {
   const context = globalThis.__accountScanContext;
   const utils = globalThis.accountScanUtils;
@@ -19,9 +20,16 @@
 
   /* PURE-START: rankProfileCandidates */
   // Hàm thuần (harness test riêng được): xếp hạng ứng viên username từ danh
-  // sách mô tả anchor {username, inNav, hasAvatar, e2eHit}. Điểm: nằm trong
-  // vùng nav/header/sidebar +5, data-e2e nhắc tới profile/avatar/user +4, có
-  // img avatar +3. Hoà điểm thì ưu tiên ứng viên trong nav, rồi thứ tự gặp.
+  // sách mô tả anchor {username, inNav, hasAvatar, e2eHit, e2e}. Điểm: nằm
+  // trong vùng nav/header/sidebar +5, data-e2e chứa 'nav' (vd nav-profile)
+  // +5 — tín hiệu ngang inNav vì selector vùng nav của TikTok không phải lúc
+  // nào cũng khớp container sidebar thật, data-e2e nhắc tới profile/avatar/
+  // user +4, có img avatar +3. LOẠI HẲN ứng viên mà e2e (anchor hoặc tổ tiên
+  // gần [data-e2e]) chứa 'video-author', 'cinema-creator' hoặc 'inbox': đó
+  // là tác giả video trên feed / người nhắn tin, không bao giờ là mình — bản
+  // cũ cho video-author-avatar +4 (chứa 'avatar') +3 (img) = 7, ngang điểm
+  // anchor hồ sơ thật nên có rủi ro nhận nhầm tác giả video. Hoà điểm thì
+  // ưu tiên ứng viên trong nav, rồi thứ tự gặp.
   function rankProfileCandidates(candidates) {
     const reserved = new Set(['foryou', 'explore', 'live', 'following', 'friends', 'messages', 'setting', 'settings', 'search', 'discover', 'upload', 'tiktokstudio']);
     let best = null;
@@ -29,7 +37,12 @@
       const username = String(c?.username || '').trim().replace(/^@/, '');
       if (!/^[a-zA-Z0-9_.-]{2,24}$/.test(username)) continue;
       if (reserved.has(username.toLowerCase())) continue;
-      const score = (c.inNav ? 5 : 0) + (c.e2eHit ? 4 : 0) + (c.hasAvatar ? 3 : 0);
+      // e2e gộp: ưu tiên trường e2e/e2eText mới, tương thích ngược e2eHit cũ.
+      const e2eText = String(c.e2e || c.e2eText || '').toLowerCase();
+      if (e2eText.includes('video-author') || e2eText.includes('cinema-creator') || e2eText.includes('inbox')) continue;
+      const navHit = e2eText.includes('nav');
+      const e2eHit = Boolean(c.e2eHit) || /profile|avatar|user/.test(e2eText);
+      const score = (c.inNav ? 5 : 0) + (navHit ? 5 : 0) + (e2eHit ? 4 : 0) + (c.hasAvatar ? 3 : 0);
       if (!best || score > best.score || (score === best.score && c.inNav && !best.inNav)) {
         best = { username, score, inNav: Boolean(c.inNav) };
       }
@@ -55,6 +68,9 @@
   // Nguồn 2: anchor /@username trong DOM — chấm điểm để phân biệt liên kết
   // "Trang cá nhân" của chính mình (trong nav/sidebar) với tác giả video
   // trên feed (cũng là /@username nhưng không nằm trong vùng điều hướng).
+  // e2e gộp đủ 3 chỗ: chính anchor, phần tử con mang [data-e2e], và tổ tiên
+  // gần nhất mang [data-e2e] qua closest('[data-e2e]') — để hàm chấm điểm
+  // thấy cả 'nav-profile' lẫn các mẫu cần loại ('video-author'...).
   function collectAnchorCandidates() {
     const out = [];
     for (const anchor of document.querySelectorAll('a[href^="/@"]')) {
@@ -62,12 +78,14 @@
       const match = href.match(/^\/@([A-Za-z0-9_.-]{2,24})\/?$/);
       if (!match) continue;
       const e2eOwner = anchor.hasAttribute('data-e2e') ? anchor : anchor.querySelector('[data-e2e]');
-      const e2eText = `${anchor.getAttribute('data-e2e') || ''} ${e2eOwner?.getAttribute('data-e2e') || ''}`;
+      const e2eAncestor = anchor.closest('[data-e2e]');
+      const e2eText = `${anchor.getAttribute('data-e2e') || ''} ${e2eOwner?.getAttribute('data-e2e') || ''} ${e2eAncestor?.getAttribute('data-e2e') || ''}`;
       out.push({
         username: match[1],
         inNav: Boolean(anchor.closest('nav, header, aside, [class*="idebar"], [data-e2e="nav-bar"]')),
         hasAvatar: Boolean(anchor.querySelector('img')),
-        e2eHit: /profile|avatar|user/i.test(e2eText)
+        e2eHit: /profile|avatar|user/i.test(e2eText),
+        e2e: e2eText
       });
     }
     return out;
@@ -125,12 +143,16 @@
 
     let username = await usernameFromReplyInspect();
     if (!username) {
-      // Nguồn 2 + 3 chạy trong cửa sổ chờ còn lại (tổng nhận diện ~20 giây
-      // kể cả nguồn 1) — trang SPA cần thời gian render sidebar.
-      const deadline = Date.now() + 14000;
+      // Nguồn 3 (rehydration) thử TRƯỚC, nguồn 2 (anchor) dự phòng sau:
+      // rehydration ở nhánh app-context > user là tín hiệu định danh chắc
+      // nhất (đúng 1 uniqueId của chính mình), anchor chỉ là heuristic DOM
+      // có thể nhầm tác giả video. Ngân sách 30 giây (trước 14 giây) vì
+      // trang lạnh render sidebar/rehydration chậm — lần quét lạnh trên nuc
+      // đã fail oan dù đăng nhập sẵn. Reply-inspect ở trên giữ nguyên ngắn.
+      const deadline = Date.now() + 30000;
       while (!username && Date.now() < deadline) {
-        username = rankProfileCandidates(collectAnchorCandidates());
-        if (!username) username = usernameFromRehydration();
+        username = usernameFromRehydration();
+        if (!username) username = rankProfileCandidates(collectAnchorCandidates());
         if (!username) await sleep(700);
       }
     }
