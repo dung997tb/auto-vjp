@@ -56,6 +56,16 @@ window.moigioi_injected_personal = true;
     });
   }
 
+  // (2.11.7) Ảnh mặc định của riêng Auto vjp qua helper shared
+  // AVJP.defaultImage (contract nạp trước automator); helper vắng mặt
+  // (inject cũ) thì rơi thẳng về asset gói sẵn trong extension.
+  async function resolveDefaultImageUrl() {
+    if (window.AVJP && AVJP.defaultImage && AVJP.defaultImage.resolveDefaultImageUrl) {
+      return AVJP.defaultImage.resolveDefaultImageUrl();
+    }
+    return chrome.runtime.getURL('assets/default-preview.png');
+  }
+
   function dataURLtoFile(dataurl, filename) {
     let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
         bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
@@ -242,7 +252,7 @@ window.moigioi_injected_personal = true;
     
     if (images.length === 0) {
       addLog("⚠️ Bài không có ảnh. Áp dụng ảnh mặc định...");
-      images = ["https://moigioi.pages.dev/default-preview.png"];
+      images = [await resolveDefaultImageUrl()];
     }
 
     addLog(`Chuẩn bị nạp ${images.length} ảnh vào Extension...`);
