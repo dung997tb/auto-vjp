@@ -6,6 +6,7 @@
   console.log('[MUT-YT-Automator] Injected on', location.href);
 
   const logs = [];
+  const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   function log(msg, extra) {
     const text = extra ? `${msg} ${extra}` : msg;
     console.log('[MUT-YT-Automator]', text);
@@ -39,7 +40,7 @@
         ▶️ YouTube Automator
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;color:#cbd5e1;">
-        ${logs.slice(-8).map(l => `<div>${l}</div>`).join('')}
+        ${logs.slice(-8).map(l => `<div>${escapeHtml(l)}</div>`).join('')}
       </div>
     `;
   }
