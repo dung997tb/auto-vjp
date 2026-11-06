@@ -7,6 +7,10 @@
  *  - (2.11.9, mục 4 theo review) Fail được isFailureRetryable xếp loại thử-lại-được
  *    thì TỰ THỬ LẠI tối đa 2 lần với backoff ~60s/~300s — xem mục Retry ở cuối file.
  *    Captcha/checkpoint/chưa đăng nhập/user huỷ thì KHÔNG BAO GIỜ thử lại.
+ *  - (2.11.11) scan_account quét NGẦM tầng 1: dùng lại tab platform user đang
+ *    mở sẵn (không điều hướng, không đóng tab của user); không có thì mở tab
+ *    nền active:false trong cửa sổ đang focus — hết cảnh mỗi lần quét bật
+ *    cửa sổ mới giật focus. Các type khác giữ nguyên hành vi mở tab.
  */
 (() => {
   globalThis.AVJP = globalThis.AVJP || {};
@@ -21,11 +25,16 @@
     if (!list.includes(tabId)) await S.set({ [S.KEYS.MANAGED_TABS]: list.concat(tabId) });
   }
 
-  async function openTab(url) {
+  // opts.active mặc định true (hành vi cũ); opts.windowId có thì ghim tab
+  // vào đúng cửa sổ đó (đường quét ngầm 2.11.11 truyền active:false +
+  // windowId của cửa sổ đang focus).
+  async function openTab(url, opts = {}) {
     let lastErr = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const tab = await chrome.tabs.create({ url, active: true, pinned: false });
+        const createOpts = { url, active: opts.active !== false, pinned: false };
+        if (opts.windowId) createOpts.windowId = opts.windowId;
+        const tab = await chrome.tabs.create(createOpts);
         if (tab?.id) {
           await rememberManaged(tab.id);
           chrome.tabs.update(tab.id, { autoDiscardable: false }).catch(() => {});
@@ -62,14 +71,132 @@
       || url.includes('/challenge') || url.includes('captcha');
   }
 
+  // (2.11.11) Tìm tab DÙNG LẠI được cho scan_account: tab user đang mở sẵn
+  // thuộc đúng platform (khớp hostname), KHÔNG phải tab automation
+  // (MANAGED_TABS) và không phải trang extension. Trả null nếu không có —
+  // lỗi đọc tab cũng coi như không có để rơi xuống đường mở tab nền.
+  async function findReusableScanTab(run) {
+    try {
+      const hosts = C().PLATFORMS[run.platform]?.hosts || [];
+      if (!hosts.length) return null;
+      const managed = await S.get(S.KEYS.MANAGED_TABS);
+      const managedSet = new Set(Array.isArray(managed) ? managed.map(Number) : []);
+      const tabs = await chrome.tabs.query({});
+      return tabs.find(t => {
+        if (!t?.id || managedSet.has(t.id)) return false;
+        const tabUrl = t.url || t.pendingUrl || '';
+        if (!tabUrl || tabUrl.startsWith('chrome-extension://')) return false;
+        return hostMatches(tabUrl, hosts);
+      }) || null;
+    } catch (_) { return null; }
+  }
+
+  // (2.11.11) Mở tab quét NỀN: active:false + ghim vào cửa sổ normal đang
+  // focus gần nhất. Không lấy được cửa sổ (lỗi/không có) thì fallback
+  // create mặc định như openTab thường — vẫn active:false.
+  async function openScanTab(url) {
+    let windowId = null;
+    try {
+      const win = await chrome.windows.getLastFocused({ windowTypes: ['normal'] });
+      if (win?.id) windowId = win.id;
+    } catch (_) { /* không có cửa sổ normal -> create mặc định */ }
+    return openTab(url, { active: false, windowId });
+  }
+
   // start(run): mở tab cho canonical run đã ghi trong storage. Trả về tabId.
   async function start(run) {
     if (run.platform === 'probe') { handleProbe(run); return null; }
     const url = C().startUrl(run);
     if (!url) throw new Error(`Không có URL khởi chạy cho ${run.platform}/${run.type}`);
+    // (2.11.11) scan_account — quét ngầm tầng 1: dùng lại tab platform user
+    // đang mở sẵn nếu có. Tab dùng lại KHÔNG vào MANAGED_TABS nên outbox
+    // không đóng tab của user khi quét xong; cũng KHÔNG điều hướng nó —
+    // trang đang đứng ở đâu quét ở đó. Tab chưa load xong thì để nhánh
+    // onUpdated inject khi complete như thường.
+    if (run.type === 'scan_account') {
+      const reuse = await findReusableScanTab(run);
+      if (reuse) {
+        await S.touchRun({ tabId: reuse.id, phase: 'acting' });
+        if (reuse.status === 'complete') {
+          // Ghi key guard TRƯỚC như nhánh onUpdated vẫn làm cho type khác
+          // nurture, tránh onUpdated bắn sau đó inject trùng cùng tab/run.
+          const key = `${reuse.id}|${run.run_id}|${reuse.url}`;
+          if (!injected.has(key)) {
+            injected.add(key);
+            await injectForRun(reuse.id, run, reuse.url);
+          }
+        }
+        // Tab lúc chụp snapshot còn 'loading' mà complete ngay trước khi
+        // touchRun ghi tabId thì onUpdated vẫn trượt — driveInject canh nốt.
+        driveInject(reuse.id, run).catch(() => {});
+        return reuse.id;
+      }
+      const tab = await openScanTab(url);
+      await S.touchRun({ tabId: tab.id, phase: 'acting' });
+      driveInject(tab.id, run).catch(() => {});
+      return tab.id;
+    }
     const tab = await openTab(url);
     await S.touchRun({ tabId: tab.id, phase: 'acting' });
+    driveInject(tab.id, run).catch(() => {});
     return tab.id;
+  }
+
+  // (2.11.11) Tự lái inject sau start — vá 2 kiểu treo đã tái hiện trong
+  // lab: (a) "cuộc đua complete" — tab tải xong TRƯỚC khi touchRun kịp ghi
+  // tabId thì onUpdated 'complete' bị bỏ qua (run.tabId chưa khớp) và trang
+  // SPA không sinh thêm sự kiện nào → run treo tới watchdog; (b) trang nặng
+  // (TikTok) giữ status 'loading' cả phút dù DOM đã dùng được — chờ
+  // 'complete' là chờ vô ích. Vòng này (fire-and-forget, start() không chờ)
+  // tự canh tab trong 90s: run còn sống thì còn canh; URL đúng host +
+  // complete → inject qua injectForRun như thường; URL đúng host + vẫn
+  // loading nhưng ổn định ≥6s → inject THỬ kiểu quiet (lỗi do redirect
+  // giữa chừng thì nuốt, canh tiếp — không deliver failed oan); URL đổi
+  // sang địa chỉ đúng host khác chưa inject → inject tiếp (redirect sau
+  // inject sớm). Mọi inject đều qua key guard chung với onUpdated nên
+  // không trùng; trang đăng nhập/checkpoint ở trạng thái complete thì
+  // deliver failed như nhánh onUpdated.
+  async function driveInject(tabId, run) {
+    const hosts = C().PLATFORMS[run.platform]?.hosts || [];
+    const deadline = Date.now() + 90000;
+    let stableUrl = '';
+    let stablePolls = 0;
+    while (Date.now() < deadline) {
+      const fresh = await S.getRun();
+      if (!fresh || String(fresh.task_id) !== String(run.task_id)) return;
+      let tab = null;
+      try { tab = await chrome.tabs.get(tabId); } catch (_) { return; }
+      if (!tab) return;
+      const url = tab.url || '';
+      if (url && url === stableUrl) stablePolls++; else { stableUrl = url; stablePolls = 0; }
+      if (url && tab.status === 'complete' && isAuthOrCheckpoint(url)) {
+        await globalThis.AVJP.outbox.deliver({
+          type: run.type, taskId: run.task_id, platform: run.platform, tabId,
+          status: 'failed', failure_code: 'session_expired', forceCleanup: true,
+          resultMessage: 'Trang đăng nhập / checkpoint / captcha — dừng task, không lách (luật fork §3-6).'
+        });
+        return;
+      }
+      if (url && hostMatches(url, hosts)) {
+        const key = `${tabId}|${run.run_id}|${url}`;
+        const already = run.type !== 'nurture' && injected.has(key);
+        if (!already) {
+          if (tab.status === 'complete') {
+            if (run.type !== 'nurture') injected.add(key);
+            await injectForRun(tabId, run, url);
+            // injectForRun lỗi chung cuộc đã tự deliver failed + dọn run;
+            // vòng lặp sẽ tự thoát ở vòng sau khi run biến mất.
+          } else if (stablePolls >= 12) {
+            if (run.type !== 'nurture') injected.add(key);
+            const okQuiet = await injectForRun(tabId, run, url, { quiet: true });
+            // Inject thử hỏng (trang vừa redirect...) → nhả key guard để
+            // khi tab complete/ổn định ở URL này còn inject lại được.
+            if (!okQuiet && run.type !== 'nurture') injected.delete(key);
+          }
+        }
+      }
+      await sleep(500);
+    }
   }
 
   // Probe: task kiểm tra vòng đời, không mở tab — đi xuyên source -> canonical -> outbox -> receipt.
@@ -83,7 +210,7 @@
     }, 300);
   }
 
-  async function injectForRun(tabId, run, tabUrl) {
+  async function injectForRun(tabId, run, tabUrl, opts = {}) {
     const spec = C().PLATFORMS[run.platform]?.scripts(run);
     if (!spec) {
       await globalThis.AVJP.outbox.deliver({
@@ -120,6 +247,10 @@
       }
     }
     if (lastErr) {
+      // (2.11.11) quiet: lần inject THỬ của driveInject khi tab còn loading
+      // — lỗi thường do trang redirect giữa chừng, nuốt để vòng canh thử
+      // lại ở URL ổn định sau; KHÔNG deliver failed oan.
+      if (opts.quiet) return false;
       const fresh = await S.getRun();
       if (fresh && String(fresh.task_id) === String(run.task_id)) {
         await globalThis.AVJP.outbox.deliver({
@@ -129,6 +260,7 @@
         });
       }
     }
+    return !lastErr;
   }
 
   chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {

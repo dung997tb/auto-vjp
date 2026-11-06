@@ -283,13 +283,31 @@
           });
         }
         const run = await S.getRun();
-        if (run && run.type === 'scan_account' && String(run.task_id) === String(message.scanId || '')) {
-          await outbox().deliver({
-            type: 'scan_account', taskId: run.task_id, platform: run.platform, tabId,
-            status: message.error && !accounts.length ? 'failed' : 'success',
-            resultMessage: message.error || `Quét được ${accounts.length} tài khoản`,
-            items: accounts
-          });
+        if (run && run.type === 'scan_account') {
+          const exact = String(run.task_id) === String(message.scanId || '');
+          // (2.11.11) Dự phòng scanId lạc: vài scanner (vd TikTok) gửi kết
+          // quả KHÔNG kèm scanId — trước đây bị nuốt sạch, run treo tới khi
+          // user tự đóng tab mới ra receipt failed. Nay scanId thiếu/không
+          // khớp nhưng run scan_account đang chạy có platform khớp
+          // (message.platform / platform suy từ tab gửi / platform của
+          // account đầu tiên) thì vẫn nhận kết quả cho run đó. CHỈ nới cho
+          // scan_account; type khác giữ nguyên kỷ luật khớp taskId.
+          const msgPlat = message.platform || platform;
+          const accPlat = accounts.length ? String(accounts[0].platform || '') : '';
+          const platformHit = run.platform === msgPlat || (accPlat !== '' && run.platform === accPlat);
+          if (exact || platformHit) {
+            if (!exact) {
+              console.warn('[Auto vjp][results] Nhận kết quả quét lạc scanId cho run scan_account hiện tại', {
+                scanId: message.scanId || null, runTask: run.task_id, platform: run.platform
+              });
+            }
+            await outbox().deliver({
+              type: 'scan_account', taskId: run.task_id, platform: run.platform, tabId,
+              status: message.error && !accounts.length ? 'failed' : 'success',
+              resultMessage: message.error || `Quét được ${accounts.length} tài khoản`,
+              items: accounts
+            });
+          }
         }
         return sendResponse({ success: true });
       }
