@@ -5,6 +5,12 @@ Chốt 2026-11-04 theo plan v2.1 §4.4 + §6-S2. Luật bao trùm: **everything 
 mỗi nền tảng = 1 module độc lập trong `modules/<platform>/`, chỉ giao tiếp qua hợp đồng này;
 thêm module mới không sửa module cũ; contract chỉ thêm, không phá._
 
+**`CONTRACT_VERSION` trong code = 2** (`modules/kernel/contract-data.js`, giữ nguyên từ bản port
+MUT tới nay). Các type cộng thêm về sau — `nurture` (2.1.0), `story` (2.7.0), `upload` (2.8.0),
+`healthscan` (2.9.0) — đều là cộng thêm theo luật trên nên **không tăng CONTRACT_VERSION**; ghi rõ
+điểm này để không hiểu nhầm tài liệu/code bị lệch. Đồng bộ lại registry §3–§4 + dọn type chết ở
+contract-data: **2.11.9** (xem §3).
+
 ## 1. Ai sở hữu cái gì
 
 | Vùng | Chủ sở hữu | Ghi chú |
@@ -43,34 +49,65 @@ tab đóng sớm ─▶ receipt `failed`; trang login/checkpoint/captcha ─▶ 
 - Khi claim, kernel dựng canonical run (port hình dạng MUT worker-lease `setCurrentAutomationTask`):
   `{...task, task_id: String(id), run_id, delivery_id, type, platform, tabId, phase,
     startedAt, lastActiveAt, updatedAt, timeout_ms}` và ghi vào `currentAutomationRun`.
-- `type` thuộc CONTRACT_VERSION 2 (MUT): tầng module nhận `post`, `reply`, `affiliate`,
-  `scan_account` + `probe` (nội bộ, kiểm tra vòng đời). Facebook KHÔNG qua tầng module (lõi lo).
-- Bổ sung 2.1.0 (chỉ cộng thêm, không phá): type `nurture` — hiện chỉ TikTok hỗ trợ
-  (module `modules/tiktok-nurture/`, engine TikTok Farmer port nguyên khối). Payload phẳng:
+- `type` thuộc CONTRACT_VERSION 2: tập type kernel route được (nguồn sự thật =
+  `AVJP.contract.TASK_TYPES` trong `kernel/contract.js`, cổng qua `validateTask` ở
+  `kernel/source.js`) hiện gồm: `post`, `reply`, `affiliate`, `scan_account`, `probe`
+  (nội bộ, kiểm tra vòng đời) + các bổ sung cộng thêm: `nurture` (2.1.0), `story` (2.7.0),
+  `upload` (2.8.0), `healthscan` (2.9.0). Facebook KHÔNG qua tầng module (lõi lo).
+  Tên type ở tầng kernel là tên "transport"; riêng `affiliate` có tên canonical trong
+  contract-data là `affiliate_comment` — hai phía nối nhau bằng `LEGACY_TASK_TYPE_MAP` /
+  `LEGACY_TRANSPORT_TASK_TYPE`, và metadata (timeout/retryable) của task affiliate được
+  tra qua canonical đó. `probe` chỉ sống ở tầng kernel: không khai trong contract-data
+  (không có TASK_METADATA — `defaultTimeoutMs` dùng nhánh fallback), runner tự ghi receipt.
+- Bổ sung 2.1.0 (chỉ cộng thêm, không phá): type `nurture` — TikTok dùng engine TikTok
+  Farmer port nguyên khối (module `modules/tiktok-nurture/`). Payload phẳng:
   `{platform:'tiktok', type:'nurture', watch_count?, like_enabled?, save_enabled?,
   follow_enabled?, max_minutes?, timeout_ms?}`. Content script báo tiến độ/kết quả qua 2 action
   riêng `nurtureProgress` / `nurtureDone` (xem §5a). Worker chỉ thi hành — giới hạn lịch
   (giờ hoạt động...) thuộc tầng điều phối giao việc, KHÔNG kiểm tra trong worker.
-- YouTube scope hẹp: task `post` YouTube có media video bị **từ chối ngay khi enqueue**
-  (upload video ngoài v1); chỉ Community post/comment.
+  Bổ sung 2.2.0–2.5.0: `nurture` mở rộng sang instagram (2.2.0), threads (2.3.0), x (2.4.0),
+  youtube (2.5.0) qua lõi dùng chung `modules/nurture-core/` + adapter riêng từng nền tảng
+  (payload theo nurture-core, xem `modules/nurture-core/README.md`).
+- Bổ sung 2.7.0: type `story` — hiện chỉ instagram (`modules/instagram/story.js`), báo
+  `storyCompleted` / `storyFailed` (xem §5a).
+- YouTube: task `post` có media video bị **từ chối ngay khi enqueue** — `post` chỉ là
+  Community post/comment; video đi qua type `upload` riêng (bổ sung 2.8.0,
+  `modules/youtube/upload.js`, tải qua YouTube Studio — video thường + Shorts chung 1 luồng),
+  báo `uploadCompleted` / `uploadFailed`.
+- Bổ sung 2.6.0: `reply` cho youtube (`modules/youtube/interaction.js` — task comment độc
+  lập trên 1 video); scan youtube đổi sang `modules/youtube/discovery.js` chạy ở
+  `channel_switcher` (xem §4).
 - Bổ sung 2.9.0 (chỉ cộng thêm): type `healthscan` — instagram/youtube/threads/tiktok
   (x: chưa hỗ trợ). Script dùng chung `modules/shared/healthscan.js` (sau CANONICAL +
   `modules/shared/healer.js`): mở bề mặt mẫu theo `startUrl`, chỉ **định vị** các neo
   mẫu qua `AVJP.heal.locate`, KHÔNG tương tác thật; báo `healthscanCompleted/Failed`,
   receipt `items` = `{key, found_via, spec}` từng neo. Healthscan không markProven —
   xem `modules/shared/HEALER.md`.
+- Dọn dẹp 2.11.9: contract-data bỏ 9 type thừa hưởng từ MUT **không bao giờ route được**
+  trong kernel local — `comment`, `like`, `own_post_comment`, `auto_connect`, `join_group`,
+  `scan_group`, `scan_shopee`, `media_enrichment`, `ai_caption` (không nằm trong
+  `AVJP.contract.TASK_TYPES` nên `validateTask` luôn từ chối; không platform nào có nhánh
+  `scripts()` cho chúng; trang quản lý không tạo được). Đã bỏ cả TASK_METADATA và alias
+  legacy trỏ riêng vào chúng (`post_comment`, `friend`). CONTRACT_VERSION giữ nguyên 2.
 
 ## 4. Registry nền tảng (kernel/contract.js — nguồn sự thật duy nhất)
 
-| platform | post | reply | affiliate | scan_account |
-|---|---|---|---|---|
-| instagram | automator.js | interaction.js | affiliate-commenter.js | accounts-scanner.js |
-| threads | automator.js | interaction.js | affiliate-commenter.js | accounts-scanner.js |
-| tiktok | automator.js | comment-replier.js / studio-comment-replier.js (theo `source_type='comments_manager'`; inject bridge MAIN-world trước) | — | accounts-scanner.js |
-| tiktok (`nurture`) | — | — | — | — | bộ engine Farmer trong `modules/tiktok-nurture/`: selectors.js → modules.js → engine.js → content.js → adapter.js (sau CANONICAL, frame top) |
-| x | automator.js (thư mục modules/x/) | interaction.js | affiliate-commenter.js | accounts-scanner.js |
-| youtube | automator.js (Community post; tự khởi động từ storage + nhận `EXECUTE_YOUTUBE_POST`) | — | — | accounts-scanner.js |
-| probe | không mở tab — runner tự ghi receipt success (chứng minh vòng đời) | | | |
+Script thi hành theo (type × platform) — tên file nằm trong `modules/<platform>/` trừ khi ghi khác:
+
+| type | instagram | threads | tiktok | x | youtube |
+|---|---|---|---|---|---|
+| post | automator.js (+ HEALER, DEFAULT_IMAGE) | automator.js (+ DEFAULT_IMAGE) | automator.js (frame top) | automator.js (+ DEFAULT_IMAGE) | automator.js (Community post; tự khởi động từ storage + nhận `EXECUTE_YOUTUBE_POST`) |
+| reply | interaction.js | interaction.js | comment-replier.js / studio-comment-replier.js (theo `source_type='comments_manager'`; inject bridge MAIN-world `reply-bridge.js` / `studio-reply-bridge.js` trước; frame top) | interaction.js | interaction.js (+ HEALER) |
+| affiliate | affiliate-commenter.js | affiliate-commenter.js | — | affiliate-commenter.js | — |
+| scan_account | accounts-scanner.js | accounts-scanner.js | accounts-scanner.js | accounts-scanner.js | **discovery.js** (chạy ở `channel_switcher`; accounts-scanner.js cũ không còn được tham chiếu — nó báo thiếu scanId nên kernel không khớp được run) |
+| nurture | nurture-core + `modules/instagram-nurture/adapter.js` (frame top) | nurture-core + `modules/threads-nurture/adapter.js` (frame top) | bộ engine Farmer trong `modules/tiktok-nurture/`: selectors.js → modules.js → engine.js → content.js → adapter.js (sau CANONICAL, frame top) | nurture-core + `modules/x-nurture/adapter.js` (frame top) | nurture-core + `modules/youtube-nurture/adapter.js` (frame top) |
+| story | story.js (+ HEALER) | — | — | — | — |
+| upload | — | — | — | — | upload.js (YouTube Studio) |
+| healthscan | `modules/shared/healthscan.js` (+ HEALER) | `modules/shared/healthscan.js` (+ HEALER) | `modules/shared/healthscan.js` (+ HEALER, frame top) | — | `modules/shared/healthscan.js` (+ HEALER) |
+| probe | không mở tab — runner tự ghi receipt success (chứng minh vòng đời) | | | | |
+
+`DEFAULT_IMAGE` = `modules/shared/default-image.js` (2.11.7, ảnh mặc định của riêng Auto vjp —
+xem §3/FORK-CHANGES #98); `HEALER` = `modules/shared/healer.js` (2.9.0).
 
 Mọi lần inject đều nạp `modules/shared/canonical-task-storage.js` TRƯỚC script nền tảng
 (trừ scan: nạp `account-scan-utils.js` + đặt `globalThis.__accountScanContext = {scanId, stepId, platform}` trước).
@@ -89,8 +126,13 @@ khi task có `watermark_config`, task local không bao giờ set).
 `getSmartCommentReply {campaignId, commentText, commentAuthor}` → `{data:{reply_text}}` hoặc `null`
 (kernel trả lời bằng web-tab AI; lỗi → `null` để script rơi về `reply_templates`),
 `socialAccountsScannerResult {scanId, stepId, accounts[], error?}` → kernel lưu vào `autovjp.accounts` (local, KHÔNG sync đi đâu).
-`nurtureProgress {taskId, counters}` (chỉ tiktok-nurture) → kernel chạm run (giữ sống trước watchdog) + lưu `nurture_counters`.
+`nurtureProgress {taskId, counters}` (mọi module nuôi — tiktok-nurture + nurture-core của
+instagram/threads/x/youtube) → kernel chạm run (giữ sống trước watchdog) + lưu `nurture_counters`.
+`nurtureOwnerPing` → `{success, tabId}`: module nuôi hỏi id của chính tab gửi để ghi owner-tab vào state run.
 `nurtureDone {taskId, status, failure_code?, resultMessage?, items?}` → outbox ghi receipt type `nurture` (items = proofs từng video/hành động).
+`getNurtureAiComment {prompt, provider?}` → `{success, text, via}` — đường AI comment dùng chung của họ nuôi:
+ưu tiên API của lõi (provider đã cấu hình, vd 9router), lỗi thì rơi về aitab; lỗi cả hai → `{success:false}`
+để adapter dùng mẫu comment trong task.
 `storyCompleted` / `storyFailed {postId, resultUrl?, details?}` → receipt type `story`; `uploadCompleted` / `uploadFailed` → type `upload` (2.7.0/2.8.0).
 `healGetLearned {platform, key}` → `{success, spec?}` · `healSuggest {platform, key, intent, snapshot}` → `{success, specs[]}` ·
 `healMarkProven {platform, key, spec}` → `{success}` — tự chữa selector 2.9.0, xem `modules/shared/HEALER.md`.
