@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Auto vjp",
   "short_name": "Auto vjp",
-  "version": "2.11.7",
+  "version": "2.11.9",
   "description": "Auto vjp — fork noi bo da go license. Tự động Facebook: kết bạn có lọc, đăng và share bài bằng AI vào nhóm, cùng các công cụ Bản tin và Trend.",
   "permissions": [
     "storage",
@@ -36,8 +36,7 @@
     "https://chatgpt.com/*",
     "https://*.chatgpt.com/*",
     "https://gemini.google.com/*",
-    "https://*/*",
-    "http://127.0.0.1/*"
+    "https://*/*"
   ],
   "action": {
     "default_title": "Auto vjp - Quản lý Nick & Page",

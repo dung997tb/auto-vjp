@@ -831,6 +831,10 @@ function bindEvents() {
       setMessage($('defaultImageUrlResult'), `Không lưu được: ${e.message || e}`, 'error');
     }
   });
+  const versionBadge = $('versionBadge');
+  if (versionBadge) {
+    try { versionBadge.textContent = 'v' + chrome.runtime.getManifest().version; } catch (_) { /* badge để trống nếu không đọc được manifest */ }
+  }
   $('probeBtn').addEventListener('click', runProbe);
   $$('.js-probe').forEach(btn => btn.addEventListener('click', runProbe));
   $('refreshBtn').addEventListener('click', refresh);

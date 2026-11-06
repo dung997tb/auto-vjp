@@ -379,6 +379,81 @@
     const text=cleanText(question).toLocaleLowerCase("vi");
     return /(?:đồng ý|đồng tình|chấp nhận|cam kết|tuân thủ|quy tắc|nội quy|quy định|không quảng cáo|không spam|không bán hàng|không đăng bài|không mua bán|không làm phiền|giữ sạch|ra về|rác|tôn trọng thành viên)/i.test(text);
   }
+  // Bộ tính biểu thức số học VIẾT TAY (tokenizer + recursive descent) — thay
+  // hẳn cơ chế eval động trước đây (2.11.8): chỉ nhận số thập phân, + - * / % ^ (**),
+  // ngoặc và dấu cộng/trừ đơn; ký tự lạ hoặc biểu thức hỏng -> ném lỗi để
+  // caller trả null. Ngữ pháp: expr := term (('+'|'-') term)* ;
+  // term := unary (('*'|'/'|'%') unary)* ; unary := ('-'|'+') unary | power ;
+  // power := primary (('**'|'^') unary)? — luỹ thừa kết hợp phải, mũ âm được;
+  // primary := số | '(' expr ')'.
+  function evalMathExpr(src){
+    const s=String(src||"");
+    const tokens=[];
+    let i=0;
+    while(i<s.length){
+      const ch=s[i];
+      if(ch===" "||ch==="\t"){i++;continue;}
+      if((ch>="0"&&ch<="9")||ch==="."){
+        let j=i,dot=false;
+        while(j<s.length&&((s[j]>="0"&&s[j]<="9")||s[j]===".")){
+          if(s[j]==="."){if(dot)throw new Error("bad-number");dot=true;}
+          j++;
+        }
+        const num=Number(s.slice(i,j));
+        if(!isFinite(num))throw new Error("bad-number");
+        tokens.push({k:"num",v:num});
+        i=j;continue;
+      }
+      if(ch==="*"&&s[i+1]==="*"){tokens.push({k:"op",v:"**"});i+=2;continue;}
+      if("+-*/%^()".includes(ch)){tokens.push({k:"op",v:ch});i++;continue;}
+      throw new Error("bad-token");
+    }
+    let pos=0;
+    const peek=()=>tokens[pos];
+    const next=()=>tokens[pos++];
+    function parseExpr(){
+      let v=parseTerm();
+      while(peek()&&peek().k==="op"&&(peek().v==="+"||peek().v==="-")){
+        const op=next().v;const rhs=parseTerm();
+        v=op==="+"?v+rhs:v-rhs;
+      }
+      return v;
+    }
+    function parseTerm(){
+      let v=parseUnary();
+      while(peek()&&peek().k==="op"&&(peek().v==="*"||peek().v==="/"||peek().v==="%")){
+        const op=next().v;const rhs=parseUnary();
+        v=op==="*"?v*rhs:op==="/"?v/rhs:v%rhs;
+      }
+      return v;
+    }
+    function parseUnary(){
+      const tk=peek();
+      if(tk&&tk.k==="op"&&(tk.v==="-"||tk.v==="+")){next();const v=parseUnary();return tk.v==="-"?-v:v;}
+      return parsePower();
+    }
+    function parsePower(){
+      const base=parsePrimary();
+      const tk=peek();
+      if(tk&&tk.k==="op"&&(tk.v==="**"||tk.v==="^")){next();const exp=parseUnary();return Math.pow(base,exp);}
+      return base;
+    }
+    function parsePrimary(){
+      const tk=next();
+      if(!tk)throw new Error("eof");
+      if(tk.k==="num")return tk.v;
+      if(tk.k==="op"&&tk.v==="("){
+        const v=parseExpr();
+        const close=next();
+        if(!close||close.k!=="op"||close.v!==")")throw new Error("no-close");
+        return v;
+      }
+      throw new Error("bad-primary");
+    }
+    const result=parseExpr();
+    if(pos!==tokens.length)throw new Error("trailing");
+    return result;
+  }
   // Giải câu hỏi toán CAPTCHA → trả về chuỗi kết quả hoặc null nếu không phải toán
   function solveMathCaptcha(question){
     const text=cleanText(question).replace(/\s+/g," ");
@@ -387,9 +462,12 @@
     if(m1){
       try{
         const expr=m1[1].replace(/[×xX]/g,"*").replace(/[÷]/g,"/").replace(/\^/g,"**").replace(/\s+/g,"");
-        if(!/^[\d+\-*/().%**]+$/.test(expr.replace(/\*\*/g,"X")))return null;
-        // eslint-disable-next-line no-new-func
-        const result=Function('"use strict";return ('+expr+')')();
+        // Vá kèm (2.11.8): bản cũ thay ** bằng "X" rồi kiểm theo bảng ký tự
+        // không có X -> MỌI biểu thức luỹ thừa đều bị loại oan (trả null).
+        // Nay gộp ** về * khi kiểm và cho phép ^; evalMathExpr vẫn là cổng
+        // kiểm cuối (tokenizer loại mọi ký tự lạ).
+        if(!/^[\d+\-*/().%^]+$/.test(expr.replace(/\*\*/g,"*")))return null;
+        const result=evalMathExpr(expr);
         if(typeof result!=="number"||!isFinite(result))return null;
         return String(Math.round(result*1000)/1000);
       }catch{/* fall through */}
@@ -401,8 +479,7 @@
       try{
         const expr=(m2[1]+m2[2]).replace(/\s+/g,"");
         if(!/^[\d+\-*/().]+$/.test(expr))return null;
-        // eslint-disable-next-line no-new-func
-        const result=Function('"use strict";return ('+expr+')')();
+        const result=evalMathExpr(expr);
         if(typeof result!=="number"||!isFinite(result))return null;
         return String(Math.round(result*1000)/1000);
       }catch{return null;}
@@ -418,15 +495,27 @@
   function isInviteQuestion(text){
     return /(?:mời\s+(?:thêm\s+)?bạn\s+bè|mời\s+người\s+thân|invite\s+(?:your\s+)?friends|tag\s+bạn\s+bè)/i.test(text);
   }
-  function needsAiAnswer(question){
-    const text=cleanText(question).toLocaleLowerCase("vi");
-    if(isConsentQuestion(text))return false;
-    if(solveMathCaptcha(question)!==null)return false;  // toán học → tự giải, không cần AI
-    if(isInviteQuestion(text))return false;             // invite → canned answer
-    // Các câu hỏi mở của nhóm đều được đưa cho AI khi người dùng bật AI;
-    // chỉ câu đồng ý quy tắc mới dùng câu trả lời mẫu. Cách này bao phủ cả
-    // câu hỏi "Xem xét quyền tham gia" mà Facebook thay đổi nội dung/nhãn.
-    return text.length>=2;
+  // LUỒNG TRẢ LỜI CÂU HỎI XIN VÀO NHÓM (2.11.8 — ĐẢO THỨ TỰ theo lệnh Dũng):
+  // Luồng 1: AI qua API là luồng CHÍNH — khi bật AI, MỌI câu hỏi đều gửi AI
+  // trước, kể cả câu toán và câu đồng ý nội quy (bản cũ loại câu toán giải
+  // được local khỏi đường AI — cổng lọc đó đã bỏ hẳn).
+  // Luồng 2 (dự phòng khi AI tắt / thiếu key / lỗi / từ chối / thiếu đáp án):
+  // cannedAnswerForQuestion — tự tính câu toán -> câu mẫu mời bạn bè / đồng ý
+  // nội quy / mục đích -> xoay vòng câu mẫu của người dùng (giữ nguyên như cũ).
+  // Nhận diện đáp án AI dạng TỪ CHỐI / lộ thân phận AI -> coi như không có
+  // đáp án để rơi xuống luồng 2 (background còn chặn thêm 1 lớp khi parse).
+  // Mẫu bắt thận trọng: "I can't wait to join" hay "không thể đến offline"
+  // KHÔNG dính vì các nhánh từ chối đều đòi động từ help/answer/provide hoặc
+  // giúp/trả lời/cung cấp/hỗ trợ đi kèm.
+  function isJoinAiRefusal(answer){
+    const a=String(answer||"").trim();
+    if(!a)return true;
+    if(/as an ai\b|as a language model|i'?m an ai\b|i am an ai\b/i.test(a))return true;
+    if(/(?:tôi|mình) là (?:một )?(?:ai|trí tuệ nhân tạo|mô hình ngôn ngữ|trợ lý ảo)\b/i.test(a))return true;
+    if(/^(?:i'?m sorry|sorry|xin lỗi|rất tiếc|thật tiếc)\b[^]{0,60}?\b(?:cannot|can'?t|unable|không thể)\b/i.test(a))return true;
+    if(/\b(?:i cannot|i can'?t|i am unable|i'?m unable)\s+(?:help|answer|provide|assist|do that)\b/i.test(a))return true;
+    if(/\b(?:tôi|mình) không thể (?:giúp|trả lời|cung cấp|hỗ trợ)\b/i.test(a))return true;
+    return false;
   }
   function cannedAnswerForQuestion(question,index){
     const text=cleanText(question).toLocaleLowerCase("vi");
@@ -529,7 +618,10 @@
       const inputs = [...currentDialog.querySelectorAll('textarea, input[type="text"], [role="textbox"]')].filter(inp=>isVisible(inp)&&!inp.disabled&&inp.getAttribute("aria-disabled")!=="true");
       const questions=inputs.map(questionForInput);
       const answers=Array(inputs.length).fill("");
-      const aiIndexes=questions.map((question,index)=>needsAiAnswer(question)?index:-1).filter(index=>index>=0);
+      // Luồng 1 (2.11.8): AI bật -> MỌI câu hỏi đều qua AI trước (kể cả câu
+      // toán + đồng ý nội quy); câu nào AI không trả được/từ chối thì vòng
+      // điền bên dưới tự rơi xuống luồng 2 (canned) như cũ.
+      const aiIndexes=questions.map((_,index)=>index);
       if(aiJoinEnabled&&aiIndexes.length){
         const aiQuestions=aiIndexes.map(index=>questions[index]);
         chrome.storage.local.set({groupStatus:t("gq.aiThinking",{n:aiQuestions.length,name:groupName||t("kj.groupSel")})});
@@ -537,7 +629,11 @@
         try{
           const ai=await chrome.runtime.sendMessage({action:"aiAnswerJoinQuestions",groupName:groupName||document.title,questions:aiQuestions,prompt:aiJoinPrompt,aiConfig:aiJoinConfig});
           if(ai?.ok){
-            (ai.answers||[]).slice(0,aiIndexes.length).forEach((answer,index)=>{answers[aiIndexes[index]]=String(answer||"").trim();});
+            (ai.answers||[]).slice(0,aiIndexes.length).forEach((answer,index)=>{
+              const a=String(answer||"").trim().slice(0,500);
+              // Đáp án rỗng/từ chối/lộ thân phận AI -> bỏ trống để luồng 2 lo.
+              answers[aiIndexes[index]]=isJoinAiRefusal(a)?"":a;
+            });
           }else console.warn("[Group AI]",ai?.error);
         }catch(e){console.warn("[Group AI]",e);}
         const missing=aiIndexes.filter(index=>!answers[index]);
@@ -548,9 +644,8 @@
         }
         chrome.storage.local.set({groupAiUsage:t("gq.aiReady",{n:aiIndexes.length,name:groupName||t("kj.groupSel")})});
       }else if(aiIndexes.length){
+        // AI tắt: mọi câu hỏi đi thẳng luồng 2 (canned) ở vòng điền bên dưới.
         chrome.storage.local.set({groupAiUsage:t("gq.aiOff",{n:aiIndexes.length,name:groupName||t("kj.groupSel")})});
-      }else if(inputs.length){
-        chrome.storage.local.set({groupAiUsage:t("gq.rulesOnly",{name:groupName||t("kj.groupSel")})});
       }
       let filled=0;
       for(let idx=0;idx<inputs.length;idx++){

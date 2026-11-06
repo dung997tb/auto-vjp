@@ -780,6 +780,24 @@ function metaFreeIsRefusal(text){
   if(!/giả mạo|giả làm|giả danh|che giấu|lừa dối/i.test(t))return false;
   return /không thể|rất tiếc|xin lỗi|từ chối|không giúp|i'm sorry|i can/i.test(t);
 }
+// Nhận diện đáp án AI TỪ CHỐI / lộ thân phận AI cho luồng xin vào nhóm — áp
+// cho MỌI provider (2.11.8), cộng thêm lớp metaFreeIsRefusal ở trên. Đem đáp
+// án từ chối điền vào form thì hại hơn không điền -> handler ném lỗi để nơi
+// gọi rơi xuống luồng dự phòng (tự tính toán + câu mẫu). Mẫu bắt thận trọng
+// để không bắt nhầm câu thật: "I can't wait to join" không dính (nhánh EN
+// đòi động từ help/answer/provide đi kèm), "không thể đến offline" không
+// dính (nhánh VI đòi giúp/trả lời/cung cấp/hỗ trợ đi kèm).
+function aiJoinIsRefusal(text){
+  const a=String(text||"").trim();
+  if(!a)return false;
+  if(metaFreeIsRefusal(a))return true;
+  if(/as an ai\b|as a language model|i'?m an ai\b|i am an ai\b/i.test(a))return true;
+  if(/(?:tôi|mình) là (?:một )?(?:ai|trí tuệ nhân tạo|mô hình ngôn ngữ|trợ lý ảo)\b/i.test(a))return true;
+  if(/^(?:i'?m sorry|sorry|xin lỗi|rất tiếc|thật tiếc)\b[^]{0,60}?\b(?:cannot|can'?t|unable|không thể)\b/i.test(a))return true;
+  if(/\b(?:i cannot|i can'?t|i am unable|i'?m unable)\s+(?:help|answer|provide|assist|do that)\b/i.test(a))return true;
+  if(/\b(?:tôi|mình) không thể (?:giúp|trả lời|cung cấp|hỗ trợ)\b/i.test(a))return true;
+  return false;
+}
 // Nhận diện tường login meta.ai từ text trang (để báo user login 1 lần).
 function metaFreeIsLoginWall(bodyText){
   const txt=String(bodyText||"").slice(0,2000);
@@ -1332,6 +1350,68 @@ async function fetchWithTimeout(url,options={},timeoutMs=AI_FETCH_TIMEOUT_MS){
     if(error?.name==="AbortError")throw new Error(t("bg.aiTimeout")||"AI không phản hồi kịp thời, đã hủy yêu cầu");
     throw error;
   }finally{clearTimeout(timer);}
+}
+// 2.11.9 — Lớp chặn SSRF cho fbFetchMedia: URL media do caller/task/nội dung
+// web đưa vào nên không cho fetch đích nội bộ. Kiểm cả URL ban đầu lẫn URL
+// cuối sau redirect (response.url) — xem assertPublicMediaUrl.
+function mediaHostBlocked(hostname){
+  const host=String(hostname||"").toLowerCase().replace(/\.$/,"").replace(/^\[|\]$/g,"");
+  if(!host)return true;
+  if(host==="localhost"||host.endsWith(".localhost")||host.endsWith(".local"))return true;
+  if(host.includes(":")){
+    // IPv6: loopback ::1, unspecified ::, link-local fe80::/10, unique-local fc00::/7
+    if(host==="::1"||host==="::")return true;
+    if(/^fe[89ab]/.test(host))return true;
+    if(/^f[cd]/.test(host))return true;
+    const mapped=host.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if(mapped)return mediaHostBlocked(mapped[1]);
+    // URL parser chuẩn hoá IPv4-mapped về dạng hex ::ffff:7f00:1 (= 127.0.0.1)
+    const mappedHex=host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+    if(mappedHex){
+      const hi=parseInt(mappedHex[1],16),lo=parseInt(mappedHex[2],16);
+      return mediaHostBlocked(`${hi>>8}.${hi&255}.${lo>>8}.${lo&255}`);
+    }
+    return false;
+  }
+  const m=host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if(m){
+    const a=+m[1],b=+m[2];
+    if(a===127||a===10||a===0)return true;                 // loopback / private A / "this host"
+    if(a===172&&b>=16&&b<=31)return true;                  // private B
+    if(a===192&&b===168)return true;                       // private C
+    if(a===169&&b===254)return true;                       // link-local (metadata)
+  }
+  return false;
+}
+function assertPublicMediaUrl(urlStr){
+  let u=null;
+  try{u=new URL(String(urlStr||""));}catch(_){throw new Error("mediaFetch: invalid URL");}
+  if(u.protocol!=="http:"&&u.protocol!=="https:")throw new Error("mediaFetch: blocked non-http(s) URL");
+  if(mediaHostBlocked(u.hostname))throw new Error("mediaFetch: blocked internal host");
+}
+// Đọc body có trần cứng: không tin content-length mù quáng — đếm byte thật
+// khi stream, vượt trần là huỷ ngay (server báo thiếu/không báo length vẫn
+// không xả quá trần được).
+async function readMediaBodyWithCap(res,maxBytes){
+  const tooBig=()=>new Error(`Media file exceeds size limit (> ${Math.round(maxBytes/1024/1024)}MB)`);
+  if(res.body&&typeof res.body.getReader==="function"){
+    const reader=res.body.getReader();
+    const chunks=[];let total=0;
+    for(;;){
+      const {done,value}=await reader.read();
+      if(done)break;
+      total+=value.byteLength;
+      if(total>maxBytes){try{await reader.cancel();}catch(_){} throw tooBig();}
+      chunks.push(value);
+    }
+    const buf=new Uint8Array(total);
+    let off=0;
+    for(const c of chunks){buf.set(c,off);off+=c.byteLength;}
+    return buf;
+  }
+  const ab=await res.arrayBuffer();
+  if(ab.byteLength>maxBytes)throw tooBig();
+  return new Uint8Array(ab);
 }
 // Gateway AI (vd Vilao) đôi khi trả về trang HTML (lỗi gateway/bảo trì) thay vì
 // JSON — res.json() lúc đó ném SyntaxError khó hiểu ("Unexpected token '<'...").
@@ -3333,19 +3413,41 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
     (async()=>{try{
       const own=msg.aiConfig||{},provider=own.provider||"gemini",key=normalizeApiKey(own.key),model=own.model||AI_DEFAULTS[provider]?.model||"",customUrl=own.url||"";
       if(!key&&provider!=="meta-free")throw new Error(t("bg.noKeyJoin"));
+      const groupName=String(msg.groupName||"").slice(0,150);
+      // Chuẩn hoá câu hỏi: chuỗi thuần, hoặc {text, options} khi nơi gọi có
+      // sẵn lựa chọn trắc nghiệm (đáp án trắc nghiệm = nguyên văn 1 lựa chọn).
+      const qList=(msg.questions||[]).slice(0,20).map(q=>{
+        if(q&&typeof q==="object")return {text:String(q.text||q.question||"").replace(/\s+/g," ").trim().slice(0,400),options:(Array.isArray(q.options)?q.options:[]).map(o=>String(o).replace(/\s+/g," ").trim().slice(0,120)).filter(Boolean).slice(0,8)};
+        return {text:String(q||"").replace(/\s+/g," ").trim().slice(0,400),options:[]};
+      }).filter(q=>q.text);
+      if(!qList.length)throw new Error(t("bg.joinInvalid"));
       // Annotate each question with a hint for AI so it knows what type it is
-      const questions=(msg.questions||[]).map((q,i)=>{
-        const qs=String(q).slice(0,400);
+      const questions=qList.map((q,i)=>{
         // Detect math pattern — hint AI to return only the number
-        const isMath=/\d+\s*[+\-\*×xX÷/:^]\s*\d+/.test(qs)||/(?:cộng|trừ|nhân|chia|bằng mấy|bằng bao nhiêu|tính ra|kết quả)/i.test(qs);
-        const hint=isMath?" [TOÁN-chỉ trả về số]":"";
-        return `${i+1}.${hint} ${qs}`;
+        const isMath=/\d+\s*[+\-\*×xX÷/:^]\s*\d+/.test(q.text)||/(?:cộng|trừ|nhân|chia|bằng mấy|bằng bao nhiêu|tính ra|kết quả)/i.test(q.text);
+        let hint=isMath?" [TOÁN — chỉ trả về đúng con số]":"";
+        if(q.options.length)hint+=" [TRẮC NGHIỆM — chỉ trả về nguyên văn 1 lựa chọn bên dưới]";
+        const opts=q.options.length?`\n   Lựa chọn: ${q.options.join(" | ")}`:"";
+        return `${i+1}.${hint} ${q.text}${opts}`;
       }).join("\n");
-      const baseSrc=provider==="meta-free"
-        ? metaFreeJoinBase(msg.prompt,t("bg.joinDefault"),t("bg.joinDefaultMeta"))
-        : (msg.prompt||t("bg.joinDefault"));
-      const base=baseSrc.replaceAll("{groupName}",String(msg.groupName||"").slice(0,150)).replaceAll("{questions}",questions);
-      const prompt=`${base}\n${t("bg.joinTail",{n:(msg.questions||[]).length})}`;let raw="";
+      // Prompt hệ thống SIẾT SẴN trong code (2.11.8): AI đóng vai chủ tài
+      // khoản, format JSON thuần, quy tắc theo từng loại câu (bg.joinSystem;
+      // meta-free dùng biến thể trung tính bg.joinSystemMeta vì Meta từ chối
+      // khi bị yêu cầu bịa thông tin cá nhân). Chỉ dẫn tay của người dùng
+      // (msg.prompt — ô "Chỉ dẫn cho AI khi trả lời câu hỏi vào nhóm" ở
+      // popup) KHÔNG còn thay cả prompt như bản cũ: nó được chích vào dưới
+      // mục "Chỉ dẫn bổ sung của chủ tài khoản" (persona / lý do tham gia /
+      // phong cách); {groupName} trong chỉ dẫn được thay bằng tên nhóm thật,
+      // {questions} bị gỡ vì danh sách câu hỏi do hệ thống liệt kê bên dưới.
+      const sysTemplate=provider==="meta-free"?t("bg.joinSystemMeta"):t("bg.joinSystem");
+      const system=sysTemplate.replaceAll("{groupName}",groupName).replaceAll("{n}",String(qList.length));
+      const guidance=String(msg.prompt||"").replaceAll("{groupName}",groupName).replaceAll("{questions}","").trim().slice(0,2000);
+      const prompt=[system,
+        guidance?`${t("bg.joinGuidanceHead")}\n${guidance}`:"",
+        `${t("bg.joinQuestionsHead")}\n${questions}`,
+        t("bg.joinTail",{n:qList.length})
+      ].filter(Boolean).join("\n");
+      let raw="";
       if(provider==="meta-free")raw=await callMetaFreeText(prompt,"join");
       else if(provider==="gemini")raw=await callGemini(key,model||AI_DEFAULTS.gemini.model,msg.groupName,prompt,false);
       else if(provider==="claude"||provider==="Muse")raw=await callClaude(key,model,msg.groupName,prompt,false);
@@ -3363,9 +3465,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
       if(!answers){try{answers=JSON.parse(String(raw).replace(/```json|```/gi,"").trim());}catch{answers=String(raw).split(/\r?\n/).map(s=>s.replace(/^\s*(?:[-*•]|\d{1,3}[.)])\s+/,"").trim()).filter(Boolean);}}
       if(!answers)answers=[];
       if(!Array.isArray(answers)||!answers.length)throw new Error(t("bg.joinInvalid"));
-      // Từ chối bịa thông tin cá nhân (Meta hay từ chối) mà đem điền vào form
-      // thì hại hơn không điền — ném để luồng gọi dùng câu mẫu dự phòng.
-      if(answers.some(a=>metaFreeIsRefusal(a)))throw new Error(t("bg.joinInvalid"));
+      // Đáp án từ chối / lộ thân phận AI (mọi provider) mà đem điền vào form
+      // thì hại hơn không điền — ném lỗi để luồng gọi rơi xuống luồng 2
+      // (tự tính câu toán + câu mẫu dự phòng).
+      if(answers.some(a=>aiJoinIsRefusal(a)))throw new Error(t("bg.joinInvalid"));
       sendResponse({ok:true,answers:answers.map(a=>String(a).trim().slice(0,500))});
     }catch(e){sendResponse({ok:false,error:friendlyAiError(e,msg.aiConfig?.provider||"Gemini")});}})();return true;
   }
@@ -4455,13 +4558,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
           return;
         }
         if(!/^https?:\/\//i.test(rawUrl))throw new Error("Invalid media URL");
-        const maxBytes=Number(msg.maxBytes)||50*1024*1024;
+        // 2.11.9: siết fbFetchMedia — chặn đích nội bộ (URL đầu + URL cuối sau
+        // redirect) và trần cứng 50MB caller không nâng lên được (fbReels từng
+        // xin 100MB): media Story/Reels là video ngắn, và handler trả cả file
+        // dạng base64 qua message nên lớn hơn cũng không thực tế.
+        assertPublicMediaUrl(rawUrl);
+        const MEDIA_HARD_CAP=50*1024*1024;
+        const maxBytes=Math.min(Number(msg.maxBytes)||MEDIA_HARD_CAP,MEDIA_HARD_CAP);
         const timeoutMs=Number(msg.timeoutMs)||60000;
         const res=await fetchWithTimeout(rawUrl,{cache:"no-store",headers:{"Accept":"image/*,video/*,*/*;q=0.8"}},timeoutMs);
         if(!res.ok)throw new Error(`HTTP ${res.status||"?"}`);
-        const buf=new Uint8Array(await res.arrayBuffer());
+        if(res.url&&res.url!==rawUrl)assertPublicMediaUrl(res.url);
+        const declaredLen=Number(res.headers.get("content-length")||0);
+        if(declaredLen>maxBytes)throw new Error(`Media file exceeds size limit (${Math.round(declaredLen/1024/1024)}MB > ${Math.round(maxBytes/1024/1024)}MB)`);
+        const buf=await readMediaBodyWithCap(res,maxBytes);
         if(!buf.length)throw new Error("Empty media file");
-        if(buf.length>maxBytes)throw new Error(`Media file exceeds size limit (${Math.round(buf.length/1024/1024)}MB > ${Math.round(maxBytes/1024/1024)}MB)`);
         let mime="application/octet-stream";
         try{
           const ct=String(res.headers.get("content-type")||"").split(";")[0].trim();
