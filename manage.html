@@ -47,6 +47,10 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3.5 20c.6-3.4 2.7-5 5.5-5s4.9 1.6 5.5 5"/><path d="M16 5.5a3.5 3.5 0 0 1 0 5.8M17.5 15.4c1.7.7 2.7 2.2 3 4.6"/></svg>
         <span>Tài khoản MXH</span>
       </button>
+      <button class="nav-item" type="button" data-nav-target="testactions">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3h4"/><path d="M11 3v5.2L5.6 18a2.2 2.2 0 0 0 2 3.2h8.8a2.2 2.2 0 0 0 2-3.2L13 8.2V3"/><path d="M8 15h8"/></svg>
+        <span>Test hành động</span>
+      </button>
 
       <div class="tool-card">
         <div class="tool-card-head">
@@ -401,6 +405,34 @@
             </div>
           </div>
           <div class="table-footer"><span id="accountCountLabel">0 tài khoản</span><span>Scanner không đồng bộ dữ liệu ra ngoài.</span></div>
+        </article>
+      </section>
+
+      <!-- TEST HÀNH ĐỘNG -->
+      <section class="view" data-view="testactions">
+        <div class="section-intro">
+          <div><h2>Test hành động</h2><p>Bảng test đơn giản: mỗi hàng là một hành động của một nền tảng theo đúng contract hiện có. Bấm Chạy để enqueue một task test THẬT và xem kết quả ngay tại hàng.</p></div>
+          <span class="info-pill">Task test là task thật</span>
+        </div>
+
+        <article class="card form-card">
+          <div class="card-header"><div><h3>Đầu vào dùng chung</h3><p>Các hàng đăng bài / story / reply / affiliate đọc từ 3 ô này tại lúc bấm Chạy.</p></div></div>
+          <div class="form-grid form-grid-2">
+            <label class="field"><span>Nội dung mẫu</span><input id="testContent" type="text" value="Bài test từ Auto vjp — kiểm tra luồng tự động."></label>
+            <label class="field"><span>URL ảnh mẫu</span><input id="testImageUrl" type="url" value="https://picsum.photos/600"></label>
+          </div>
+          <label class="field"><span>URL nguồn (cho reply / affiliate)</span><input id="testSourceUrl" type="url" placeholder="https://… link bài viết / video đích — để trống thì hàng reply / affiliate báo thiếu và không chạy"></label>
+          <p class="field-note">Phiên nuôi test để trần ngắn (ít hành động, vài phút). Quét tài khoản và quét sức khoẻ selector không cần đầu vào. Upload YouTube cần URL/file video nên bảng không chạy trực tiếp — xem ghi chú ở hàng Upload.</p>
+        </article>
+
+        <article class="card table-card">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead><tr><th>Nền tảng</th><th>Hành động</th><th>Đầu vào test</th><th>Chạy</th><th>Kết quả gần nhất</th></tr></thead>
+              <tbody id="testTableBody"></tbody>
+            </table>
+          </div>
+          <div class="table-footer"><span id="testCountLabel">0 hành động</span><span>Kết quả đối chiếu từ biên lai local, tự cập nhật ~3 giây/lần khi có hàng đang chạy.</span></div>
         </article>
       </section>
     </main>

@@ -30,7 +30,8 @@ const STATUS_LABELS = {
   success: 'Thành công',
   failed: 'Thất bại',
   uncertain: 'Chưa chắc chắn',
-  skipped: 'Đã bỏ qua'
+  skipped: 'Đã bỏ qua',
+  cancelled: 'Đã huỷ'
 };
 const PAGE_META = {
   dashboard: ['Trang chủ', 'Tổng quan hàng đợi, lịch trình và kết quả thi hành trên thiết bị này.'],
@@ -38,7 +39,8 @@ const PAGE_META = {
   library: ['Kho nội dung', 'Hàng đợi, phiên đang chạy và kết quả đã hoàn tất trong cùng một nơi.'],
   compose: ['Viết bài mới', 'Tạo task bằng contract local hiện có, đăng ngay hoặc lên lịch.'],
   activity: ['Nhật ký hoạt động', 'Biên lai local ghi lại kết quả và lỗi của từng lần thi hành.'],
-  accounts: ['Tài khoản MXH', 'Tài khoản đã quét và lưu hoàn toàn trong trình duyệt này.']
+  accounts: ['Tài khoản MXH', 'Tài khoản đã quét và lưu hoàn toàn trong trình duyệt này.'],
+  testactions: ['Test hành động', 'Chạy thử từng hành động của từng nền tảng và xem kết quả ngay tại bảng.']
 };
 
 let currentState = {
@@ -121,6 +123,7 @@ function showView(name, updateHash = true) {
   if (name === 'library') renderLibrary();
   if (name === 'activity') renderActivity();
   if (name === 'accounts') renderAccounts();
+  if (name === 'testactions') renderTestActions();
 }
 
 function bindNavigation() {
@@ -158,6 +161,7 @@ function renderAll() {
   renderComposeAccounts();
   updateComposeSummary();
   renderLearned();
+  renderTestActions();
 }
 
 /* ---------- Selector đã học (tự chữa 2.9.0) ---------- */
@@ -870,6 +874,12 @@ function bindEvents() {
   });
   $$('input[name="publishMode"]').forEach(input => input.addEventListener('change', updatePublishMode));
 
+  $('testTableBody').addEventListener('click', ev => {
+    const btn = ev.target.closest('[data-test-run]');
+    if (!btn || btn.disabled) return;
+    runTestAction(btn.dataset.testRun);
+  });
+
   $('scanButtons').addEventListener('click', async ev => {
     const btn = ev.target.closest('[data-scan-platform]');
     if (!btn || btn.disabled) return;
@@ -918,6 +928,201 @@ function bindEvents() {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && Object.keys(changes).some(k => k.startsWith('autovjp.') || k === 'currentAutomationRun')) refresh();
   });
+}
+
+/* ---------- Bảng test hành động ----------
+ * Mỗi hàng = 1 cặp (platform, type) HỢP LỆ theo modules/kernel/
+ * contract.js scripts() — đối chiếu tay:
+ *   instagram: post, story, reply, affiliate, scan_account, healthscan, nurture
+ *   threads:   post, reply, affiliate, scan_account, healthscan, nurture
+ *   tiktok:    post, reply, scan_account, healthscan, nurture
+ *   x:         post, reply, affiliate, scan_account, nurture (KHÔNG có healthscan)
+ *   youtube:   post, upload, reply, scan_account, healthscan, nurture
+ * Task test là task THẬT qua autovjp.createTask; kết quả đối chiếu từ
+ * receipts của autovjp.listState theo task_id do kernel gán khi enqueue. */
+// Mẫu comment dự phòng cho phiên nuôi test — cùng bộ mẫu trung tính với
+// các nút nuôi mẫu ở sidebar (adapter dùng khi AI chưa sẵn).
+const TEST_NURTURE_TEMPLATES = [
+  'Bài chia sẻ hay quá, cảm ơn bạn nhiều nhé!',
+  'Đọc xong thấy rất đồng cảm luôn á.',
+  'Nội dung rất hữu ích, mình lưu lại để xem tiếp.'
+];
+const TEST_ACTIONS = [
+  { platform: 'instagram', type: 'scan_account', input: 'Không cần đầu vào' },
+  { platform: 'instagram', type: 'healthscan', input: 'Không cần đầu vào' },
+  { platform: 'instagram', type: 'post', input: 'Nội dung mẫu + ảnh mẫu' },
+  { platform: 'instagram', type: 'story', input: 'Ảnh mẫu + nội dung mẫu làm chữ' },
+  { platform: 'instagram', type: 'reply', input: 'URL nguồn + nội dung mẫu', needsSource: true },
+  { platform: 'instagram', type: 'affiliate', input: 'URL nguồn + nội dung mẫu', needsSource: true },
+  { platform: 'instagram', type: 'nurture', input: 'Phiên ngắn: tối đa 3 hành động · 5 phút' },
+  { platform: 'threads', type: 'scan_account', input: 'Không cần đầu vào' },
+  { platform: 'threads', type: 'healthscan', input: 'Không cần đầu vào' },
+  { platform: 'threads', type: 'post', input: 'Nội dung mẫu + ảnh mẫu' },
+  { platform: 'threads', type: 'reply', input: 'URL nguồn + nội dung mẫu', needsSource: true },
+  { platform: 'threads', type: 'affiliate', input: 'URL nguồn + nội dung mẫu', needsSource: true },
+  { platform: 'threads', type: 'nurture', input: 'Phiên ngắn: tối đa 3 hành động · 5 phút' },
+  { platform: 'tiktok', type: 'scan_account', input: 'Không cần đầu vào' },
+  { platform: 'tiktok', type: 'healthscan', input: 'Không cần đầu vào' },
+  { platform: 'tiktok', type: 'post', input: 'Nội dung mẫu + ảnh mẫu (bài ảnh)' },
+  { platform: 'tiktok', type: 'reply', input: 'URL nguồn + nội dung mẫu', needsSource: true },
+  { platform: 'tiktok', type: 'nurture', input: 'Phiên ngắn: xem 3 video · tối đa 5 phút' },
+  { platform: 'x', type: 'scan_account', input: 'Không cần đầu vào' },
+  { platform: 'x', type: 'post', input: 'Nội dung mẫu + ảnh mẫu' },
+  { platform: 'x', type: 'reply', input: 'URL nguồn + nội dung mẫu', needsSource: true },
+  { platform: 'x', type: 'affiliate', input: 'URL nguồn + nội dung mẫu', needsSource: true },
+  { platform: 'x', type: 'nurture', input: 'Phiên ngắn: tối đa 3 hành động · 5 phút' },
+  { platform: 'youtube', type: 'scan_account', input: 'Không cần đầu vào' },
+  { platform: 'youtube', type: 'healthscan', input: 'Không cần đầu vào' },
+  { platform: 'youtube', type: 'post', input: 'Community: nội dung mẫu + ảnh mẫu' },
+  { platform: 'youtube', type: 'reply', input: 'URL nguồn (link video) + nội dung mẫu', needsSource: true },
+  { platform: 'youtube', type: 'nurture', input: 'Phiên ngắn: xem 2 video · tối đa 6 phút' },
+  { platform: 'youtube', type: 'upload', input: 'Cần URL/file video — bảng chưa hỗ trợ nhập', needsFile: true }
+];
+const testRowKey = action => `${action.platform}:${action.type}`;
+// testRuns[rowKey] = { state: 'running'|'done'|'note', taskId, startedAt,
+//                      status, message, resultUrl, receivedAt }
+const testRuns = {};
+let testPollTimer = null;
+
+function buildTestTask(action) {
+  const content = $('testContent').value.trim() || 'Bài test từ Auto vjp — kiểm tra luồng tự động.';
+  const image = $('testImageUrl').value.trim() || 'https://picsum.photos/600';
+  const sourceUrl = $('testSourceUrl').value.trim();
+  const base = { platform: action.platform, type: action.type };
+  switch (action.type) {
+    case 'scan_account':
+    case 'healthscan':
+      return base;
+    case 'post':
+      return { ...base, content, images: [image] };
+    case 'story':
+      return { ...base, content, images: [image] };
+    case 'reply':
+    case 'affiliate':
+      return { ...base, source_url: sourceUrl, content };
+    case 'nurture': {
+      // Trần ngắn cho test — cùng tên trường với các nút nuôi mẫu ở
+      // sidebar (nurture-core / adapter từng platform đọc các trường này).
+      if (action.platform === 'tiktok') {
+        return { ...base, watch_count: 3, like_enabled: true, save_enabled: true, follow_enabled: false, max_minutes: 5, timeout_ms: 12 * 60 * 1000 };
+      }
+      if (action.platform === 'youtube') {
+        return { ...base, watch_count: 2, like_enabled: true, subscribe_enabled: false, comment_enabled: true, like_pct: 80, comment_pct: 60, comment_templates: TEST_NURTURE_TEMPLATES, search_query: 'tin tức hôm nay', max_actions: 4, max_minutes: 6, timeout_ms: 15 * 60 * 1000 };
+      }
+      if (action.platform === 'instagram') {
+        return { ...base, like_enabled: true, save_enabled: true, follow_enabled: false, comment_enabled: true, like_pct: 80, save_pct: 50, comment_pct: 60, comment_templates: TEST_NURTURE_TEMPLATES, max_actions: 3, max_minutes: 5, timeout_ms: 12 * 60 * 1000 };
+      }
+      if (action.platform === 'threads') {
+        return { ...base, like_enabled: true, follow_enabled: false, comment_enabled: true, like_pct: 80, comment_pct: 60, comment_templates: TEST_NURTURE_TEMPLATES, max_actions: 3, max_minutes: 5, timeout_ms: 12 * 60 * 1000 };
+      }
+      // x
+      return { ...base, like_enabled: true, bookmark_enabled: false, follow_enabled: false, comment_enabled: true, like_pct: 80, comment_pct: 60, comment_templates: TEST_NURTURE_TEMPLATES, max_actions: 3, max_minutes: 5, timeout_ms: 12 * 60 * 1000 };
+    }
+    default:
+      return base;
+  }
+}
+
+function syncTestRunsFromState() {
+  const receipts = currentState.receipts || [];
+  Object.values(testRuns).forEach(run => {
+    if (run.state !== 'running' || !run.taskId) return;
+    const receipt = receipts.find(r => String(r.task_id) === String(run.taskId));
+    // Receipt trung gian 'retrying' (runner thử lại) chưa phải kết quả cuối.
+    if (receipt && receipt.status !== 'retrying') {
+      run.state = 'done';
+      run.status = receipt.status;
+      run.message = receipt.message || '';
+      run.resultUrl = receipt.result_url || '';
+      run.receivedAt = receipt.received_at || Date.now();
+    }
+  });
+}
+
+function testResultCell(run) {
+  if (!run) return '<span class="muted">Chưa chạy</span>';
+  if (run.state === 'running') {
+    return `${statusBadge('running')}<br><span class="muted">task <code>${esc(run.taskId || '')}</code> · từ ${esc(fmtTime(run.startedAt))}</span>`;
+  }
+  if (run.state === 'done') {
+    const link = safeUrl(run.resultUrl);
+    return `${statusBadge(run.status)}<br><span>${esc(truncate(run.message || 'Không có thông điệp', 120))}</span><br><span class="muted">${esc(fmtTime(run.receivedAt))}</span>${link ? `<br><a href="${esc(link)}" target="_blank" rel="noreferrer">Mở kết quả</a>` : ''}`;
+  }
+  // state 'note': cảnh báo ngay tại hàng (thiếu đầu vào / cần file / enqueue lỗi)
+  return `<span>${esc(run.message || '')}</span>`;
+}
+
+function renderTestActions() {
+  const body = $('testTableBody');
+  if (!body) return;
+  syncTestRunsFromState();
+  $('testCountLabel').textContent = `${TEST_ACTIONS.length} hành động`;
+  body.innerHTML = TEST_ACTIONS.map(action => {
+    const key = testRowKey(action);
+    const run = testRuns[key];
+    const running = run?.state === 'running';
+    return `<tr>
+      <td>${platformChip(action.platform)}</td>
+      <td class="content-cell"><strong>${esc(typeLabel(action.type))}</strong><span>${esc(action.type)}</span></td>
+      <td>${esc(action.input)}</td>
+      <td><button class="mini-button" type="button" data-test-run="${esc(key)}" ${running ? 'disabled' : ''}>${action.needsFile ? 'Cần file' : (running ? 'Đang chạy…' : 'Chạy')}</button></td>
+      <td class="detail-cell">${testResultCell(run)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function stopTestPollIfIdle() {
+  if (testPollTimer && !Object.values(testRuns).some(r => r.state === 'running')) {
+    clearInterval(testPollTimer);
+    testPollTimer = null;
+  }
+}
+function ensureTestPoll() {
+  if (testPollTimer) return;
+  testPollTimer = setInterval(async () => {
+    const state = await send({ action: 'autovjp.listState' });
+    if (state.success) {
+      currentState = state;
+      syncTestRunsFromState();
+    }
+    // Quá 10 phút chưa có biên lai -> ngừng theo dõi hàng đó tại bảng
+    // (task thật vẫn chạy trong kernel; kết quả xem ở Nhật ký).
+    const now = Date.now();
+    Object.values(testRuns).forEach(run => {
+      if (run.state === 'running' && now - Number(run.startedAt || now) > 10 * 60 * 1000) {
+        run.state = 'note';
+        run.message = 'Quá 10 phút chưa thấy biên lai — task vẫn có thể đang chạy, kiểm tra mục Nhật ký hoạt động.';
+      }
+    });
+    renderTestActions();
+    stopTestPollIfIdle();
+  }, 3000);
+}
+
+async function runTestAction(key) {
+  const action = TEST_ACTIONS.find(a => testRowKey(a) === key);
+  if (!action) return;
+  if (action.needsFile) {
+    testRuns[key] = { state: 'note', message: 'Upload YouTube cần URL/file video thật nên bảng test không chạy trực tiếp. Dùng nút "Upload video YouTube (task mẫu)" ở cột trái (video mẫu công khai) hoặc form Viết bài mới với URL mp4 của bạn.' };
+    renderTestActions();
+    return;
+  }
+  if (action.needsSource && !$('testSourceUrl').value.trim()) {
+    testRuns[key] = { state: 'note', message: 'Thiếu URL nguồn — nhập link bài viết / video đích vào ô "URL nguồn" phía trên rồi bấm Chạy lại. Chưa có task nào được tạo.' };
+    renderTestActions();
+    return;
+  }
+  testRuns[key] = { state: 'running', taskId: '', startedAt: Date.now() };
+  renderTestActions();
+  const res = await send({ action: 'autovjp.createTask', task: buildTestTask(action) });
+  if (res.success && res.task) {
+    testRuns[key] = { state: 'running', taskId: res.task.id, startedAt: Date.now() };
+    ensureTestPoll();
+  } else {
+    testRuns[key] = { state: 'note', message: `Không đưa được task vào hàng đợi: ${res.error || 'không rõ'}` };
+  }
+  renderTestActions();
+  refresh();
 }
 
 /* ---------- Khởi tạo ---------- */

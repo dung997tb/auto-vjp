@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Auto vjp",
   "short_name": "Auto vjp",
-  "version": "2.11.11",
+  "version": "2.11.12",
   "description": "Auto vjp — fork noi bo da go license. Tự động Facebook: kết bạn có lọc, đăng và share bài bằng AI vào nhóm, cùng các công cụ Bản tin và Trend.",
   "permissions": [
     "storage",
