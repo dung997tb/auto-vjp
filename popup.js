@@ -8436,7 +8436,7 @@ async function createScheduleChain(){
     const pageGap=document.querySelector("#scheduleChainPageGap")?Math.min(604800,Math.max(0,parseInt(document.querySelector("#scheduleChainPageGap").value)||30)):gapSeconds;
     const autoFresh=!document.querySelector("#scheduleChainAutoFresh")||document.querySelector("#scheduleChainAutoFresh").checked;
     const onFailure=["auto","continue","stop"].includes(scheduleChainOnFailure?.value)?scheduleChainOnFailure.value:"auto";
-    const actorOf=step=>{try{const p=step?.config?.page;return p?String(p.id||p.url||"page"):nick;}catch{return "nick";}};
+    const actorOf=step=>{try{const p=step?.config?.page;return p?String(p.id||p.url||"page"):"nick";}catch{return "nick";}};
     const steps=scheduleChainDraft.map((step,i)=>{
       const config={...(step.config||{})};
       if(autoFresh&&!String(step.feature||"").startsWith("trend")&&Array.isArray(config.groups)&&config.groups.length&&!config.groups.some(g=>g&&typeof g.auto==="object")){
