@@ -1,0 +1,120 @@
+{
+  "manifest_version": 3,
+  "name": "Auto vjp",
+  "short_name": "Auto vjp",
+  "version": "2.11.6",
+  "description": "Auto vjp — fork noi bo da go license. Tự động Facebook: kết bạn có lọc, đăng và share bài bằng AI vào nhóm, cùng các công cụ Bản tin và Trend.",
+  "permissions": [
+    "storage",
+    "downloads",
+    "debugger",
+    "scripting",
+    "unlimitedStorage",
+    "alarms",
+    "power",
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://*.facebook.com/*",
+    "https://api.openai.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://api.anthropic.com/*",
+    "https://api.groq.com/*",
+    "https://openrouter.ai/*",
+    "https://api.deepseek.com/*",
+    "https://api.mistral.ai/*",
+    "https://*.instagram.com/*",
+    "https://*.threads.net/*",
+    "https://*.threads.com/*",
+    "https://*.tiktok.com/*",
+    "https://x.com/*",
+    "https://*.x.com/*",
+    "https://twitter.com/*",
+    "https://*.twitter.com/*",
+    "https://youtube.com/*",
+    "https://*.youtube.com/*",
+    "https://chatgpt.com/*",
+    "https://*.chatgpt.com/*",
+    "https://gemini.google.com/*",
+    "https://*/*",
+    "http://127.0.0.1/*"
+  ],
+  "action": {
+    "default_title": "Auto vjp - Quản lý Nick & Page",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.facebook.com/*"
+      ],
+      "js": [
+        "store.js",
+        "i18n.js",
+        "personalActor.js",
+        "aiTyping.js",
+        "content.js",
+        "scrape.js",
+        "group.js",
+        "page.js",
+        "feed.js",
+        "share.js",
+        "sales.js",
+        "trend.js",
+        "friendReengage.js",
+        "friendWarm.js",
+        "news.js",
+        "readywall.js",
+        "fbStory.js",
+        "fbReels.js",
+        "overnight.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://*.facebook.com/*"
+      ],
+      "js": [
+        "scrape-network.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "*://x.com/*",
+        "*://twitter.com/*"
+      ],
+      "js": [
+        "xread.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://*.meta.ai/*"
+      ],
+      "js": [
+        "metaai.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://*.vnexpress.net/*",
+        "*://vnexpress.net/*"
+      ],
+      "js": [
+        "web-image.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "128": "icon128.png"
+  }
+}
