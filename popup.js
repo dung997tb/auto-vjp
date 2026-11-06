@@ -9029,6 +9029,13 @@ if(exportSettingsBtn)exportSettingsBtn.onclick=async()=>{
       showBackupStatus(`✅ Đã xuất cấu hình: ${Object.keys(payload.sync).length} mục${dropped.length?` (bỏ ${dropped.length} lịch cần nhóm: ${dropped.slice(0,3).join(", ")})`:""} — key và nhóm ở lại máy này`);
       return;
     }
+    // (2.11.10) Xuất ĐẦY ĐỦ chứa API key + thông tin license trong file
+    // JSON — ai có file là dùng được key. Hỏi rõ trước khi gom; huỷ thì
+    // dừng hẳn, không tạo file nào.
+    if(!confirm("⚠️ Xuất bản ĐẦY ĐỦ?\n\nFile backup này chứa API key và thông tin license của bạn. Ai có file này đều dùng được key của bạn.\nChỉ tiếp tục nếu bạn chắc chắn lưu file ở nơi an toàn.\n\nTiếp tục xuất đầy đủ?")){
+      showBackupStatus("Đã huỷ xuất đầy đủ — không có file nào được tạo.",false);
+      return;
+    }
     showBackupStatus("⏳ Đang gom dữ liệu xuất...");
     const [sync,baseLocal]=await Promise.all([chrome.storage.sync.get(null),chrome.storage.local.get(EXPORT_LOCAL_KEYS)]);
     // Bù key per-Page (pageJoinedGroups_*): allowlist ghi literal nên get trực tiếp sẽ sót.
@@ -9055,6 +9062,35 @@ if(importSettingsBtn)importSettingsBtn.onclick=()=>importSettingsFile&&importSet
 // Tái dùng khung full backup ở trên, khác 3 điểm: (1) bỏ secrets + nhóm,
 // (2) hồ sơ AI gộp theo tên (giữ key nick2), (3) lịch cần nhóm thì bỏ + báo rõ.
 const CONFIG_ONLY_SECRET_KEYS=new Set(["aiApiKey","aiKeys","groupPostAiKey","licenseToken","licenseKey","licenseGmail","licenseMachineId","licenseLastVerified","licenseValid","licenseReason","licenseExpiry","licensePlan","licenseKeyBackup","licenseGmailBackup"]);
+// (2.11.10) Lớp lọc secret THỨ HAI cho bản config-only: đệ quy quét mọi
+// object/array và loại thêm key lạ mà tên (lowercase) khớp mẫu secret —
+// phòng key bí mật lồng sâu trong config/lịch mà set tên cố định ở trên
+// không biết. NGOẠI LỆ tường minh: các key cấu hình/thống kê chứa chữ
+// "token" nhưng KHÔNG phải bí mật — giới hạn token đầu ra của AI
+// (maxTokensOverride, maxOutputTokens, max_tokens, max_completion_tokens)
+// và thống kê digest hồ sơ (estimatedTokens, tokens, approxTokens). Các
+// key chứa "keyword" (friendGroupKeyword...) không khớp mẫu vì mẫu đòi
+// "api" đứng ngay trước "key".
+const CONFIG_ONLY_SECRET_NAME_RE=/(api[-_]?key|secret|token|password|passwd)/;
+const CONFIG_ONLY_SAFE_TOKEN_KEYS=new Set(["maxtokensoverride","maxoutputtokens","max_tokens","max_completion_tokens","estimatedtokens","tokens","approxtokens"]);
+function configOnlyIsSecretKey(k){
+  if(CONFIG_ONLY_SECRET_KEYS.has(k))return true;
+  const lk=String(k).toLowerCase();
+  if(CONFIG_ONLY_SAFE_TOKEN_KEYS.has(lk))return false;
+  return CONFIG_ONLY_SECRET_NAME_RE.test(lk);
+}
+function configOnlyStripSecretsDeep(v){
+  if(Array.isArray(v))return v.map(configOnlyStripSecretsDeep);
+  if(v&&typeof v==="object"){
+    const out={};
+    for(const [k,val] of Object.entries(v)){
+      if(configOnlyIsSecretKey(k))continue;
+      out[k]=configOnlyStripSecretsDeep(val);
+    }
+    return out;
+  }
+  return v;
+}
 const CONFIG_ONLY_GROUP_FEATURES=new Set(["share","sales","trendPost","pageGroupPost","pageSales","pageGroupComment","groupComment","groupInteract","groupPost"]);
 function configOnlyStripGroupsDeep(task){
   // Trả bản sao task đã xóa nhóm CỨNG, giữ entry {auto} (tự phân giải theo
@@ -9072,7 +9108,9 @@ async function buildConfigOnlyPayload(){
   const sync={};
   for(const [k,v] of Object.entries(syncAll||{})){
     if(CONFIG_ONLY_SECRET_KEYS.has(k))continue;
-    sync[k]=v;
+    // (2.11.10) Giá trị cũng phải quét đệ quy: secret có thể lồng trong
+    // object con (hồ sơ AI, config từng tính năng) chứ không chỉ ở key gốc.
+    sync[k]=configOnlyStripSecretsDeep(v);
   }
   if(Array.isArray(sync.aiProfiles))sync.aiProfiles=sync.aiProfiles.map(p=>({...p,key:""}));
   delete sync.salesScheduleProductIds;
@@ -9081,11 +9119,11 @@ async function buildConfigOnlyPayload(){
   const dropped=[];
   try{
     const keep=await chrome.storage.local.get(["salesProductsMeta","scheduledTasks","scheduleChainDraft"]).catch(()=>({}));
-    if(Array.isArray(keep.salesProductsMeta))local.salesProductsMeta=keep.salesProductsMeta;
+    if(Array.isArray(keep.salesProductsMeta))local.salesProductsMeta=configOnlyStripSecretsDeep(keep.salesProductsMeta);
     try{
       const everything=await chrome.storage.local.get(null).catch(()=>({}));
       for(const k of Object.keys(everything||{})){
-        if(k.startsWith("pageSalesProductsMeta_"))local[k]=everything[k];
+        if(k.startsWith("pageSalesProductsMeta_"))local[k]=configOnlyStripSecretsDeep(everything[k]);
       }
     }catch{}
     if(Array.isArray(keep.scheduledTasks)){
@@ -9102,18 +9140,18 @@ async function buildConfigOnlyPayload(){
           });
           if(!keptSteps.length){dropped.push(task.name||task.label||task.id||"chain");continue;}
           const t={...task,steps:keptSteps.map(s=>configOnlyStripGroupsDeep(s))};
-          local.scheduledTasks.push(configOnlyStripGroupsDeep(t));
+          local.scheduledTasks.push(configOnlyStripSecretsDeep(configOnlyStripGroupsDeep(t)));
         }else if(CONFIG_ONLY_GROUP_FEATURES.has(task.feature)){
           const cleaned=configOnlyStripGroupsDeep(task);
           const leftovers=Array.isArray(cleaned.config?.groups)?cleaned.config.groups.length:0;
           if(!leftovers){dropped.push(task.name||task.label||task.feature||task.id);continue;}
-          local.scheduledTasks.push(cleaned);
+          local.scheduledTasks.push(configOnlyStripSecretsDeep(cleaned));
         }else{
-          local.scheduledTasks.push(configOnlyStripGroupsDeep(task));
+          local.scheduledTasks.push(configOnlyStripSecretsDeep(configOnlyStripGroupsDeep(task)));
         }
       }
     }
-    if(Array.isArray(keep.scheduleChainDraft))local.scheduleChainDraft=keep.scheduleChainDraft;
+    if(Array.isArray(keep.scheduleChainDraft))local.scheduleChainDraft=configOnlyStripSecretsDeep(keep.scheduleChainDraft);
   }catch{}
   return {sync,local,dropped};
 }

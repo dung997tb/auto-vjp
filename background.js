@@ -4533,10 +4533,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
       try{
         const url=newsDecodeEntities(String(msg.url||"").trim()).replace(/&amp;/g,"&");
         if(!/^https?:\/\//i.test(url))throw new Error(t("bg.newsBadSource"));
+        // 2.11.10: áp cùng lớp chặn SSRF như fbFetchMedia — URL ảnh lấy từ
+        // nội dung web/RSS, không cho trỏ vào đích nội bộ; URL cuối sau
+        // redirect cũng được kiểm lại ở dưới trước khi đọc body.
+        assertPublicMediaUrl(url);
         // Một số CDN báo chí chặn request thiếu Accept/referrer (hay gặp 401 với
         // ảnh RSS); gửi Accept ảnh + no-store, lỗi thì caller fallback tab capture.
         const res=await fetchWithTimeout(url,{cache:"no-store",headers:{"Accept":"image/avif,image/webp,image/apng,image/*,*/*;q=0.8"}},30000);
         if(!res.ok)throw new Error(`HTTP ${res.status||"?"}`);
+        if(res.url&&res.url!==url)assertPublicMediaUrl(res.url);
         const buf=new Uint8Array(await res.arrayBuffer());
         if(!buf.length||buf.length>8*1024*1024)throw new Error(t("bg.newsImgTooBig"));
         let mime="image/jpeg";
