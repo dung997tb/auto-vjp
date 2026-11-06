@@ -36,6 +36,16 @@
         return false;
       }
 
+      // (2.11.10) Chốt tab: kết quả phải đến từ đúng tab của run. Callback
+      // cũ/sai phiên gửi từ tab lạ dù khớp taskId cũng bị bỏ — KHÔNG ghi
+      // receipt. Ngoại lệ scan_account: quét ngoài canonical, tab không
+      // ràng buộc với run. Thiếu tabId ở một trong hai phía thì cho qua
+      // (tương thích các đường deliver cũ không mang tab).
+      if (result.type !== 'scan_account' && run?.tabId && result.tabId && String(run.tabId) !== String(result.tabId)) {
+        console.warn('[Auto vjp][outbox] Bỏ kết quả sai tab của run', { taskId, runTab: run.tabId, resultTab: result.tabId });
+        return false;
+      }
+
       const key = receiptKeyOf({ ...result, runId: result.runId || run?.run_id || '' });
       const seenKeys = Array.isArray(stored[K.RECEIPT_KEYS]) ? stored[K.RECEIPT_KEYS] : [];
       if (seenKeys.includes(key)) return true; // đã ghi receipt rồi — coi như đã ACK
@@ -98,5 +108,49 @@
     });
   }
 
-  globalThis.AVJP.outbox = { deliver, receiptKeyOf };
+  // replayPending() -> Promise<số receipt đã khôi phục> (2.11.10)
+  // deliver() ghi OUTBOX trước rồi mới ghi RECEIPT — SW chết giữa hai lần
+  // ghi là receipt mất nhưng mục outbox còn nằm lại. Lúc khởi động, quét
+  // outbox: mục nào chưa có trong RECEIPTS (theo receipt_id hoặc key
+  // chống trùng) thì bổ sung vào RECEIPTS + thêm key, rồi dọn khỏi
+  // OUTBOX. Mục đã có receipt thì chỉ dọn khỏi outbox (đừng để tồn mãi).
+  // KHÔNG đụng canonical run — phiên chạy dở để watchdog xử như cũ.
+  // Chạy lại nhiều lần an toàn: lần sau outbox đã sạch, không trùng.
+  async function replayPending() {
+    return S.withLock(async () => {
+      const stored = await S.getMany([K.OUTBOX, K.RECEIPTS, K.RECEIPT_KEYS]);
+      const pending = Array.isArray(stored[K.OUTBOX]) ? stored[K.OUTBOX] : [];
+      if (!pending.length) return 0;
+      const receipts = (Array.isArray(stored[K.RECEIPTS]) ? stored[K.RECEIPTS] : []).slice();
+      const seenKeys = (Array.isArray(stored[K.RECEIPT_KEYS]) ? stored[K.RECEIPT_KEYS] : []).slice();
+      let restored = 0;
+      for (const item of pending) {
+        // Mục outbox lưu ở dạng receipt (task_id/run_id snake_case) — dựng
+        // lại key theo các trường đó. Receipt không lưu sourceKey nên key
+        // dựng lại thiếu thành phần này; bù bằng chốt receipt_id bên dưới.
+        const key = receiptKeyOf({
+          type: item.type, taskId: item.task_id || '', platform: item.platform || '',
+          runId: item.run_id || '', sourceKey: ''
+        });
+        const already = receipts.some(r => r.receipt_id && r.receipt_id === item.receipt_id) || seenKeys.includes(key);
+        if (!already) {
+          receipts.push(item);
+          seenKeys.push(key);
+          restored++;
+        }
+      }
+      await S.set({
+        [K.RECEIPTS]: receipts.slice(-200),
+        [K.RECEIPT_KEYS]: seenKeys.slice(-200),
+        [K.OUTBOX]: []
+      });
+      if (restored) console.warn(`[Auto vjp][outbox] replayPending: khôi phục ${restored} receipt từ outbox tồn`);
+      return restored;
+    }).catch(err => {
+      console.error('[Auto vjp][outbox] replayPending error', err);
+      return 0;
+    });
+  }
+
+  globalThis.AVJP.outbox = { deliver, receiptKeyOf, replayPending };
 })();

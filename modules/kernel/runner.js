@@ -41,6 +41,21 @@
     throw lastErr || new Error('Không mở được tab automation');
   }
 
+  // (2.11.10) Khớp host theo hostname thật (parse URL) — KHÔNG dùng
+  // url.includes(h): 'instagram.com.attacker.example' chứa chuỗi
+  // 'instagram.com' vẫn phải bị từ chối. Đúng khi hostname bằng host
+  // hoặc là subdomain của host.
+  function hostMatches(url, hosts) {
+    try {
+      const hostname = new URL(url || '').hostname.toLowerCase();
+      if (!hostname) return false;
+      return (hosts || []).some(h => {
+        const host = String(h || '').toLowerCase();
+        return host && (hostname === host || hostname.endsWith('.' + host));
+      });
+    } catch (_) { return false; }
+  }
+
   function isAuthOrCheckpoint(url) {
     return url.includes('/login') || url.includes('/checkpoint') || url.includes('accounts/login')
       || url.includes('accounts.google.com/signin') || url.includes('facebook.com/recover')
@@ -122,7 +137,7 @@
       const run = await S.getRun();
       if (!run || run.tabId !== tabId || run.platform === 'probe') return;
       const hosts = C().PLATFORMS[run.platform]?.hosts || [];
-      if (!hosts.some(h => tab.url.includes(h))) return;
+      if (!hostMatches(tab.url, hosts)) return;
 
       if (isAuthOrCheckpoint(tab.url)) {
         await globalThis.AVJP.outbox.deliver({

@@ -17,9 +17,67 @@
     return btoa(binary);
   }
 
+  // 2.11.10 — Lớp chặn SSRF TỰ CHỨA trong file này (không phụ thuộc thứ tự
+  // nạp file): URL media do task/nội dung web đưa vào nên không cho fetch
+  // đích nội bộ. Tiêu chí đồng bộ helper mediaHostBlocked/
+  // assertPublicMediaUrl ở background.js (2.11.9): chỉ http/https, chặn
+  // localhost/*.localhost/*.local, IPv4 127/8, 10/8, 172.16/12, 192.168/16,
+  // 169.254/16, 0/8 (kể cả dạng số nguyên thập phân/hex), IPv6 ::1, ::,
+  // fe80::/10, fc00::/7 và IPv4-mapped ::ffff:. Kiểm URL đầu vào ở mọi hàm
+  // fetch, và kiểm thêm URL cuối sau redirect trước khi đọc body.
+  function mediaHostBlocked(hostname) {
+    const host = String(hostname || '').toLowerCase().replace(/\.$/, '').replace(/^\[|\]$/g, '');
+    if (!host) return true;
+    if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true;
+    if (host.includes(':')) {
+      // IPv6: loopback ::1, unspecified ::, link-local fe80::/10, unique-local fc00::/7
+      if (host === '::1' || host === '::') return true;
+      if (/^fe[89ab]/.test(host)) return true;
+      if (/^f[cd]/.test(host)) return true;
+      const mapped = host.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+      if (mapped) return mediaHostBlocked(mapped[1]);
+      // URL parser chuẩn hoá IPv4-mapped về dạng hex ::ffff:7f00:1 (= 127.0.0.1)
+      const mappedHex = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+      if (mappedHex) {
+        const hi = parseInt(mappedHex[1], 16), lo = parseInt(mappedHex[2], 16);
+        return mediaHostBlocked(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
+      }
+      return false;
+    }
+    const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (m) {
+      const a = +m[1], b = +m[2];
+      if (a === 127 || a === 10 || a === 0) return true;      // loopback / private A / "this host"
+      if (a === 172 && b >= 16 && b <= 31) return true;      // private B
+      if (a === 192 && b === 168) return true;               // private C
+      if (a === 169 && b === 254) return true;               // link-local (metadata)
+      return false;
+    }
+    // IPv4 dạng số nguyên thập phân (2130706433) hoặc hex (0x7f000001):
+    // parser URL thường tự chuẩn hoá về dạng chấm thập phân, nhưng tự
+    // chuyển ở đây để không phụ thuộc hành vi của parser.
+    let intVal = null;
+    if (/^\d+$/.test(host)) intVal = Number(host);
+    else if (/^0x[0-9a-f]+$/i.test(host)) intVal = parseInt(host, 16);
+    if (intVal !== null && Number.isFinite(intVal)) {
+      const v = intVal >>> 0;
+      return mediaHostBlocked(`${(v >>> 24) & 255}.${(v >>> 16) & 255}.${(v >>> 8) & 255}.${v & 255}`);
+    }
+    return false;
+  }
+
+  function assertMediaUrl(urlStr) {
+    let u = null;
+    try { u = new URL(String(urlStr || '')); } catch (_) { throw new Error('mediaFetch: invalid URL'); }
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('mediaFetch: blocked non-http(s) URL');
+    if (mediaHostBlocked(u.hostname)) throw new Error('mediaFetch: blocked internal host');
+  }
+
   async function start(url) {
+    assertMediaUrl(url);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`media fetch HTTP ${res.status}`);
+    if (res.url && res.url !== url) assertMediaUrl(res.url);
     const buf = await res.arrayBuffer();
     const id = `mf_${Date.now().toString(36)}_${++seq}`;
     cache.set(id, { buf, type: res.headers.get('content-type') || 'application/octet-stream' });
@@ -42,8 +100,10 @@
   }
 
   async function fetchImage(url) {
+    assertMediaUrl(url);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`image fetch HTTP ${res.status}`);
+    if (res.url && res.url !== url) assertMediaUrl(res.url);
     const buf = await res.arrayBuffer();
     if (buf.byteLength > 20 * 1024 * 1024) throw new Error('image too large');
     const type = res.headers.get('content-type') || 'image/jpeg';

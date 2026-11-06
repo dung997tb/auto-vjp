@@ -26,9 +26,14 @@
     return { platform, type };
   }
 
-  // enqueue(input) -> task đã chuẩn hoá (payload của task nằm phẳng ở top-level,
-  // khớp cách automator MUT đọc task: content/images/source_url/reply_templates/...)
-  async function enqueue(input) {
+  // enqueueLocked(input) -> task đã chuẩn hoá: validate + đẩy queue.
+  // BẮT BUỘC gọi khi đang ở trong S.withLock — hàm này KHÔNG tự lấy khoá
+  // (withLock là promise-chain không đệ quy được: enqueue tự lấy khoá mà
+  // bị gọi từ trong một withLock khác là deadlock). processSchedules
+  // dùng trực tiếp để đọc lịch + tạo task + ghi lịch trong MỘT khoá.
+  // (payload của task nằm phẳng ở top-level, khớp cách automator MUT đọc
+  // task: content/images/source_url/reply_templates/...)
+  async function enqueueLocked(input) {
     const { platform, type } = validateTask(input);
     const task = {
       ...input,
@@ -38,11 +43,15 @@
       status: 'queued',
       created_at: Date.now()
     };
-    await S.withLock(async () => {
-      const queue = (await S.get(K.QUEUE)) || [];
-      queue.push(task);
-      await S.set({ [K.QUEUE]: queue });
-    });
+    const queue = (await S.get(K.QUEUE)) || [];
+    queue.push(task);
+    await S.set({ [K.QUEUE]: queue });
+    return task;
+  }
+
+  // enqueue(input) -> task đã chuẩn hoá
+  async function enqueue(input) {
+    const task = await S.withLock(() => enqueueLocked(input));
     kick().catch(() => {});
     return task;
   }
@@ -65,22 +74,34 @@
     };
   }
 
+  // (2.11.10) Toàn bộ đọc lịch -> tạo task -> ghi lịch còn lại nằm trong
+  // MỘT withLock. Trước đây ba bước rời nhau: hai lần kick() chồng nhau
+  // (alarm 1 phút + kick sau mỗi receipt) cùng thấy một lịch đến hạn, bắn
+  // trùng 2 task, rồi ghi đè danh sách lịch của nhau. Chống trùng thêm
+  // một lớp: task từ lịch mang schedule_id + schedule_run_at của lần bắn;
+  // queue đã có task cùng cặp này thì bỏ qua, không tạo nữa.
   async function processSchedules() {
-    const now = Date.now();
-    const schedules = (await S.get(K.SCHEDULES)) || [];
-    if (!schedules.length) return;
-    const due = schedules.filter(sch => Number(sch.run_at) <= now);
-    if (!due.length) return;
-    const remaining = [];
-    for (const sch of schedules) {
-      if (Number(sch.run_at) <= now) {
-        try { await enqueue({ ...sch.template, schedule_id: sch.id }); } catch (err) {
-          console.error('[Auto vjp][source] schedule enqueue failed', sch.id, err);
-        }
-        if (sch.repeat === 'daily') remaining.push({ ...sch, run_at: Number(sch.run_at) + 24 * 3600 * 1000 });
-      } else remaining.push(sch);
-    }
-    await S.set({ [K.SCHEDULES]: remaining });
+    await S.withLock(async () => {
+      const now = Date.now();
+      const schedules = (await S.get(K.SCHEDULES)) || [];
+      if (!schedules.length) return;
+      const due = schedules.filter(sch => Number(sch.run_at) <= now);
+      if (!due.length) return;
+      const remaining = [];
+      for (const sch of schedules) {
+        if (Number(sch.run_at) <= now) {
+          const queueNow = (await S.get(K.QUEUE)) || [];
+          const already = queueNow.some(t => t && t.schedule_id === sch.id && Number(t.schedule_run_at) === Number(sch.run_at));
+          if (!already) {
+            try { await enqueueLocked({ ...sch.template, schedule_id: sch.id, schedule_run_at: Number(sch.run_at) }); } catch (err) {
+              console.error('[Auto vjp][source] schedule enqueue failed', sch.id, err);
+            }
+          }
+          if (sch.repeat === 'daily') remaining.push({ ...sch, run_at: Number(sch.run_at) + 24 * 3600 * 1000 });
+        } else remaining.push(sch);
+      }
+      await S.set({ [K.SCHEDULES]: remaining });
+    });
   }
 
   async function claimNext() {
@@ -134,7 +155,15 @@
     chrome.alarms.onAlarm.addListener(alarm => {
       if (alarm.name === ALARM) kick().catch(() => {});
     });
-    chrome.runtime.onStartup.addListener(() => kick().catch(() => {}));
+    chrome.runtime.onStartup.addListener(() => {
+      // (2.11.10) Khôi phục receipt còn tồn trong outbox (SW chết giữa
+      // chừng lúc deliver ghi dở) trước khi nhận việc mới.
+      globalThis.AVJP.outbox?.replayPending?.().catch(() => {});
+      kick().catch(() => {});
+    });
+    // Một lần ngay khi nạp SW (không chờ onStartup): phiên trước bị giết
+    // giữa chừng thì outbox tồn được dọn ngay từ lần nạp này.
+    globalThis.AVJP.outbox?.replayPending?.().catch(err => console.error('[Auto vjp][source] replay outbox', err));
     kick().catch(() => {});
   }
 

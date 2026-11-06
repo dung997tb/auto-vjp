@@ -11,11 +11,26 @@
   const K = S.KEYS;
   const outbox = () => globalThis.AVJP.outbox;
 
+  // (2.11.10) Khớp host theo hostname thật (parse URL) — KHÔNG dùng
+  // url.includes(h): chuỗi 'instagram.com' cũng xuất hiện trong
+  // 'instagram.com.attacker.example' và trong path/query, includes cho
+  // qua hết. Đúng khi hostname bằng host hoặc là subdomain của host.
+  function hostMatches(url, hosts) {
+    try {
+      const hostname = new URL(url || '').hostname.toLowerCase();
+      if (!hostname) return false;
+      return (hosts || []).some(h => {
+        const host = String(h || '').toLowerCase();
+        return host && (hostname === host || hostname.endsWith('.' + host));
+      });
+    } catch (_) { return false; }
+  }
+
   function senderPlatform(sender, fallback) {
     try {
       const url = sender?.tab?.url || '';
       for (const [name, pl] of Object.entries(globalThis.AVJP.contract.PLATFORMS)) {
-        if (pl.hosts.some(h => url.includes(h))) return name;
+        if (hostMatches(url, pl.hosts)) return name;
       }
     } catch (_) {}
     return fallback || 'facebook';
@@ -49,13 +64,30 @@
     switch (action) {
       case 'postCompleted':
       case 'storyCompleted':
-      case 'uploadCompleted':
-      case 'postResultUnknown': {
+      case 'uploadCompleted': {
         const confirmed = await outbox().deliver({
           type: action === 'storyCompleted' ? 'story' : (action === 'uploadCompleted' ? 'upload' : 'post'), taskId: message.postId, platform,
           status: 'success', tabId,
           resultUrl: message.resultUrl || null,
-          resultUrlType: message.resultUrlType || (action === 'postResultUnknown' ? (message.actorUrl ? 'profile_fallback' : 'unavailable') : null),
+          resultUrlType: message.resultUrlType || null,
+          actorUrl: message.actorUrl || null, actorName: message.actorName || null,
+          targetName: message.targetName || null,
+          resultMessage: message.error || undefined,
+          details: message.details || null,
+          runId: message.runId, deliveryId: message.deliveryId
+        });
+        return sendResponse({ success: confirmed });
+      }
+      case 'postResultUnknown': {
+        // (2.11.10) Automator đã bấm đăng nhưng KHÔNG proof được bài lên
+        // thật — trước đây đi chung nhánh success làm sai thống kê và dễ
+        // mất bài vì tưởng đã đăng. Tách riêng: ghi 'uncertain' (kỷ luật
+        // kernel: uncertain không tự chạy lại, người kiểm tra tay sau).
+        const confirmed = await outbox().deliver({
+          type: 'post', taskId: message.postId, platform,
+          status: 'uncertain', tabId,
+          resultUrl: message.resultUrl || null,
+          resultUrlType: message.resultUrlType || (message.actorUrl ? 'profile_fallback' : 'unavailable'),
           actorUrl: message.actorUrl || null, actorName: message.actorName || null,
           targetName: message.targetName || null,
           resultMessage: message.error || undefined,
@@ -70,6 +102,10 @@
         const confirmed = await outbox().deliver({
           type: action === 'storyFailed' ? 'story' : (action === 'uploadFailed' ? 'upload' : 'post'), taskId: message.postId, platform,
           status: 'failed', tabId,
+          // (2.11.10) Gắn failure_code để tầng retry (runner) phân loại
+          // được fail nào thử lại được; thiếu cả hai nguồn thì để null
+          // (không phân loại được -> fail chung cuộc như cũ).
+          failure_code: message.failure_code || (message.details && message.details.failure_code) || null,
           actorUrl: message.actorUrl || null, actorName: message.actorName || null,
           targetName: message.targetName || null,
           resultMessage: message.error || 'Extension không thể hoàn tất đăng bài',
