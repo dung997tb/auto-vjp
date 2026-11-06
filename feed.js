@@ -31,6 +31,8 @@
   // comment (bắt live: chọn like nhưng vẫn đăng comment) — đã chốt lưu/khôi
   // phục đầy đủ như các cấu hình khác.
   let aiRunMode="comment",aiReactionPref="like";
+  // Cờ like-sau-comment của phiên (trước đây chỉ gán mà không khai báo → toàn cục ngầm).
+  let aiLikeAfterComment=false;
 // Prompt thường (không tag) của phiên — trước đây content script không mang
 // theo nên background luôn dùng prompt legacy toàn cục, bài tab cấu hình bị
 // bỏ qua (bắt live: comment kém bám sát dù prompt đã gửi).
