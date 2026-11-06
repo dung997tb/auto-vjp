@@ -1,21 +1,18 @@
 /* Auto vjp — module contract data (ported from MUT client task-contract, exports stripped). */
 (()=>{
 // Ported from MUT core/task-contract.js (CONTRACT_VERSION 2) — see MODULE-CONTRACT.md
+// Dọn dẹp 2.11.9: đã bỏ các type thừa hưởng từ MUT mà kernel local không bao giờ
+// route được (không nằm trong AVJP.contract.TASK_TYPES nên validateTask ở
+// source.js luôn từ chối, không platform nào có nhánh scripts()): comment, like,
+// own_post_comment, auto_connect, join_group, scan_group, scan_shopee,
+// media_enrichment, ai_caption — kèm metadata + alias legacy trỏ riêng vào chúng.
+// CONTRACT_VERSION giữ nguyên 2 (chỉ bỏ phần chết, không đổi hợp đồng type còn sống).
 const CONTRACT_VERSION = 2;
 const TASK_TYPES = Object.freeze({
   "POST": "post",
-  "COMMENT": "comment",
   "REPLY": "reply",
-  "LIKE": "like",
-  "OWN_POST_COMMENT": "own_post_comment",
   "AFFILIATE_COMMENT": "affiliate_comment",
-  "AUTO_CONNECT": "auto_connect",
-  "JOIN_GROUP": "join_group",
   "SCAN_ACCOUNT": "scan_account",
-  "SCAN_GROUP": "scan_group",
-  "SCAN_SHOPEE": "scan_shopee",
-  "MEDIA_ENRICHMENT": "media_enrichment",
-  "AI_CAPTION": "ai_caption",
   "NURTURE": "nurture",
   "STORY": "story",
   "UPLOAD": "upload",
@@ -62,38 +59,8 @@ const TASK_METADATA = Object.freeze({
       "execution_error"
     ]
   },
-  "comment": {
-    "default_timeout_ms": 120000,
-    "retryable_failure_codes": [
-      "selector_not_found",
-      "upload_timeout",
-      "network_error",
-      "task_timeout",
-      "execution_error"
-    ]
-  },
   "reply": {
     "default_timeout_ms": 600000,
-    "retryable_failure_codes": [
-      "selector_not_found",
-      "upload_timeout",
-      "network_error",
-      "task_timeout",
-      "execution_error"
-    ]
-  },
-  "like": {
-    "default_timeout_ms": 30000,
-    "retryable_failure_codes": [
-      "selector_not_found",
-      "upload_timeout",
-      "network_error",
-      "task_timeout",
-      "execution_error"
-    ]
-  },
-  "own_post_comment": {
-    "default_timeout_ms": 300000,
     "retryable_failure_codes": [
       "selector_not_found",
       "upload_timeout",
@@ -112,58 +79,8 @@ const TASK_METADATA = Object.freeze({
       "execution_error"
     ]
   },
-  "auto_connect": {
-    "default_timeout_ms": 600000,
-    "retryable_failure_codes": [
-      "selector_not_found",
-      "upload_timeout",
-      "network_error",
-      "task_timeout",
-      "execution_error"
-    ]
-  },
-  "join_group": {
-    "default_timeout_ms": 600000,
-    "retryable_failure_codes": [
-      "selector_not_found",
-      "upload_timeout",
-      "network_error",
-      "task_timeout",
-      "execution_error"
-    ]
-  },
   "scan_account": {
     "default_timeout_ms": 300000,
-    "retryable_failure_codes": [
-      "selector_not_found",
-      "upload_timeout",
-      "network_error",
-      "task_timeout",
-      "execution_error"
-    ]
-  },
-  "scan_group": {
-    "default_timeout_ms": 300000,
-    "retryable_failure_codes": [
-      "selector_not_found",
-      "upload_timeout",
-      "network_error",
-      "task_timeout",
-      "execution_error"
-    ]
-  },
-  "scan_shopee": {
-    "default_timeout_ms": 300000,
-    "retryable_failure_codes": [
-      "selector_not_found",
-      "upload_timeout",
-      "network_error",
-      "task_timeout",
-      "execution_error"
-    ]
-  },
-  "media_enrichment": {
-    "default_timeout_ms": 600000,
     "retryable_failure_codes": [
       "selector_not_found",
       "upload_timeout",
@@ -176,16 +93,6 @@ const TASK_METADATA = Object.freeze({
     "default_timeout_ms": 3600000,
     "retryable_failure_codes": [
       "selector_not_found",
-      "network_error",
-      "task_timeout",
-      "execution_error"
-    ]
-  },
-  "ai_caption": {
-    "default_timeout_ms": 120000,
-    "retryable_failure_codes": [
-      "selector_not_found",
-      "upload_timeout",
       "network_error",
       "task_timeout",
       "execution_error"
@@ -246,15 +153,12 @@ const LEGACY_FAILURE_CODE_MAP = Object.freeze({
 });
 const LEGACY_TASK_TYPE_MAP = Object.freeze({
   "affiliate": "affiliate_comment",
-  "post_comment": "own_post_comment",
   "interaction": "reply",
   "replies": "reply",
-  "friend": "auto_connect",
   "post_tasks": "post"
 });
 const LEGACY_TRANSPORT_TASK_TYPE = Object.freeze({
-  "affiliate_comment": "affiliate",
-  "own_post_comment": "post_comment"
+  "affiliate_comment": "affiliate"
 });
 const taskTypes = new Set(Object.values(TASK_TYPES));
 const statuses = new Set(Object.values(TASK_STATUS));
