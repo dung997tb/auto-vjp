@@ -2,7 +2,8 @@
   "manifest_version": 3,
   "name": "Auto vjp",
   "short_name": "Auto vjp",
-  "version": "2.11.13",
+  "version": "2.11.14",
+  "minimum_chrome_version": "111",
   "description": "Auto vjp — fork noi bo da go license. Tự động Facebook: kết bạn có lọc, đăng và share bài bằng AI vào nhóm, cùng các công cụ Bản tin và Trend.",
   "permissions": [
     "storage",
@@ -15,7 +16,6 @@
     "tabs"
   ],
   "host_permissions": [
-    "*://*.facebook.com/*",
     "https://api.openai.com/*",
     "https://generativelanguage.googleapis.com/*",
     "https://api.anthropic.com/*",
