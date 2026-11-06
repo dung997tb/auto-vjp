@@ -24,7 +24,25 @@
     let name = '';
     let followersCount = null;
 
-    for (let attempt = 0; attempt < 10; attempt++) {
+    // Lớp 0 (2.11.11): API phiên đăng nhập của chính X — settings.json trả
+    // screen_name của tài khoản đang đăng nhập, ổn định hơn dò DOM (bản cũ
+    // chỉ dò DOM nên giao diện X đổi là ra 0 nick). Lỗi/timeout thì rơi
+    // xuống các lớp DOM bên dưới như cũ.
+    try {
+      const res = await fetch('https://x.com/i/api/1.1/account/settings.json', {
+        credentials: 'include',
+        signal: AbortSignal.timeout(8000)
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json && typeof json.screen_name === 'string' && json.screen_name) {
+          username = json.screen_name;
+          name = clean(json.name || '');
+        }
+      }
+    } catch (_) { /* API lỗi -> dò DOM như cũ */ }
+
+    for (let attempt = 0; attempt < 10 && !username; attempt++) {
       // 1. Kiểm tra nếu đang mở trang cá nhân của mình
       const pathMatch = window.location.pathname.match(/^\/([A-Za-z0-9_]{1,15})\/?$/);
       if (pathMatch && !['home', 'explore', 'notifications', 'messages', 'i', 'settings'].includes(pathMatch[1].toLowerCase())) {
@@ -77,6 +95,16 @@
       await new Promise(r => setTimeout(r, 500));
     }
 
+    // Lớp 0 có username nhưng chưa có tên hiển thị: thử AccountSwitcher 1 lần.
+    if (username && !name) {
+      const switcher = document.querySelector('[data-testid="SideNav_AccountSwitcher_Button"]');
+      if (switcher) {
+        const lines = (switcher.innerText || '').split('\n').map(clean).filter(Boolean);
+        const candidate = lines.find(l => !l.startsWith('@') && l.toLowerCase() !== username.toLowerCase());
+        if (candidate) name = candidate;
+      }
+    }
+
     if (username) {
       accounts.push({
         platform: 'x',
@@ -89,5 +117,12 @@
   } catch(e) {
     console.warn('[X Scanner] Lỗi quét profile:', e);
   }
-  scanUtils.sendDiscovery(scanContext, { action: 'socialAccountsScannerResult', type: 'discovery', accounts: accounts });
+  // (2.11.11) Kết thúc rỗng PHẢI kèm error: bản cũ gửi accounts rỗng không
+  // error khiến kernel ghi success "Quét được 0 tài khoản" gây hiểu nhầm.
+  // Mọi đường thoát đều gửi đúng 1 lần qua sendDiscovery kèm context.
+  if (accounts.length) {
+    scanUtils.sendDiscovery(scanContext, { action: 'socialAccountsScannerResult', type: 'discovery', accounts: accounts });
+  } else {
+    scanUtils.sendDiscovery(scanContext, { action: 'socialAccountsScannerResult', type: 'discovery', accounts: [], error: 'Không nhận diện được tài khoản X (chưa đăng nhập hoặc giao diện X đã đổi)' });
+  }
 })();
