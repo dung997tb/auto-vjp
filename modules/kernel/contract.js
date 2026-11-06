@@ -81,6 +81,13 @@
       label: 'TikTok',
       hosts: ['tiktok.com'],
       home: 'https://www.tiktok.com',
+      // Quét tài khoản TikTok phải mở /foryou thay vì trang gốc: trang gốc
+      // (https://www.tiktok.com/) trong môi trường headless KHÔNG render
+      // nội dung app (0 anchor /@, không có rehydration) nên scanner không
+      // bao giờ nhận diện được nick khi quét lạnh; /foryou render đầy đủ
+      // sidebar + rehydration. scanHome chỉ dùng cho scan_account (xem
+      // startUrl), không đổi hành vi post/reply/nurture của TikTok.
+      scanHome: 'https://www.tiktok.com/foryou',
       scripts(task) {
         if (task.type === 'post') return { files: [CANONICAL, 'modules/tiktok/automator.js'], frameTopOnly: true };
         if (task.type === 'reply') {
