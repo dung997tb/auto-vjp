@@ -14,6 +14,10 @@
   // tự rơi về finder gốc. Xem modules/shared/HEALER.md.
   const HEALER = 'modules/shared/healer.js';
   const HEALTHSCAN = 'modules/shared/healthscan.js';
+  // Ảnh mặc định của riêng Auto vjp (2.11.7): AVJP.defaultImage — nạp
+  // TRƯỚC automator ở spec 'post' (instagram/threads/x); automator không
+  // thấy helper thì tự rơi về asset gói sẵn. Xem modules/shared/default-image.js.
+  const DEFAULT_IMAGE = 'modules/shared/default-image.js';
 
   // scriptsFor(platform, type, task) -> { files:[...], mainWorldBefore:[...], frameTopOnly:bool }
   // Khớp bảng inject của MUT tab-automation-runner (đã đối chiếu file:dòng ở TONG-HOP②),
@@ -27,7 +31,7 @@
       scripts(task) {
         // (2.9.0) post/story nạp thêm HEALER trước module: automator +
         // story.js định vị nút Tạo/Share/công cụ text qua AVJP.heal.
-        if (task.type === 'post') return { files: [CANONICAL, HEALER, 'modules/instagram/automator.js'] };
+        if (task.type === 'post') return { files: [CANONICAL, HEALER, DEFAULT_IMAGE, 'modules/instagram/automator.js'] };
         // story (2.7.0): đăng Story IG (ảnh/video) — script riêng, đọc
         // canonical run trực tiếp, báo storyCompleted/storyFailed. Xem
         // modules/instagram/story.js + MODULE.md §7.
@@ -55,7 +59,7 @@
       home: 'https://www.threads.net',
       scanHome: 'https://www.threads.com',
       scripts(task) {
-        if (task.type === 'post') return { files: [CANONICAL, 'modules/threads/automator.js'] };
+        if (task.type === 'post') return { files: [CANONICAL, DEFAULT_IMAGE, 'modules/threads/automator.js'] };
         if (task.type === 'reply') return { files: [CANONICAL, 'modules/threads/interaction.js'] };
         if (task.type === 'affiliate') return { files: [CANONICAL, 'modules/threads/affiliate-commenter.js'] };
         if (task.type === 'scan_account') return { files: [SCAN_UTILS, 'modules/threads/accounts-scanner.js'], scan: true };
@@ -111,7 +115,7 @@
       hosts: ['x.com', 'twitter.com'],
       home: 'https://x.com/home',
       scripts(task) {
-        if (task.type === 'post') return { files: [CANONICAL, 'modules/x/automator.js'] };
+        if (task.type === 'post') return { files: [CANONICAL, DEFAULT_IMAGE, 'modules/x/automator.js'] };
         if (task.type === 'reply') return { files: [CANONICAL, 'modules/x/interaction.js'] };
         if (task.type === 'affiliate') return { files: [CANONICAL, 'modules/x/affiliate-commenter.js'] };
         if (task.type === 'scan_account') return { files: [SCAN_UTILS, 'modules/x/accounts-scanner.js'], scan: true };
