@@ -21,6 +21,7 @@ window.moigioi_injected_ig = true;
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const logs = [];
 
+  const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   function addLog(msg) {
     const timeStr = new Date().toLocaleTimeString('vi-VN', { hour12: false });
     logs.push(`[${timeStr}] ${msg}`);
@@ -47,7 +48,7 @@ window.moigioi_injected_ig = true;
         📸 Trợ lý Đăng Instagram
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;color:#cbd5e1;">
-        ${logs.slice(-8).map(l => `<div>${l}</div>`).join('')}
+        ${logs.slice(-8).map(l => `<div>${escapeHtml(l)}</div>`).join('')}
       </div>
     `;
   }
