@@ -6374,14 +6374,10 @@ let aiBasePrompt="";
   async function clearGroupPostDraftBeforeNavigate(){
     try{
       window.onbeforeunload=null;
-      for(let i=0;i<2;i++){
-        const dlg=(typeof findDialog==="function"?findDialog():null);
-        if(!dlg)break;
-        try{document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",code:"Escape",keyCode:27,bubbles:true}));}catch(_){}
-        await sleep(400);
-      }
-      const ed=(typeof findEditor==="function"?findEditor(document):null);
-      if(ed){ try{ed.focus();document.execCommand("selectAll",false,null);document.execCommand("delete",false,null);}catch(_){} }
+      // (2.11.15) Đã bỏ vòng đóng hộp thoại qua findDialog và đoạn xoá nháp qua
+      // findEditor: hai hàm đó không tồn tại trong phạm vi của feed.js (bản ở
+      // news.js/readywall.js bị nhốt trong IIFE riêng) nên typeof luôn false —
+      // các nhánh đó chưa bao giờ chạy thật. Hành vi giữ nguyên như cũ.
       await sleep(300);
     }catch(_){}
   }
