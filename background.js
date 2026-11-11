@@ -643,7 +643,6 @@ function cleanTrendPost(raw){
   text=text.replace(/^(?:dàn ý|outline|bài đăng|nội dung|gợi ý)\s*:\s*/i,"").replace(/^["""]+|["""]+$/g,"").replace(/(^|\s)#[\p{L}\p{N}_-]+/gu," ").replace(/https?:\/\/\S+/gi," ").replace(/[^\S\n]+/g," ").replace(/\n{3,}/g,"\n\n").trim();
   if([...text].length>1200)text=truncateAtSentence(text,1200);
   return sanitizePostedText(text);
-  return sanitizePostedText(text);
 }
 function imageDataParts(dataUrl){
   const m=String(dataUrl||"").match(/^data:(image\/[a-z0-9.+-]+);base64,([\s\S]+)$/i);
@@ -1149,6 +1148,10 @@ async function repairBackgroundPost(content,background,requestText,cleaner,fresh
   // Bài dùng được: vừa trần nền, qua ngưỡng stub, kết bằng câu tròn.
   const usable=s=>{const v=cleaner(s);const l=backgroundTextLength(v);return v&&l>=gate&&l<=range.max&&endsRound(v)?v:"";};
   const current=cleaner(content);
+  // hit khai báo ở phạm vi hàm: nhánh 2) gán trong khối if(!skipAiRepair),
+  // nhánh 4) bên dưới gán tiếp ngoài khối đó — trước đây điểm gán ngoài khối
+  // rơi vào biến toàn cục ngầm (sửa ở 2.11.15).
+  let hit=null;
   const initialLength=backgroundTextLength(current);
   if(initialLength>=range.min&&initialLength<=range.max)return current;
   // 1) Dài quá: cắt cơ học ở câu tròn TRƯỚC — xác định 100%, không tốn lượt
@@ -1183,7 +1186,7 @@ async function repairBackgroundPost(content,background,requestText,cleaner,fresh
   const repairLabel=belowMin?"NỘI DUNG CẦN BỔ SUNG Ý":"NỘI DUNG CẦN NÉN";
   let repaired=cleaner(await requestText(t(repairKey,range)+`\n\n${repairLabel}:\n`+current));
   if(!repaired)throw new Error(t("bg.contentEmpty"));
-  let hit=usable(repaired);
+  hit=usable(repaired);
   if(hit)return hit;
   // Lượt hai bỏ mục tiêu cận dưới, chỉ ép trần cứng.
   const hardLimitPrompt=t("bg.postBgHardRepair",{max:range.max})+"\n\nNỘI DUNG CẦN NÉN:\n"+repaired;
@@ -1354,40 +1357,16 @@ async function fetchWithTimeout(url,options={},timeoutMs=AI_FETCH_TIMEOUT_MS){
 // 2.11.9 — Lớp chặn SSRF cho fbFetchMedia: URL media do caller/task/nội dung
 // web đưa vào nên không cho fetch đích nội bộ. Kiểm cả URL ban đầu lẫn URL
 // cuối sau redirect (response.url) — xem assertPublicMediaUrl.
-function mediaHostBlocked(hostname){
-  const host=String(hostname||"").toLowerCase().replace(/\.$/,"").replace(/^\[|\]$/g,"");
-  if(!host)return true;
-  if(host==="localhost"||host.endsWith(".localhost")||host.endsWith(".local"))return true;
-  if(host.includes(":")){
-    // IPv6: loopback ::1, unspecified ::, link-local fe80::/10, unique-local fc00::/7
-    if(host==="::1"||host==="::")return true;
-    if(/^fe[89ab]/.test(host))return true;
-    if(/^f[cd]/.test(host))return true;
-    const mapped=host.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if(mapped)return mediaHostBlocked(mapped[1]);
-    // URL parser chuẩn hoá IPv4-mapped về dạng hex ::ffff:7f00:1 (= 127.0.0.1)
-    const mappedHex=host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-    if(mappedHex){
-      const hi=parseInt(mappedHex[1],16),lo=parseInt(mappedHex[2],16);
-      return mediaHostBlocked(`${hi>>8}.${hi&255}.${lo>>8}.${lo&255}`);
-    }
-    return false;
-  }
-  const m=host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if(m){
-    const a=+m[1],b=+m[2];
-    if(a===127||a===10||a===0)return true;                 // loopback / private A / "this host"
-    if(a===172&&b>=16&&b<=31)return true;                  // private B
-    if(a===192&&b===168)return true;                       // private C
-    if(a===169&&b===254)return true;                       // link-local (metadata)
-  }
-  return false;
-}
+// (2.11.15) Bản chặn host nội bộ DUY NHẤT sống ở modules/kernel/media.js,
+// expose qua AVJP.mediaHostBlocked (bridge.js nạp kernel vào cùng SW).
+// Không giữ bản sao ở đây nữa — hai bản đã từng lệch nhau (review 5.2).
 function assertPublicMediaUrl(urlStr){
   let u=null;
   try{u=new URL(String(urlStr||""));}catch(_){throw new Error("mediaFetch: invalid URL");}
   if(u.protocol!=="http:"&&u.protocol!=="https:")throw new Error("mediaFetch: blocked non-http(s) URL");
-  if(mediaHostBlocked(u.hostname))throw new Error("mediaFetch: blocked internal host");
+  // Bộ kiểm không sẵn sàng (kernel chưa nạp) thì chặn luôn — chốt an toàn không được fail-open.
+  if(!globalThis.AVJP?.mediaHostBlocked)throw new Error("mediaFetch: host checker unavailable");
+  if(AVJP.mediaHostBlocked(u.hostname))throw new Error("mediaFetch: blocked internal host");
 }
 // Đọc body có trần cứng: không tin content-length mù quáng — đếm byte thật
 // khi stream, vượt trần là huỷ ngay (server báo thiếu/không báo length vẫn
@@ -4567,11 +4546,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
         }
         if(!/^https?:\/\//i.test(rawUrl))throw new Error("Invalid media URL");
         // 2.11.9: siết fbFetchMedia — chặn đích nội bộ (URL đầu + URL cuối sau
-        // redirect) và trần cứng 50MB caller không nâng lên được (fbReels từng
-        // xin 100MB): media Story/Reels là video ngắn, và handler trả cả file
-        // dạng base64 qua message nên lớn hơn cũng không thực tế.
+        // redirect) và trần cứng caller không nâng lên được (fbReels từng
+        // xin 100MB): media Story/Reels là video ngắn.
+        // 2.11.15: hạ trần 50 MiB -> 32 MiB. Handler trả cả file dạng base64
+        // qua message; base64 phình ~4/3 nên 50 MiB nhị phân thành ~66,7 MiB,
+        // vượt giới hạn message 64 MiB của Chrome (file 48-50 MiB qua được
+        // trần nhưng vỡ ở bước gửi). 32 MiB -> ~42,7 MiB base64, an toàn.
         assertPublicMediaUrl(rawUrl);
-        const MEDIA_HARD_CAP=50*1024*1024;
+        const MEDIA_HARD_CAP=32*1024*1024;
         const maxBytes=Math.min(Number(msg.maxBytes)||MEDIA_HARD_CAP,MEDIA_HARD_CAP);
         const timeoutMs=Number(msg.timeoutMs)||60000;
         const res=await fetchWithTimeout(rawUrl,{cache:"no-store",headers:{"Accept":"image/*,video/*,*/*;q=0.8"}},timeoutMs);
@@ -5055,6 +5037,13 @@ ${userPrompt?`Yêu cầu: ${userPrompt}\n`:""}${content?`Chất liệu video: ${
 // ============================================================
 // LICENSE SYSTEM - Floating single-seat, JWT-based
 // ============================================================
+// 2.11.15: xóa hẳn cơ chế license/update CHẾT — alarm licenseVerify
+// (3 ngày) + updateCheck (4 giờ), hai hàm stub verifyLicense()/
+// checkForUpdate() và downloadUpdateZipData() luôn throw. Không còn
+// alarm nào được tạo cho license/update, không còn lời gọi ở onStartup.
+// Trạng thái license mặc định (bộ giá trị verifyLicense cũ vẫn ghi) nay
+// được gieo MỘT LẦN trong onInstalled khi chưa có, để getLicenseState
+// và UI đọc hiển thị như cũ.
 
 async function getLicenseState() {
   const s = await chrome.storage.local.get(["licenseToken","licenseKey","licenseGmail","licenseMachineId","licenseLastVerified","licenseValid","licenseReason","licenseExpiry","licensePlan"]);
@@ -5065,40 +5054,22 @@ async function activateLicense(licenseKey, gmail) {
   return { ok: true }; // Auto vjp (fork noi bo): license da go — khong kich hoat qua server
 }
 
-async function verifyLicense() {
-  try { await chrome.storage.local.set({ licenseValid: true, licenseReason: "", licenseToken: "preview-local", licenseLastVerified: Date.now(), licensePlan: "lifetime" }); } catch (_) {}
-  return true; // Auto vjp (fork noi bo): license da go — khong verify qua server
-}
+// Gieo trạng thái license mặc định một lần khi cài/cập nhật (chỉ khi
+// chưa có) — thay cho verifyLicense() chạy khi khởi động + alarm 3 ngày
+// trước đây. Máy đã chạy bản cũ thì storage đã có sẵn, không ghi đè.
+chrome.runtime.onInstalled.addListener(async () => {
+  try {
+    const s = await chrome.storage.local.get(["licenseValid"]);
+    if (s.licenseValid === undefined) {
+      await chrome.storage.local.set({ licenseValid: true, licenseReason: "", licenseToken: "preview-local", licenseLastVerified: Date.now(), licensePlan: "lifetime" });
+    }
+  } catch (_) {}
+});
 
-// Alarm verify mỗi 3 ngày
+// Alarm listener nay chỉ còn nhánh metaFree (đã bỏ nhánh licenseVerify).
 chrome.alarms.onAlarm.addListener(alarm => {
-  if (alarm.name === "licenseVerify") verifyLicense().catch(() => {});
   if (alarm.name === "metaFreeRestoreFocus") metaFreeRestoreFocus(0);
 });
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.alarms.create("licenseVerify", { periodInMinutes: 3 * 24 * 60 });
-});
-chrome.runtime.onStartup.addListener(() => {
-  verifyLicense().catch(() => {});
-  checkForUpdate().catch(() => {});
-});
-
-// ── Auto-update notification ──────────────────────────────────────────────
-async function checkForUpdate() {
-  return; // Auto vjp (fork noi bo): tat han check update ve server tac gia
-}
-chrome.alarms.onAlarm.addListener(alarm => {
-  if (alarm.name === 'updateCheck') checkForUpdate().catch(() => {});
-});
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.alarms.create('updateCheck', { periodInMinutes: 4 * 60 });
-  checkForUpdate().catch(() => {});
-});
-
-// Auto vjp (fork noi bo): da go han co che tu tai ban moi — khong con server cap nhat.
-async function downloadUpdateZipData(){
-  throw new Error("Auto vjp: tinh nang tai ban moi da bi go bo");
-}
 
 // Message handlers
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -5109,10 +5080,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.action === "verifyLicense") {
-    verifyLicense()
-      .then(ok => sendResponse({ ok }))
-      .catch(() => sendResponse({ ok: false }));
-    return true;
+    // 2.11.15: không còn hàm verifyLicense — trả mặc định ok:true ngay
+    // để bên gửi (gate cũ ở popup) không treo chờ; trạng thái license
+    // mặc định đã được gieo trong onInstalled ở trên.
+    sendResponse({ ok: true });
+    return;
   }
   if (msg.action === "getLicenseState") {
     getLicenseState().then(s => sendResponse(s)).catch(() => sendResponse({}));
@@ -5125,10 +5097,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.action === "downloadUpdateZip") {
-    downloadUpdateZipData()
-      .then(d => sendResponse({ ok: true, ...d }))
-      .catch(e => sendResponse({ ok: false, error: String(e?.message||e) }));
-    return true;
+    // 2.11.15: bỏ downloadUpdateZipData() — trả thẳng lỗi như hành vi cũ
+    // (tính năng tự tải bản mới đã gỡ; nút cập nhật ở popup nhận
+    // ok:false + error này và hiện nút thử lại như trước).
+    sendResponse({ ok: false, error: "Auto vjp: tinh nang tai ban moi da bi go bo" });
+    return;
   }
 });
 
