@@ -112,7 +112,10 @@ window.moigioi_injected_x = true;
     if (currentChunk) {
       chunks.push(currentChunk.trim());
     }
-    return chunks;
+    // (2.11.15) Lọc đoạn rỗng ở cửa ra: đoạn cuối toàn khoảng trắng bị
+    // push thành '' (currentChunk '   ' vẫn truthy) → vòng đăng thread
+    // bấm thêm 1 đoạn trống. Mọi đường ra của hàm đều qua đây.
+    return chunks.map(c => c.trim()).filter(Boolean);
   }
 
   function waitForElement(sel, timeout = 15000) {
