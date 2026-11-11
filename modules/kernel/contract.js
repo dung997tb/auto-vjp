@@ -9,6 +9,9 @@
 
   const CANONICAL = 'modules/shared/canonical-task-storage.js';
   const SCAN_UTILS = 'modules/shared/account-scan-utils.js';
+  // Đọc số followers dùng chung AVJP.metrics (2.11.15): nạp TRƯỚC
+  // accounts-scanner của instagram/tiktok/x (đã xoá 3 bản sao cục bộ).
+  const METRICS = 'modules/shared/metrics.js';
   // Tự chữa selector (2.9.0): helper phía trang AVJP.heal — nạp TRƯỚC
   // module ở các spec có điểm hay gãy; module không thấy AVJP.heal thì
   // tự rơi về finder gốc. Xem modules/shared/HEALER.md.
@@ -39,7 +42,7 @@
         if (task.type === 'healthscan') return { files: [CANONICAL, HEALER, HEALTHSCAN] };
         if (task.type === 'reply') return { files: [CANONICAL, 'modules/instagram/interaction.js'] };
         if (task.type === 'affiliate') return { files: [CANONICAL, 'modules/instagram/affiliate-commenter.js'] };
-        if (task.type === 'scan_account') return { files: [SCAN_UTILS, 'modules/instagram/accounts-scanner.js'], scan: true };
+        if (task.type === 'scan_account') return { files: [SCAN_UTILS, METRICS, 'modules/instagram/accounts-scanner.js'], scan: true };
         // nurture (2.2.0): lõi nuôi dùng chung + adapter Instagram. Xem
         // modules/nurture-core/README.md + modules/instagram-nurture/MODULE.md.
         if (task.type === 'nurture') {
@@ -98,7 +101,7 @@
             frameTopOnly: true
           };
         }
-        if (task.type === 'scan_account') return { files: [SCAN_UTILS, 'modules/tiktok/accounts-scanner.js'], scan: true };
+        if (task.type === 'scan_account') return { files: [SCAN_UTILS, METRICS, 'modules/tiktok/accounts-scanner.js'], scan: true };
         if (task.type === 'healthscan') return { files: [CANONICAL, HEALER, HEALTHSCAN], frameTopOnly: true };
         // nurture (2.1.0): engine TikTok Farmer port nguyên khối — thứ tự nạp
         // đúng manifest gốc của Farmer (selectors -> modules -> engine ->
@@ -125,7 +128,7 @@
         if (task.type === 'post') return { files: [CANONICAL, DEFAULT_IMAGE, 'modules/x/automator.js'] };
         if (task.type === 'reply') return { files: [CANONICAL, 'modules/x/interaction.js'] };
         if (task.type === 'affiliate') return { files: [CANONICAL, 'modules/x/affiliate-commenter.js'] };
-        if (task.type === 'scan_account') return { files: [SCAN_UTILS, 'modules/x/accounts-scanner.js'], scan: true };
+        if (task.type === 'scan_account') return { files: [SCAN_UTILS, METRICS, 'modules/x/accounts-scanner.js'], scan: true };
         // nurture (2.4.0): lõi nuôi dùng chung + adapter X. Xem
         // modules/nurture-core/README.md + modules/x-nurture/MODULE.md.
         if (task.type === 'nurture') {
