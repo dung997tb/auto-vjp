@@ -25,10 +25,16 @@
   // 169.254/16, 0/8 (kể cả dạng số nguyên thập phân/hex), IPv6 ::1, ::,
   // fe80::/10, fc00::/7 và IPv4-mapped ::ffff:. Kiểm URL đầu vào ở mọi hàm
   // fetch, và kiểm thêm URL cuối sau redirect trước khi đọc body.
+  // (2.11.15) Bịt các lỗ review 5.2 đã kiểm chứng lọt: CGNAT 100.64/10,
+  // 192.0.0/24, benchmark 198.18/15, IPv6 NAT64 64:ff9b::/96, 6to4
+  // 2002::/16, IPv4-compatible ::/96, hostname một nhãn và hậu tố
+  // .internal/.lan/.home.arpa. Đây là BẢN DUY NHẤT của hàm này trong
+  // repo: background.js dùng chung qua AVJP.mediaHostBlocked.
   function mediaHostBlocked(hostname) {
     const host = String(hostname || '').toLowerCase().replace(/\.$/, '').replace(/^\[|\]$/g, '');
     if (!host) return true;
     if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true;
+    if (host.endsWith('.internal') || host.endsWith('.lan') || host.endsWith('.home.arpa')) return true;
     if (host.includes(':')) {
       // IPv6: loopback ::1, unspecified ::, link-local fe80::/10, unique-local fc00::/7
       if (host === '::1' || host === '::') return true;
@@ -42,6 +48,19 @@
         const hi = parseInt(mappedHex[1], 16), lo = parseInt(mappedHex[2], 16);
         return mediaHostBlocked(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
       }
+      // (2.11.15) Dạng IPv6 nhúng IPv4 mà parser chuẩn hoá về hex (NAT64,
+      // 6to4, compatible — vd ::7f00:1 = 127.0.0.1): giãn đủ 8 hextet rồi
+      // áp luật IPv4 cho phần nhúng.
+      const hx = expandIPv6(host);
+      if (hx) {
+        const dotted = (x, y) => `${x >> 8}.${x & 255}.${y >> 8}.${y & 255}`;
+        // NAT64 well-known 64:ff9b::/96 — IPv4 nhúng ở 32 bit cuối
+        if (hx[0] === 0x64 && hx[1] === 0xff9b && !hx[2] && !hx[3] && !hx[4] && !hx[5]) return mediaHostBlocked(dotted(hx[6], hx[7]));
+        // 6to4 2002::/16 — IPv4 nhúng ở bit 16-48
+        if (hx[0] === 0x2002) return mediaHostBlocked(dotted(hx[1], hx[2]));
+        // IPv4-compatible ::/96 (:: và ::1 đã chặn phía trên)
+        if (!hx[0] && !hx[1] && !hx[2] && !hx[3] && !hx[4] && !hx[5]) return mediaHostBlocked(dotted(hx[6], hx[7]));
+      }
       return false;
     }
     const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
@@ -51,6 +70,9 @@
       if (a === 172 && b >= 16 && b <= 31) return true;      // private B
       if (a === 192 && b === 168) return true;               // private C
       if (a === 169 && b === 254) return true;               // link-local (metadata)
+      if (a === 100 && b >= 64 && b <= 127) return true;     // CGNAT 100.64/10 (100.100.100.200 = metadata Alibaba)
+      if (a === 192 && b === 0 && +m[3] === 0) return true;  // đúng 192.0.0/24 đặc biệt IETF (gồm 192.0.0.192)
+      if (a === 198 && (b === 18 || b === 19)) return true;  // benchmark 198.18/15
       return false;
     }
     // IPv4 dạng số nguyên thập phân (2130706433) hoặc hex (0x7f000001):
@@ -63,7 +85,28 @@
       const v = intVal >>> 0;
       return mediaHostBlocked(`${(v >>> 24) & 255}.${(v >>> 16) & 255}.${(v >>> 8) & 255}.${v & 255}`);
     }
+    // Hostname một nhãn (không dấu chấm): tên máy nội bộ kiểu metadata/
+    // intranet/nas — tên public thật luôn có TLD nên chặn.
+    if (!host.includes('.')) return true;
     return false;
+  }
+
+  // Giãn IPv6 dạng nén (::) thành mảng 8 hextet số; null nếu không hợp lệ.
+  // Đầu vào tới đây không còn IPv4 chấm thập phân nhúng (mapped đã xử lý).
+  function expandIPv6(host) {
+    const halves = host.split('::');
+    if (halves.length > 2) return null;
+    const head = halves[0] ? halves[0].split(':') : [];
+    const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+    if (halves.length === 1) {
+      if (head.length !== 8) return null;
+      const nums = head.map(x => parseInt(x, 16));
+      return nums.some(Number.isNaN) ? null : nums;
+    }
+    const missing = 8 - head.length - tail.length;
+    if (missing < 0) return null;
+    const nums = [...head, ...Array(missing).fill('0'), ...tail].map(x => parseInt(x, 16));
+    return nums.some(Number.isNaN) ? null : nums;
   }
 
   function assertMediaUrl(urlStr) {
@@ -111,4 +154,8 @@
   }
 
   globalThis.AVJP.media = { start, chunk, end, fetchImage };
+
+  // (2.11.15) Phơi hàm chặn host dùng chung — background.js gọi
+  // AVJP.mediaHostBlocked(hostname) thay cho bản sao riêng đã xoá.
+  globalThis.AVJP.mediaHostBlocked = mediaHostBlocked;
 })();
