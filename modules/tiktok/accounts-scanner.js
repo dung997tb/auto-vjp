@@ -116,20 +116,9 @@
     return found.size === 1 ? [...found][0] : '';
   }
 
-  function parseMetricNumber(str) {
-    if (!str) return null;
-    const clean = String(str).trim().toLowerCase().replace(/\s/g, '');
-    const m = clean.match(/([\d.,]+)([kmb])?/);
-    if (!m) return null;
-    const raw = m[1].includes(',') && !m[1].includes('.') ? m[1].replace(/,/g, '') : m[1].replace(/,/g, '.');
-    let val = parseFloat(raw);
-    if (isNaN(val)) return null;
-    const unit = m[2];
-    if (unit === 'k') val *= 1000;
-    else if (unit === 'm') val *= 1000000;
-    else if (unit === 'b') val *= 1000000000;
-    return Math.round(val);
-  }
+  // (2.11.15) parseMetricNumber dùng chung AVJP.metrics
+  // (modules/shared/metrics.js, contract nạp trước scanner này) — bản sao
+  // cục bộ ở đây đọc sai định dạng Việt nên đã xoá.
 
   let reported = false;
   const report = payload => {
@@ -198,7 +187,7 @@
         if (descMatch) {
           const desc = descMatch[1];
           const fol = desc.match(/([\d.,]+\s*[kKmMbB]?)\s*Followers/i);
-          if (fol) followersCount = parseMetricNumber(fol[1]);
+          if (fol) followersCount = AVJP.metrics.parseMetricNumber(fol[1]);
         }
         if (followersCount == null) {
           const folMatch = html.match(/"followerCount":(\d+)/);
@@ -212,10 +201,10 @@
     if (followersCount == null) {
       const followersEl = document.querySelector('[data-e2e="followers-count"]');
       if (followersEl) {
-        followersCount = parseMetricNumber(followersEl.textContent || '');
+        followersCount = AVJP.metrics.parseMetricNumber(followersEl.textContent || '');
       } else {
         const match = (document.body ? document.body.innerText : '').match(/([\d.,]+\s*[kKmM]?)\s*(?:followers|người theo dõi|Follower)/i);
-        if (match) followersCount = parseMetricNumber(match[1]);
+        if (match) followersCount = AVJP.metrics.parseMetricNumber(match[1]);
       }
     }
 
