@@ -138,6 +138,25 @@ instagram/threads/x/youtube) → kernel chạm run (giữ sống trước watchd
 `healMarkProven {platform, key, spec}` → `{success}` — tự chữa selector 2.9.0, xem `modules/shared/HEALER.md`.
 `healthscanCompleted` / `healthscanFailed {postId, items?}` → receipt type `healthscan` (2.9.0).
 `microActionDone {taskId, status, failure_code?, resultMessage?, details?}` → receipt type `micro_action` (2.11.16) — hành động nhỏ test lẻ (scroll_feed/like_first/watch_first/view_first_story/open_notifications/open_profile) qua `modules/<platform>/micro.js`; payload task `{action, seconds?}`.
+
+#### Registry hành động nhỏ — `MICRO_ACTIONS` (2.11.17)
+
+Nguồn sự thật duy nhất cho tập hành động nhỏ: `AVJP.contractData.MICRO_ACTIONS` trong `modules/kernel/contract-data.js` — map `platform → entry[]`. Trang quản lý (manage.js) render bảng "Hành động nhỏ" từ registry này (không còn danh sách cứng); results.js gắn `details.label` từ registry vào biên lai `micro_action`.
+
+Entry: `{key, label, needs, prefix?, note?}`
+
+- `key`: khoá hành động — chính là `payload.action` của task `micro_action`; handler sống trong `modules/<platform>/micro.js`. Key + hành vi của 22 khoá 2.11.16 giữ nguyên.
+- `label`: nhãn tiếng Việt hiển thị trên bảng + biên lai.
+- `needs`: `'standalone'` (chạy lẻ được) | `'context'` (cần ngữ cảnh do chuỗi tiền tố dựng).
+- `prefix`: chỉ khi `needs:'context'` — mảng key chạy lần lượt TRƯỚC hành động đích trong cùng task (step-runner theo phase trong micro.js, phase lưu storage chống inject lại sau điều hướng). Tiền tố fail → task `failed` với `failure_code:'prefix_failed'` + `details` ghi rõ bước tiền tố nào fail; không chạy bước đích.
+- `note?`: ghi chú hiển thị (đầu vào cần thiết, tính phá huỷ, stub…).
+
+Quy ước khoá đặc biệt:
+
+- `tf_<tên step>` (chỉ tiktok): step TikTok Farmer chạy lẻ đúng 1 step qua `TF.engine` (kind module, workflow 1 bước, ctx/checkpoint như phiên nuôi). 5 step khung (`tf_chon_video_hang_doi`, `tf_goi_workflow`, `tf_lap_lai`, `tf_neu_thi`, `tf_theo_xac_suat`) có label hậu tố `· khung` và kết quả mang `details.stub: true`.
+- `healthscan_<anchor>` (instagram/youtube/threads/tiktok — đặt ở nền tảng của neo): định vị neo selector mẫu của healthscan (`ig.post.createBtn`, `yt.reply.commentBox`, `th.feed.likeBtn`, `tt.fyp.likeBtn`) qua handler dùng chung `modules/shared/healthscan-micro.js` + `AVJP.heal.locate` — chỉ định vị, không bấm, không markProven.
+
+Tổng 2.11.17: **216 hàng** (instagram 34, threads 23, tiktok 78, x 32, youtube 49) = 207 hành động nguyên tử đã kiểm kê + 4 healthscan + 5 khoá micro tiktok cũ là hành động riêng không trùng 36 hành động nền tảng tiktok.
 `humanMouse {kind: click|scroll|move, x, y, dy?}` (content → background.js, KHÔNG qua results.js) → `{ok}` — chuột thật qua chrome.debugger cho `AVJP.human` (modules/shared/humanmouse.js, 2.11.16); lỗi/tắt công tắc → `{ok:false}`, content tự fallback click DOM.
 
 Action lạ: listener của kernel **không trả lời** — để lõi FB xử lý action của nó.
