@@ -2886,11 +2886,128 @@ chrome.storage.onChanged.addListener((changes,area)=>{
   }).catch(()=>{});
 });
 
+// ── (2.11.16) CHUỘT NGƯỜI — phía service worker ─────────────────────
+// Content script (modules/shared/humanmouse.js) gửi {action:"humanMouse",
+// kind:"click"|"scroll"|"move", x, y, dy?} với đích là tab của sender.
+// SW phát SỰ KIỆN CHUỘT THẬT qua chrome.debugger (CDP
+// Input.dispatchMouseEvent, isTrusted=true) kèm chuyển động giống người:
+// đường cong Bezier, tốc độ ease-in-out, thỉnh thoảng vọt quá đích rồi
+// quay lại, giữ nhấn ngẫu nhiên. Vị trí chuột cuối của từng tab được nhớ
+// để mỗi cú di chuyển bắt đầu từ nơi cú trước kết thúc.
+const humanMousePos=new Map(); // tabId -> {x, y}
+try{chrome.tabs.onRemoved.addListener(tabId=>humanMousePos.delete(tabId));}catch(_){}
+const hmSleep=ms=>new Promise(r=>setTimeout(r,ms));
+const hmRand=(a,b)=>a+Math.random()*(b-a);
+function hmSend(tabId,method,params){
+  return new Promise((resolve,reject)=>{
+    try{
+      chrome.debugger.sendCommand({tabId},method,params,()=>{
+        const err=chrome.runtime.lastError;
+        if(err)reject(new Error(err.message||String(err)));else resolve();
+      });
+    }catch(e){reject(e);}
+  });
+}
+// Điểm trên đường cong Bezier bậc 2 tại t (0..1).
+function hmBezier(p0,p1,p2,t){
+  const u=1-t;
+  return {x:u*u*p0.x+2*u*t*p1.x+t*t*p2.x, y:u*u*p0.y+2*u*t*p1.y+t*t*p2.y};
+}
+// Di chuột từ `from` tới `to` theo đường cong: điểm điều khiển lệch khỏi
+// trung điểm theo phương vuông góc tới ±20% quãng đường, 12-24 bước
+// (đường ngắn tự co lại), mỗi bước 8-25ms, tốc độ ease-in-out như tay
+// người. stepsOverride dùng cho đoạn quay lại ngắn sau overshoot.
+async function hmMovePath(tabId,from,to,stepsOverride){
+  const dist=Math.hypot(to.x-from.x,to.y-from.y);
+  let steps=stepsOverride||Math.round(hmRand(12,24));
+  if(!stepsOverride&&dist<40)steps=Math.max(5,Math.round(steps/2));
+  const mx=(from.x+to.x)/2,my=(from.y+to.y)/2;
+  const off=(Math.random()*2-1)*0.2*(dist||1);
+  const ctrl={x:mx+(-(to.y-from.y)/(dist||1))*off, y:my+((to.x-from.x)/(dist||1))*off};
+  for(let i=1;i<=steps;i++){
+    const t=i/steps;
+    const te=t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+    const p=hmBezier(from,ctrl,to,te);
+    await hmSend(tabId,"Input.dispatchMouseEvent",{type:"mouseMoved",x:Math.round(p.x),y:Math.round(p.y),modifiers:0});
+    if(i<steps)await hmSleep(hmRand(8,25));
+  }
+  humanMousePos.set(tabId,{x:to.x,y:to.y});
+}
+async function runHumanMouse(tabId,msg){
+  const kind=msg&&msg.kind;
+  const x=Math.round(Number(msg&&msg.x)||0), y=Math.round(Number(msg&&msg.y)||0);
+  if(!tabId)throw new Error("humanMouse: không xác định được tab đích");
+  if(!["click","scroll","move"].includes(kind))throw new Error("humanMouse: kind lạ "+String(kind));
+  // Attach: nếu lõi FB đang giữ phiên debugger cho tab này, attach báo
+  // "already attached" — dùng chung phiên sẵn có và KHÔNG detach khi
+  // xong (phiên không phải của mình). Attach được thì detach đúng phần
+  // mình ở finally.
+  let attachedByUs=false;
+  try{
+    await new Promise((res,rej)=>chrome.debugger.attach({tabId},"1.3",()=>chrome.runtime.lastError?rej(chrome.runtime.lastError):res()));
+    attachedByUs=true;
+  }catch(e){
+    if(!/already attached/i.test(String(e&&e.message||e)))throw e;
+  }
+  try{
+    if(kind==="click"||kind==="move"){
+      let from=humanMousePos.get(tabId);
+      if(!from){
+        // Chưa biết vị trí chuột: bắt đầu từ điểm ngẫu nhiên lệch đích 100-300px.
+        const ang=Math.random()*Math.PI*2, rad=hmRand(100,300);
+        from={x:Math.max(0,Math.round(x+Math.cos(ang)*rad)), y:Math.max(0,Math.round(y+Math.sin(ang)*rad))};
+      }
+      let dest={x,y};
+      const overshoot=kind==="click"&&Math.random()<0.3;
+      if(overshoot){
+        // ~30%: vọt quá đích 2-6px theo hướng di chuyển rồi quay lại.
+        const vx=x-from.x, vy=y-from.y, vl=Math.hypot(vx,vy)||1, over=hmRand(2,6);
+        dest={x:Math.round(x+vx/vl*over), y:Math.round(y+vy/vl*over)};
+      }
+      await hmMovePath(tabId,from,dest);
+      if(overshoot){
+        await hmSleep(hmRand(40,110));
+        await hmMovePath(tabId,dest,{x,y},1+Math.floor(Math.random()*2)); // 1-2 bước quay lại
+      }
+      if(kind==="click"){
+        await hmSleep(hmRand(30,80));
+        await hmSend(tabId,"Input.dispatchMouseEvent",{type:"mousePressed",x,y,button:"left",clickCount:1});
+        await hmSleep(hmRand(40,110)); // giữ nhấn như ngón tay người
+        await hmSend(tabId,"Input.dispatchMouseEvent",{type:"mouseReleased",x,y,button:"left",clickCount:1});
+      }
+    }else{ // scroll: chia dy thành 3-6 nấc nhỏ cách nhau 30-80ms
+      const total=Math.round(Number(msg.dy)||0);
+      if(total!==0){
+        const n=3+Math.floor(Math.random()*4);
+        let sent=0;
+        for(let i=0;i<n;i++){
+          const part=i===n-1?total-sent:Math.round(total/n+hmRand(-20,20));
+          sent+=part;
+          await hmSend(tabId,"Input.dispatchMouseEvent",{type:"mouseWheel",x,y,deltaX:0,deltaY:part});
+          if(i<n-1)await hmSleep(hmRand(30,80));
+        }
+        humanMousePos.set(tabId,{x,y});
+      }
+    }
+    return {ok:true};
+  }finally{
+    if(attachedByUs){try{await new Promise(res=>chrome.debugger.detach({tabId},()=>res()));}catch(_){}}
+  }
+}
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
   if(msg.action==="logActivityFromPopup"){
     logActivity(String(msg.feature||"info"),String(msg.msg||""),msg.level||undefined);
     sendResponse({ok:true});
     return false;
+  }
+  if(msg.action==="humanMouse"){
+    (async()=>{
+      try{
+        const tabId=sender&&sender.tab&&sender.tab.id;
+        sendResponse(await runHumanMouse(tabId,msg));
+      }catch(error){sendResponse({ok:false,error:String(error?.message||error)});}
+    })();
+    return true;
   }
   if(msg.action==="scanJoinedGroupsStart"){
     (async()=>{
