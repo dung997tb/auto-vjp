@@ -473,6 +473,17 @@ window.TF = window.TF || {};
             if (out.status === 'failed' || out.status === 'unknown') self3.log('warn', 'Module ' + step.moduleId + ': ' + (out.note || out.status), step.moduleId);
             else if (out.note) self3.log('info', step.moduleId + ': ' + out.note, step.moduleId);
             self3.journalEnd(jEntry, out.status, out.note);
+            // (2.11.16) Sau bước module thành công, ~25% khả năng xen 1
+            // đợt di chuột vô định (AVJP.human.wander — chuột thật qua
+            // CDP) cho nhịp hành động giống người. Module humanmouse
+            // vắng mặt thì bỏ qua êm; wander lỗi cũng không được làm
+            // hỏng kết quả bước vừa chạy.
+            if (out.status === 'success' && Math.random() < 0.25) {
+              var H = (typeof window !== 'undefined' && window.AVJP && window.AVJP.human) || null;
+              if (H && typeof H.wander === 'function') {
+                return Promise.resolve(H.wander()).catch(function () {}).then(function () { return out; });
+              }
+            }
             return out;
           })
           .catch(function (e) { self3.log('error', 'Module ' + step.moduleId + ' lỗi: ' + (e && e.message), step.moduleId); self3.journalEnd(jEntry, 'failed', 'throw:' + (e && e.message)); return R('failed', 'throw:' + (e && e.message)); });
