@@ -55,6 +55,46 @@ if (window.top !== window.self) {
   const pMediaUrl = String(payload.media_url ?? payload.media ?? payload.file_url ??
     (Array.isArray(payload.media_urls) ? payload.media_urls[0] : '') ?? '').trim();
 
+  // ── PAGE-SIDE CANCEL (2.11.18, Lane P) ──
+  // Kernel ghi cờ huỷ vào chrome.storage.local['autovjp.cancelFlags']
+  // = { <taskId>: <timestamp> } khi user bấm Dừng. Script phía trang tự
+  // thấy cờ thì NGỪNG ngay: báo failed/'user_cancelled' qua report() sẵn
+  // có của file (kernel có thể đã chốt receipt trước - kết quả đến muộn
+  // bị kernel bỏ qua, vô hại) rồi unwind bằng ngoại lệ để không bấm/cuộn
+  // thêm nữa. Định danh task dùng ở đây: taskId = String(run.task_id ||
+  // run.id) - cùng khoá mà phase storage (PHASE_KEY) của file gắn vào.
+  async function avjpCancelRequested() {
+    try {
+      const s = await chrome.storage.local.get('autovjp.cancelFlags');
+      const m = s && s['autovjp.cancelFlags'];
+      return !!(m && typeof m === 'object' && Object.prototype.hasOwnProperty.call(m, taskId));
+    } catch (_) { return false; }
+  }
+  async function avjpSleepCancellable(ms) {
+    const end = Date.now() + Math.max(0, Number(ms) || 0);
+    for (;;) {
+      const rem = end - Date.now();
+      if (rem <= 0) return true;
+      await sleep(Math.min(800, rem));
+      if (await avjpCancelRequested()) return false;
+      if (Date.now() >= end) return true;
+    }
+  }
+  function avjpCancelledError() {
+    const e = new Error('user_cancelled');
+    e.avjpCancelled = true;
+    e.failure_code = 'user_cancelled';
+    e.failureCode = 'user_cancelled';
+    return e;
+  }
+  function avjpAbortCancelled(extra = {}) {
+    try {
+      report('failed', { action, cancelled: true, ...extra }, 'user_cancelled',
+        'Đã dừng theo yêu cầu người dùng (user_cancelled)');
+    } catch (_) {}
+    throw avjpCancelledError();
+  }
+
   const getPhase = async () => {
     const s = await chrome.storage.local.get(PHASE_KEY);
     const p = s[PHASE_KEY];
@@ -97,7 +137,7 @@ if (window.top !== window.self) {
       try { v = fn(); } catch (_) {}
       if (v) return v;
       if (Date.now() >= end) return null;
-      await sleep(stepMs);
+      if (!(await avjpSleepCancellable(stepMs))) avjpAbortCancelled({ phase: 'waitFor' });
     }
   }
   function plainClick(el) {
@@ -185,7 +225,7 @@ if (window.top !== window.self) {
       try { target.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, bubbles: true, cancelable: true, view: window })); } catch (_) {}
       try { window.scrollBy(0, dy); } catch (_) {}
       ticks++;
-      await sleep(Math.min(rand(1600, 3200), Math.max(0, end - Date.now())));
+      if (!(await avjpSleepCancellable(Math.min(rand(1600, 3200), Math.max(0, end - Date.now()))))) avjpAbortCancelled({ step: 'scroll_feed', ticks });
     }
     done({ seconds: secs, ticks });
   }
@@ -210,7 +250,7 @@ if (window.top !== window.self) {
       return report('failed', { action, found: true, target: 'first_video_playback' }, 'execution_error',
         'Có video đầu nhưng không phát được (không thấy currentTime chạy)');
     }
-    await sleep(secs * 1000);
+    if (!(await avjpSleepCancellable(secs * 1000))) avjpAbortCancelled({ step: 'watch_first' });
     done({ watched_seconds: secs }, `Đã xem video đầu ${secs} giây`);
   }
 
@@ -258,7 +298,7 @@ if (window.top !== window.self) {
       case 'watch_first': {
         const v = await waitFor(firstVideo, 8000);
         if (v && await ensurePlaying(v, 5000)) {
-          await sleep(secondsOr(20) * 1000);
+          if (!(await avjpSleepCancellable(secondsOr(20) * 1000))) avjpAbortCancelled({ step: 'watch_first', resumed: true });
           return done({ watched_seconds: secondsOr(20), resumed: true }, 'Đã xem video đầu (lượt tiếp)');
         }
         return report('failed', { action, resumed: true, found: false, target: 'first_video_playback' },
@@ -627,7 +667,7 @@ if (window.top !== window.self) {
           const b = TFQ('commentBtn');
           if (b) { await humanClickStrict(b); lastClick = Date.now(); }
         }
-        await sleep(800);
+        if (!(await avjpSleepCancellable(800))) avjpAbortCancelled({ step: 'post_comment_open_panel' });
         input = TFQ('commentInput');
       }
     }
@@ -669,7 +709,7 @@ if (window.top !== window.self) {
     await humanClickStrict(submit);
     let verified = false;
     for (let i = 0; i < 10 && !verified; i++) {
-      await sleep(1000);
+      if (!(await avjpSleepCancellable(1000))) avjpAbortCancelled({ step: 'post_comment_verify' });
       if (countCommentText(content) > before) verified = true;
     }
     if (!verified) return badExec('Đã bấm gửi nhưng không thấy bình luận xuất hiện (comment_unverified)', { comment_unverified: true });
@@ -1070,6 +1110,7 @@ if (window.top !== window.self) {
   async function executeChain(state) {
     while (state.idx < state.chain.length) {
       const step = state.chain[state.idx];
+      if (await avjpCancelRequested()) avjpAbortCancelled({ step });
       if (state.verify === step) {
         const vf = VERIFY_HANDLERS[step];
         const vr = vf ? await vf(state) : ok({});
@@ -1265,6 +1306,12 @@ if (window.top !== window.self) {
       } catch (e) { finish({ error: e }); return; }
       if (startRes && startRes.queued) { finish({ busy: true }); return; }
       const iv = setInterval(() => {
+        avjpCancelRequested().then(cancelled => {
+          if (!cancelled) return;
+          clearInterval(iv);
+          try { TFg.engine.stopAll('user_cancelled'); } catch (_) {}
+          finish({ cancelled: true });
+        }).catch(() => {});
         try {
           if (!TFg.engine.running) {
             clearInterval(iv);
@@ -1276,6 +1323,10 @@ if (window.top !== window.self) {
       // Nếu module điều hướng (gotoUrl), trang chết tại đây và promise
       // không bao giờ resolve — lượt inject sau đối soát qua resumeTf().
     });
+    if (outcome.cancelled) {
+      return report('failed', { action, tf_key: key, module: moduleId, cancelled: true }, 'user_cancelled',
+        'Đã dừng step Farmer theo yêu cầu người dùng (user_cancelled)');
+    }
     if (outcome.busy) {
       return failExec({ tf_key: key, module: moduleId, error: 'engine_busy' },
         'Engine Farmer đang bận chạy phiên khác — không chạy lẻ được step lúc này');
