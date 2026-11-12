@@ -17,6 +17,11 @@
   // tự rơi về finder gốc. Xem modules/shared/HEALER.md.
   const HEALER = 'modules/shared/healer.js';
   const HEALTHSCAN = 'modules/shared/healthscan.js';
+  // (2.11.17) Handler dùng chung cho hành động nhỏ healthscan_<anchor>
+  // ở nhánh micro_action (chỉ 4 nền tảng có neo mẫu: ig/yt/threads/
+  // tiktok) — nạp TRƯỚC micro.js, micro.js uỷ quyền khi action bắt đầu
+  // bằng 'healthscan_'. Xem modules/shared/healthscan-micro.js.
+  const HEALTHSCAN_MICRO = 'modules/shared/healthscan-micro.js';
   // Ảnh mặc định của riêng Auto vjp (2.11.7): AVJP.defaultImage — nạp
   // TRƯỚC automator ở spec 'post' (instagram/threads/x); automator không
   // thấy helper thì tự rơi về asset gói sẵn. Xem modules/shared/default-image.js.
@@ -53,7 +58,7 @@
         if (task.type === 'scan_account') return { files: [SCAN_UTILS, METRICS, 'modules/instagram/accounts-scanner.js'], scan: true };
         // micro_action (2.11.16): hành động nhỏ test lẻ (lướt feed, like
         // bài đầu, xem story...) — script riêng modules/instagram/micro.js.
-        if (task.type === 'micro_action') return { files: [HUMAN_MOUSE, 'modules/instagram/micro.js'], frameTopOnly: true };
+        if (task.type === 'micro_action') return { files: [HUMAN_MOUSE, HEALER, HEALTHSCAN_MICRO, 'modules/instagram/micro.js'], frameTopOnly: true };
         // nurture (2.2.0): lõi nuôi dùng chung + adapter Instagram. Xem
         // modules/nurture-core/README.md + modules/instagram-nurture/MODULE.md.
         if (task.type === 'nurture') {
@@ -77,7 +82,13 @@
         if (task.type === 'reply') return { files: [CANONICAL, 'modules/threads/interaction.js'] };
         if (task.type === 'affiliate') return { files: [CANONICAL, 'modules/threads/affiliate-commenter.js'] };
         if (task.type === 'scan_account') return { files: [SCAN_UTILS, 'modules/threads/accounts-scanner.js'], scan: true };
-        if (task.type === 'micro_action') return { files: [HUMAN_MOUSE, 'modules/threads/micro.js'], frameTopOnly: true };
+        // micro_action (2.11.17): đủ 22 hành động nguyên tử trong
+        // modules/threads/micro.js. File tự chứa (bộ chọn/logic port từ
+        // automator/interaction/affiliate-commenter/threads-nurture
+        // adapter) — KHÔNG nạp kèm các file nguồn đó: chúng là IIFE
+        // khép kín tự chạy theo task post/reply/affiliate/nurture
+        // riêng, nạp vào nhánh micro sẽ tranh chấp tab.
+        if (task.type === 'micro_action') return { files: [HUMAN_MOUSE, HEALER, HEALTHSCAN_MICRO, 'modules/threads/micro.js'], frameTopOnly: true };
         if (task.type === 'healthscan') return { files: [CANONICAL, HEALER, HEALTHSCAN] };
         // nurture (2.3.0): lõi nuôi dùng chung + adapter Threads. Xem
         // modules/nurture-core/README.md + modules/threads-nurture/MODULE.md.
@@ -114,7 +125,20 @@
           };
         }
         if (task.type === 'scan_account') return { files: [SCAN_UTILS, METRICS, 'modules/tiktok/accounts-scanner.js'], scan: true };
-        if (task.type === 'micro_action') return { files: [HUMAN_MOUSE, 'modules/tiktok/micro.js'], frameTopOnly: true };
+        // micro_action (2.11.17): ngoài HUMAN_MOUSE + micro.js, nạp thêm
+        // bộ script nurture TikTok (selectors -> modules -> engine ->
+        // content, đúng thứ tự nhánh nurture) để micro.js có TF.q/TF.qa
+        // cho 36 hành động nền tảng và TF.engine + TF.MODULES cho 36 step
+        // Farmer tf_* chạy lẻ 1 step. content.js dựng TF.engine (hooks
+        // ghi storage tf_*) — adapter.js KHÔNG nạp (nó chỉ chạy task
+        // nurture đầy đủ, sẽ giành engine với micro).
+        if (task.type === 'micro_action') return { files: [CANONICAL, HUMAN_MOUSE,
+          'modules/tiktok-nurture/selectors.js',
+          'modules/tiktok-nurture/modules.js',
+          'modules/tiktok-nurture/engine.js',
+          'modules/tiktok-nurture/content.js',
+          HEALER, HEALTHSCAN_MICRO,
+          'modules/tiktok/micro.js'], frameTopOnly: true };
         if (task.type === 'healthscan') return { files: [CANONICAL, HEALER, HEALTHSCAN], frameTopOnly: true };
         // nurture (2.1.0): engine TikTok Farmer port nguyên khối — thứ tự nạp
         // đúng manifest gốc của Farmer (selectors -> modules -> engine ->
@@ -142,7 +166,16 @@
         if (task.type === 'reply') return { files: [CANONICAL, 'modules/x/interaction.js'] };
         if (task.type === 'affiliate') return { files: [CANONICAL, 'modules/x/affiliate-commenter.js'] };
         if (task.type === 'scan_account') return { files: [SCAN_UTILS, METRICS, 'modules/x/accounts-scanner.js'], scan: true };
-        if (task.type === 'micro_action') return { files: [HUMAN_MOUSE, 'modules/x/micro.js'], frameTopOnly: true };
+        // micro_action (2.11.17): 32 hành động nguyên tử. Nạp thêm
+        // nurture-core TRƯỚC micro.js: micro dùng hàm THẬT
+        // AVJP.nurture.util (normalizeText/commentSignature) cho các
+        // bước verify/nurture. Các file nguồn automator.js /
+        // interaction.js / affiliate-commenter.js / x-nurture/adapter.js
+        // là script TỰ CHẠY theo task-key riêng (không export hàm) nên
+        // KHÔNG nạp ở nhánh này — nạp vào sẽ kích hoạt luồng đăng/trả
+        // lời/affiliate/nuôi thật giữa phiên micro; micro.js bám đúng
+        // selector + kỹ thuật của chúng (ghi nguồn tại từng handler).
+        if (task.type === 'micro_action') return { files: [HUMAN_MOUSE, 'modules/nurture-core/nurture-core.js', 'modules/x/micro.js'], frameTopOnly: true };
         // nurture (2.4.0): lõi nuôi dùng chung + adapter X. Xem
         // modules/nurture-core/README.md + modules/x-nurture/MODULE.md.
         if (task.type === 'nurture') {
@@ -181,7 +214,7 @@
         if (task.type === 'reply') return { files: [CANONICAL, HEALER, 'modules/youtube/interaction.js'] };
         if (task.type === 'healthscan') return { files: [CANONICAL, HEALER, HEALTHSCAN] };
         if (task.type === 'scan_account') return { files: [SCAN_UTILS, 'modules/youtube/discovery.js'], scan: true };
-        if (task.type === 'micro_action') return { files: [HUMAN_MOUSE, 'modules/youtube/micro.js'], frameTopOnly: true };
+        if (task.type === 'micro_action') return { files: [HUMAN_MOUSE, HEALER, HEALTHSCAN_MICRO, 'modules/youtube/micro.js'], frameTopOnly: true };
         // nurture (2.5.0): lõi nuôi dùng chung + adapter YouTube. Xem
         // modules/nurture-core/README.md + modules/youtube-nurture/MODULE.md.
         if (task.type === 'nurture') {
