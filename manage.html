@@ -415,7 +415,11 @@
       <section class="view" data-view="testactions">
         <div class="section-intro">
           <div><h2>Test hành động</h2><p>Bảng test đơn giản: mỗi hàng là một hành động của một nền tảng theo đúng contract hiện có. Bấm Chạy để enqueue một task test THẬT và xem kết quả ngay tại hàng.</p></div>
-          <span class="info-pill">Task test là task thật</span>
+          <div>
+            <button id="cancelAllTestBtn" class="btn btn-danger-soft" type="button">Dừng tất cả đang chạy</button>
+            <span id="cancelAllResult" class="form-message" aria-live="polite"></span>
+            <span class="info-pill">Task test là task thật</span>
+          </div>
         </div>
 
         <article class="card form-card">
@@ -448,6 +452,12 @@
             </table>
           </div>
           <div class="table-footer"><span id="microCountLabel">0 hành động nhỏ</span><span>Dùng chung biên lai và nhịp poll ~3 giây với bảng chính.</span></div>
+        </article>
+
+        <article class="card table-card" id="testLogPanel">
+          <div class="card-header"><div><h3>Log test</h3><p>40 biên lai gần nhất từ các lần chạy test, mới nhất trước.</p></div><button id="clearTestLogViewBtn" class="btn btn-ghost" type="button">Xoá khung xem</button></div>
+          <div id="testLogList" class="test-log-list"></div>
+          <div class="table-footer"><span>Xoá khung xem chỉ ẩn các dòng cũ trên trang này, không xoá dữ liệu.</span></div>
         </article>
       </section>
     </main>
