@@ -5,6 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Auto vjp — Quản lý đa nền tảng</title>
 <link rel="stylesheet" href="manage.css">
+<style>
+/* Cập nhật extension (2.11.19) — class update-* chưa có trong manage.css.
+   Section này cố ý KHÔNG dùng class .view: manage.js showView() tắt
+   is-active của mọi .view không khớp data-view, sẽ ẩn mất khối này. */
+.update-wrap { margin-bottom: 18px; }
+.update-card { padding: 19px 20px; }
+.update-card-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.update-card-head h2 { margin: 0; font-size: 18px; letter-spacing: -.015em; }
+.update-note { margin: 10px 0 0; color: var(--text-2); font-size: 13px; line-height: 1.55; }
+.update-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 14px; }
+.update-status { min-height: 19px; margin: 12px 0 0; color: var(--text-2); font-size: 13px; line-height: 1.5; }
+.update-status:empty { min-height: 0; margin-top: 0; }
+</style>
 </head>
 <body>
 <div class="app-shell">
@@ -145,6 +158,22 @@
     </header>
 
     <main class="content">
+      <section class="update-wrap" id="updateSection" aria-label="Cập nhật extension">
+        <div class="card update-card">
+          <div class="update-card-head">
+            <h2>Cập nhật extension</h2>
+            <span class="badge badge-neutral">Phiên bản hiện tại: <span id="updCurrentVersion">…</span></span>
+          </div>
+          <p class="update-note">Tải bản mới nhất từ GitHub và ghi đè vào thư mục extension đã chọn (chọn 1 lần). Sau khi ghi xong, mở chrome://extensions bấm ⟳ (Làm mới) ở thẻ Auto vjp để nạp bản mới.</p>
+          <div class="update-actions">
+            <button class="btn btn-primary" type="button" id="updBtn">Cập nhật</button>
+            <button class="btn" type="button" id="updOpenExt" hidden>Mở trang quản lý extension</button>
+            <button class="btn btn-ghost" type="button" id="updReselect">Chọn lại thư mục</button>
+          </div>
+          <p class="update-status" id="updStatus" role="status"></p>
+        </div>
+      </section>
+
       <!-- TRANG CHỦ -->
       <section class="view is-active" data-view="dashboard" aria-labelledby="pageTitle">
         <div id="dashboardPauseNotice" class="notice notice-warning" hidden>
@@ -464,6 +493,7 @@
   </div>
 </div>
 <script src="modules/kernel/contract-data.js"></script>
+<script src="manage-updater.js"></script>
 <script src="manage.js"></script>
 </body>
 </html>
