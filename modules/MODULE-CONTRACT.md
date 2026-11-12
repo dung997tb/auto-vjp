@@ -137,6 +137,8 @@ instagram/threads/x/youtube) → kernel chạm run (giữ sống trước watchd
 `healGetLearned {platform, key}` → `{success, spec?}` · `healSuggest {platform, key, intent, snapshot}` → `{success, specs[]}` ·
 `healMarkProven {platform, key, spec}` → `{success}` — tự chữa selector 2.9.0, xem `modules/shared/HEALER.md`.
 `healthscanCompleted` / `healthscanFailed {postId, items?}` → receipt type `healthscan` (2.9.0).
+`microActionDone {taskId, status, failure_code?, resultMessage?, details?}` → receipt type `micro_action` (2.11.16) — hành động nhỏ test lẻ (scroll_feed/like_first/watch_first/view_first_story/open_notifications/open_profile) qua `modules/<platform>/micro.js`; payload task `{action, seconds?}`.
+`humanMouse {kind: click|scroll|move, x, y, dy?}` (content → background.js, KHÔNG qua results.js) → `{ok}` — chuột thật qua chrome.debugger cho `AVJP.human` (modules/shared/humanmouse.js, 2.11.16); lỗi/tắt công tắc → `{ok:false}`, content tự fallback click DOM.
 
 Action lạ: listener của kernel **không trả lời** — để lõi FB xử lý action của nó.
 
