@@ -136,11 +136,156 @@
       driveInject(tab.id, run).catch(() => {});
       return tab.id;
     }
+    // (2.11.16) Spec khai emulation 'mobile' (hiện chỉ IG story): mở
+    // tab TRẮNG, gắn giả lập thiết bị xong MỚI điều hướng sang
+    // startUrl — gắn sau khi trang đã tải là quá muộn, IG chốt layout
+    // desktop cho cả phiên. Gắn không được -> deliver failed
+    // 'emulation_missing' ngay thay vì để tầng module chết vô ích
+    // trên giao diện desktop (mã này không thuộc nhóm retryable nên
+    // fail là chung cuộc, xem planRetry).
+    const spec0 = C().PLATFORMS[run.platform]?.scripts(run);
+    if (spec0 && spec0.emulation === 'mobile') {
+      const tab = await openTab('about:blank');
+      await S.touchRun({ tabId: tab.id, phase: 'acting' });
+      if (!await applyMobileEmulation(tab.id)) {
+        await globalThis.AVJP.outbox.deliver({
+          type: run.type, taskId: run.task_id, platform: run.platform, tabId: tab.id,
+          status: 'failed', failure_code: 'emulation_missing', forceCleanup: true,
+          resultMessage: 'Không gắn được giả lập thiết bị mobile qua chrome.debugger — huỷ task thay vì chạy trên giao diện desktop.'
+        });
+        return tab.id;
+      }
+      await chrome.tabs.update(tab.id, { url });
+      driveInject(tab.id, run).catch(() => {});
+      return tab.id;
+    }
     const tab = await openTab(url);
     await S.touchRun({ tabId: tab.id, phase: 'acting' });
     driveInject(tab.id, run).catch(() => {});
     return tab.id;
   }
+
+  /* ===== Giả lập thiết bị mobile theo task (2.11.16) =====
+   * Bộ thông số lấy NGUYÊN từ spike sống 2026-11-12 trên nuc (nick
+   * @langlehoaanhdao, Chrome 156, verdict: đi trọn luồng tới nút
+   * đăng): Pixel 8 / Android 14 — metrics 412x915 KÈM
+   * screenOrientation portrait (thiếu orientation thì editor chặn
+   * bằng màn hình bắt xoay thiết bị), touch 5 điểm, UA mobile kèm
+   * userAgentMetadata (thiếu UA mobile thì IG trả feed dạng reels,
+   * không có khay tin). Thiếu một món là giao diện mobile không ra
+   * đúng, nên gắn thiếu thì coi như gắn hỏng.
+   * Gỡ giả lập ở MỌI ngả kết thúc run: bọc AVJP.outbox.deliver (điểm
+   * chảy chung của mọi kết quả thi hành — cùng điểm chạm wrap retry
+   * dùng ở cuối file): clear metrics + tắt touch + khôi phục UA +
+   * detach CHỈ khi phiên do runner attach. Mẫu attach chịu lỗi
+   * "already attached" bê từ handler humanMouse trong background.js:
+   * phiên debugger đã có của extension/lõi FB thì vẫn gửi lệnh được
+   * nhưng KHÔNG detach của người ta.
+   * Giới hạn đã biết: map trạng thái sống trong SW — SW khởi động lại
+   * giữa run thì mất dấu attach; khi đó deliver chung cuộc vẫn đóng
+   * tab managed nên giả lập chết theo tab, không rò sang tab khác
+   * (mọi override CDP là theo từng target).
+   */
+  const MOBILE_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Mobile Safari/537.36';
+  const emulatedTabs = new Map(); // tabId -> { attachedByUs: boolean }
+
+  function dbgAttach(tabId) {
+    return new Promise((resolve, reject) => {
+      try {
+        chrome.debugger.attach({ tabId }, '1.3', () => {
+          const err = chrome.runtime.lastError;
+          if (err) reject(new Error(err.message || String(err))); else resolve();
+        });
+      } catch (e) { reject(e); }
+    });
+  }
+
+  function dbgDetach(tabId) {
+    return new Promise(resolve => {
+      try { chrome.debugger.detach({ tabId }, () => resolve()); } catch (_) { resolve(); }
+    });
+  }
+
+  async function dbgSend(tabId, method, params) {
+    return chrome.debugger.sendCommand({ tabId }, method, params || {});
+  }
+
+  // Gắn đủ 3 lệnh Emulation. Thành công mới ghi dấu vào map; hỏng
+  // giữa chừng thì tự gỡ phần đã gắn rồi trả false.
+  async function applyMobileEmulation(tabId) {
+    let attachedByUs = false;
+    try {
+      await dbgAttach(tabId);
+      attachedByUs = true;
+    } catch (e) {
+      if (!/already attached/i.test(String(e?.message || e))) return false;
+      // Phiên debugger đã có sẵn — gửi lệnh được, detach không thuộc mình.
+    }
+    try {
+      await dbgSend(tabId, 'Emulation.setDeviceMetricsOverride', {
+        width: 412, height: 915, deviceScaleFactor: 2.625, mobile: true,
+        screenWidth: 412, screenHeight: 915,
+        screenOrientation: { type: 'portraitPrimary', angle: 0 }
+      });
+      await dbgSend(tabId, 'Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+      await dbgSend(tabId, 'Emulation.setUserAgentOverride', {
+        userAgent: MOBILE_UA,
+        acceptLanguage: 'vi-VN,vi;q=0.9,en;q=0.8',
+        userAgentMetadata: {
+          brands: [
+            { brand: 'Chromium', version: '156' },
+            { brand: 'Google Chrome', version: '156' },
+            { brand: 'Not-A.Brand', version: '99' }
+          ],
+          fullVersionList: [{ brand: 'Chromium', version: '156.0.8078.80' }],
+          platform: 'Android', platformVersion: '14', architecture: '',
+          model: 'Pixel 8', mobile: true
+        }
+      });
+    } catch (e) {
+      await clearMobileEmulation(tabId, { attachedByUs }).catch(() => {});
+      return false;
+    }
+    emulatedTabs.set(tabId, { attachedByUs });
+    return true;
+  }
+
+  // Gỡ giả lập: từng lệnh nuốt lỗi riêng (tab có thể đã đóng giữa
+  // chừng) để một lệnh hỏng không chặn các lệnh sau; luôn xoá dấu.
+  // `known` cho phép gỡ khi chưa kịp ghi map (đường gắn dở ở trên).
+  async function clearMobileEmulation(tabId, known) {
+    const state = known || emulatedTabs.get(tabId);
+    emulatedTabs.delete(tabId);
+    if (!state) return;
+    try { await dbgSend(tabId, 'Emulation.clearDeviceMetricsOverride', {}); } catch (_) {}
+    try { await dbgSend(tabId, 'Emulation.setTouchEmulationEnabled', { enabled: false }); } catch (_) {}
+    try { await dbgSend(tabId, 'Emulation.setUserAgentOverride', { userAgent: '' }); } catch (_) {}
+    if (state.attachedByUs) await dbgDetach(tabId);
+  }
+
+  // Bọc deliver: gỡ giả lập TRƯỚC khi deliver gốc chạy, vì outbox
+  // đóng tab managed ngay trong deliver — lệnh CDP phải đi khi tab
+  // còn sống. Kết quả không mang tab đang giả lập thì cho qua nguyên.
+  function wrapDeliverWithEmulationCleanup() {
+    const box = globalThis.AVJP.outbox;
+    if (!box || typeof box.deliver !== 'function' || box.deliver.__avjpEmuCleanup) return;
+    const original = box.deliver;
+    const wrapped = async result => {
+      try {
+        const tabId = result?.tabId || null;
+        if (tabId && emulatedTabs.has(tabId)) await clearMobileEmulation(tabId);
+      } catch (err) {
+        console.error('[Auto vjp][runner] gỡ giả lập lỗi — vẫn deliver như thường', err);
+      }
+      return original(result);
+    };
+    wrapped.__avjpEmuCleanup = true;
+    box.deliver = wrapped;
+  }
+
+  // Tab bị đóng: override + phiên debugger tự chết theo target, chỉ
+  // cần xoá dấu để map không rò.
+  chrome.tabs.onRemoved.addListener(tabId => { emulatedTabs.delete(tabId); });
 
   // (2.11.11) Tự lái inject sau start — vá 2 kiểu treo đã tái hiện trong
   // lab: (a) "cuộc đua complete" — tab tải xong TRƯỚC khi touchRun kịp ghi
@@ -489,6 +634,10 @@
   }
 
   wrapDeliverWithRetry();
+  // (2.11.16) Bọc thêm lớp gỡ giả lập thiết bị mobile — gắn SAU lớp
+  // retry để nó ở ngoài cùng: mọi deliver (kể cả bản trung gian
+  // 'retrying' do lớp retry sinh) đều qua tay gỡ giả lập trước.
+  wrapDeliverWithEmulationCleanup();
   try { chrome.alarms.create(RETRY_ALARM, { periodInMinutes: 1 }); } catch (_) {}
   chrome.alarms.onAlarm.addListener(alarm => {
     if (alarm && (alarm.name === RETRY_ALARM || alarm.name === 'autovjp.tick')) promoteDueRetries().catch(() => {});
