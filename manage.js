@@ -53,6 +53,7 @@ let currentState = {
   accounts: {},
   paused: false,
   currentRun: null,
+  testState: {},
   learnedSelectors: {},
   platforms: Object.keys(PLATFORM_META).filter(p => p !== 'probe')
 };
@@ -145,6 +146,7 @@ async function refresh() {
       return;
     }
     currentState = state;
+    maybeBackfillTestState();
     populatePlatformFilters();
     renderAll();
   } finally {
@@ -938,15 +940,33 @@ function bindEvents() {
   $$('input[name="publishMode"]').forEach(input => input.addEventListener('change', updatePublishMode));
 
   $('testTableBody').addEventListener('click', ev => {
+    const stopBtn = ev.target.closest('[data-test-stop]');
+    if (stopBtn) {
+      if (!stopBtn.disabled) cancelTestTask(stopBtn.dataset.testStop);
+      return;
+    }
     const btn = ev.target.closest('[data-test-run]');
     if (!btn || btn.disabled) return;
     runTestAction(btn.dataset.testRun);
   });
 
   $('microTableBody').addEventListener('click', ev => {
+    const stopBtn = ev.target.closest('[data-micro-stop]');
+    if (stopBtn) {
+      if (!stopBtn.disabled) cancelTestTask(stopBtn.dataset.microStop);
+      return;
+    }
     const btn = ev.target.closest('[data-micro-run]');
     if (!btn || btn.disabled) return;
     runMicroAction(btn.dataset.microRun);
+  });
+
+  const cancelAllBtn = $('cancelAllTestBtn');
+  if (cancelAllBtn) cancelAllBtn.addEventListener('click', cancelAllTestTasks);
+  const clearTestLogBtn = $('clearTestLogViewBtn');
+  if (clearTestLogBtn) clearTestLogBtn.addEventListener('click', () => {
+    testLogHiddenUntil = Date.now();
+    renderTestLog();
   });
 
   $('copyFullLog').addEventListener('click', copyFullLogToClipboard);
@@ -1059,6 +1079,165 @@ const testRowKey = action => `${action.platform}:${action.type}`;
 const testRuns = {};
 let testPollTimer = null;
 
+/* ---------- 2.11.18: testKey / Dừng theo hàng / chip / Log test / backfill ----------
+ * testKey = platform + ':' + type + ':' + (actionKey || '') — hàng chính
+ * actionKey rỗng, hàng micro actionKey là key registry (type micro_action).
+ * Kernel ghi testState[testKey] lúc enqueue (running) và lúc receipt chốt. */
+const buildTestKey = (platform, type, actionKey) => `${platform}:${type}:${actionKey || ''}`;
+const testKeyForAction = action => buildTestKey(action.platform, action.type, '');
+const testKeyForMicro = item => buildTestKey(item.platform, 'micro_action', item.action);
+const cancellingTestTaskIds = new Set();
+let testLogHiddenUntil = 0;
+let testStateBackfillDone = false;
+
+const pad2 = n => String(n).padStart(2, '0');
+const fmtClock = ts => {
+  if (!ts) return '--:--:--';
+  const d = new Date(Number(ts));
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+};
+const fmtChipTime = ts => {
+  if (!ts) return '';
+  const d = new Date(Number(ts));
+  const hm = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  return isToday(ts) ? hm : `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)} ${hm}`;
+};
+function receiptDetailLabel(receipt) {
+  const details = receipt?.details;
+  if (!details) return '';
+  if (typeof details === 'object') return String(details.label || '');
+  if (typeof details === 'string') {
+    const text = details.trim();
+    if (text.startsWith('{')) {
+      try { return String(JSON.parse(text).label || ''); } catch (_) { return ''; }
+    }
+  }
+  return '';
+}
+function taskMatchesTestRow(task, testKey, platform, type, actionKey) {
+  if (!task) return false;
+  const metaKey = task.meta && task.meta.testKey;
+  if (metaKey) return metaKey === testKey;
+  // Dự phòng khi task chưa có meta (task cũ): platform + type khớp và,
+  // với hàng micro, payload.action khớp actionKey của hàng.
+  if (task.platform !== platform || task.type !== type) return false;
+  if (!actionKey) return true;
+  const payloadAction = task.payload?.action || task.action || '';
+  return payloadAction === actionKey;
+}
+function findActiveTaskForRow(testKey, platform, type, actionKey) {
+  const run = currentState.currentRun;
+  if (run && taskMatchesTestRow(run, testKey, platform, type, actionKey)) {
+    const taskId = run.task_id || run.id;
+    if (taskId) return { taskId: String(taskId), kind: 'running' };
+  }
+  for (const task of (currentState.queue || [])) {
+    if (taskMatchesTestRow(task, testKey, platform, type, actionKey)) {
+      const taskId = task.id || task.task_id;
+      if (taskId) return { taskId: String(taskId), kind: 'queued' };
+    }
+  }
+  return null;
+}
+function testStateChipHtml(testKey) {
+  const entry = (currentState.testState || {})[testKey];
+  if (!entry) return '';
+  const status = String(entry.status || '');
+  let label;
+  if (status === 'success') label = 'PASS';
+  else if (status === 'failed') label = 'FAIL';
+  else if (status === 'uncertain') label = 'Treo';
+  else if (status === 'cancelled') label = 'Đã dừng';
+  else if (status === 'running') {
+    const ids = new Set();
+    if (currentState.currentRun?.task_id) ids.add(String(currentState.currentRun.task_id));
+    if (currentState.currentRun?.id) ids.add(String(currentState.currentRun.id));
+    (currentState.queue || []).forEach(t => {
+      if (t.id) ids.add(String(t.id));
+      if (t.task_id) ids.add(String(t.task_id));
+    });
+    label = entry.task_id && ids.has(String(entry.task_id)) ? 'Đang chạy' : 'Gián đoạn';
+  } else label = status || 'Không rõ';
+  const time = entry.at ? fmtChipTime(entry.at) : '';
+  return `<span class="badge badge-${esc(status || 'neutral')}" title="${esc(entry.message || '')}">${esc(label)}${time ? ` · ${esc(time)}` : ''}</span>`;
+}
+function receiptActionName(receipt) {
+  if (receipt.type === 'micro_action') return receiptDetailLabel(receipt) || receipt.type;
+  return `${platformLabel(receipt.platform)} · ${typeLabel(receipt.type)}`;
+}
+function renderTestLog() {
+  const box = $('testLogList');
+  if (!box) return;
+  const receipts = (currentState.receipts || [])
+    .filter(r => Number(r.received_at || 0) > testLogHiddenUntil)
+    .slice(0, 40);
+  box.innerHTML = receipts.length
+    ? receipts.map(r => {
+        const msg = truncate(r.message || r.failure_code || '', 140);
+        return `<div class="test-log-line"><span class="muted">${esc(fmtClock(r.received_at))}</span> <strong>${esc(receiptActionName(r))}</strong> · ${statusBadge(r.status)}${msg ? ` <span>${esc(msg)}</span>` : ''}</div>`;
+      }).join('')
+    : emptyState('Chưa có log test', 'Dòng log sẽ xuất hiện sau khi một task test hoàn tất hoặc gặp lỗi.', '☰');
+}
+function maybeBackfillTestState() {
+  if (testStateBackfillDone) return;
+  testStateBackfillDone = true;
+  const receipts = currentState.receipts || [];
+  if (!receipts.length) return;
+  const existing = currentState.testState || {};
+  const seen = new Set();
+  const entries = {};
+  for (const receipt of receipts) {
+    if (!receipt.platform || !receipt.type) continue;
+    let key;
+    if (receipt.type === 'micro_action') {
+      const label = receiptDetailLabel(receipt);
+      if (!label) continue;
+      const match = MICRO_ACTIONS.find(item => item.platform === receipt.platform && item.label === label);
+      if (!match) continue;
+      key = buildTestKey(receipt.platform, 'micro_action', match.action);
+    } else {
+      key = buildTestKey(receipt.platform, receipt.type, '');
+    }
+    // receipts đang mới-trước: lần gặp đầu tiên cho mỗi khoá là mới nhất.
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (Object.prototype.hasOwnProperty.call(existing, key)) continue;
+    entries[key] = { status: receipt.status, at: receipt.received_at, message: receipt.message || '', task_id: receipt.task_id };
+  }
+  if (!Object.keys(entries).length) return;
+  // Gộp cục bộ lạc quan: chip hiện ngay ở lần render này, poll sau xác nhận từ kernel.
+  currentState.testState = { ...entries, ...existing };
+  send({ action: 'autovjp.backfillTestState', entries });
+}
+async function cancelTestTask(taskId) {
+  const id = String(taskId || '');
+  if (!id || cancellingTestTaskIds.has(id)) return;
+  cancellingTestTaskIds.add(id);
+  renderTestActions();
+  try {
+    await send({ action: 'autovjp.cancelTask', taskId: id });
+  } finally {
+    cancellingTestTaskIds.delete(id);
+  }
+  refresh();
+}
+async function cancelAllTestTasks() {
+  const btn = $('cancelAllTestBtn');
+  if (btn) btn.disabled = true;
+  const res = await send({ action: 'autovjp.cancelAll' });
+  const el = $('cancelAllResult');
+  if (el) {
+    if (res.success) {
+      const stopped = res.cancelled_running ? 'đã dừng phiên đang chạy' : 'không có phiên đang chạy để dừng';
+      el.textContent = `Dừng tất cả: ${stopped} · đã xoá ${Number(res.removed_queued || 0)} task chờ.`;
+    } else {
+      el.textContent = `Dừng tất cả lỗi: ${res.error || 'không rõ'}`;
+    }
+  }
+  if (btn) btn.disabled = false;
+  refresh();
+}
+
 function buildTestTask(action) {
   const content = $('testContent').value.trim() || 'Bài test từ Auto vjp — kiểm tra luồng tự động.';
   const image = $('testImageUrl').value.trim() || 'https://picsum.photos/600';
@@ -1144,15 +1323,19 @@ function renderTestActions() {
     const key = testRowKey(action);
     const run = testRuns[key];
     const running = run?.state === 'running';
+    const testKey = testKeyForAction(action);
+    const active = findActiveTaskForRow(testKey, action.platform, action.type, '');
+    const chip = testStateChipHtml(testKey);
     return `<tr>
       <td>${platformChip(action.platform)}</td>
       <td class="content-cell"><strong>${esc(typeLabel(action.type))}</strong><span>${esc(action.type)}</span></td>
       <td>${esc(action.input)}</td>
-      <td><button class="mini-button" type="button" data-test-run="${esc(key)}" ${running ? 'disabled' : ''}>${running ? 'Đang chạy…' : 'Chạy'}</button></td>
-      <td class="detail-cell">${testResultCell(run)}</td>
+      <td><button class="mini-button" type="button" data-test-run="${esc(key)}" ${running ? 'disabled' : ''}>${running ? 'Đang chạy…' : 'Chạy'}</button>${active ? ` <button class="mini-button danger" type="button" data-test-stop="${esc(active.taskId)}" ${cancellingTestTaskIds.has(active.taskId) ? 'disabled' : ''}>Dừng</button>` : ''}</td>
+      <td class="detail-cell">${chip ? `${chip}<br>` : ''}${testResultCell(run)}</td>
     </tr>`;
   }).join('');
   renderMicroActions();
+  renderTestLog();
 }
 
 function stopTestPollIfIdle() {
@@ -1198,7 +1381,9 @@ async function runTestAction(key) {
   }
   testRuns[key] = { state: 'running', taskId: '', startedAt: Date.now() };
   renderTestActions();
-  const res = await send({ action: 'autovjp.createTask', task: buildTestTask(action) });
+  const task = buildTestTask(action);
+  task.meta = { testKey: testKeyForAction(action) };
+  const res = await send({ action: 'autovjp.createTask', task });
   if (res.success && res.task) {
     testRuns[key] = { state: 'running', taskId: res.task.id, startedAt: Date.now() };
     ensureTestPoll();
@@ -1285,12 +1470,15 @@ function renderMicroActions() {
       ? `Chuỗi ${(item.prefix || []).length + 1} bước`
       : (item.seconds ? `${item.seconds} giây` : 'Không cần đầu vào');
     const note = item.note ? `<span>${esc(item.note)}</span>` : '';
+    const testKey = testKeyForMicro(item);
+    const active = findActiveTaskForRow(testKey, item.platform, 'micro_action', item.action);
+    const chip = testStateChipHtml(testKey);
     return `<tr>
       <td>${platformChip(item.platform)}</td>
       <td class="content-cell"><strong>${esc(item.label)}</strong><span>${esc(item.action)}</span>${note}</td>
       <td>${input}</td>
-      <td><button class="mini-button" type="button" data-micro-run="${esc(key)}" ${running ? 'disabled' : ''}>${running ? 'Đang chạy…' : 'Chạy'}</button></td>
-      <td class="detail-cell">${testResultCell(run)}</td>
+      <td><button class="mini-button" type="button" data-micro-run="${esc(key)}" ${running ? 'disabled' : ''}>${running ? 'Đang chạy…' : 'Chạy'}</button>${active ? ` <button class="mini-button danger" type="button" data-micro-stop="${esc(active.taskId)}" ${cancellingTestTaskIds.has(active.taskId) ? 'disabled' : ''}>Dừng</button>` : ''}</td>
+      <td class="detail-cell">${chip ? `${chip}<br>` : ''}${testResultCell(run)}</td>
     </tr>`;
   }).join('');
 }
@@ -1313,7 +1501,7 @@ async function runMicroAction(key) {
   if (sharedSource) payload.target_url = sharedSource;
   const sharedVideo = $('testVideoUrl')?.value.trim();
   if (sharedVideo) payload.media_url = sharedVideo;
-  const res = await send({ action: 'autovjp.createTask', task: { platform: item.platform, type: 'micro_action', payload } });
+  const res = await send({ action: 'autovjp.createTask', task: { platform: item.platform, type: 'micro_action', payload, meta: { testKey: testKeyForMicro(item) } } });
   if (res.success && res.task) {
     testRuns[key] = { state: 'running', taskId: res.task.id, startedAt: Date.now() };
     ensureTestPoll();
