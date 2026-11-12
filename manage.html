@@ -354,7 +354,10 @@
       <section class="view" data-view="activity">
         <div class="section-intro">
           <div><h2>Nhật ký hoạt động</h2><p>Biên lai local là nguồn sự thật cho mọi kết quả thi hành của tầng module.</p></div>
-          <button id="clearReceipts" class="btn btn-danger-soft" type="button">Xoá biên lai</button>
+          <div>
+            <button id="copyFullLog" class="btn btn-ghost" type="button">Sao chép toàn bộ log</button>
+            <button id="clearReceipts" class="btn btn-danger-soft" type="button">Xoá biên lai</button>
+          </div>
         </div>
         <article class="card table-card">
           <div class="table-toolbar">
@@ -416,13 +419,14 @@
         </div>
 
         <article class="card form-card">
-          <div class="card-header"><div><h3>Đầu vào dùng chung</h3><p>Các hàng đăng bài / story / reply / affiliate đọc từ 3 ô này tại lúc bấm Chạy.</p></div></div>
+          <div class="card-header"><div><h3>Đầu vào dùng chung</h3><p>Các hàng đăng bài / story / reply / affiliate / upload đọc từ 4 ô này tại lúc bấm Chạy.</p></div></div>
           <div class="form-grid form-grid-2">
             <label class="field"><span>Nội dung mẫu</span><input id="testContent" type="text" value="Bài test từ Auto vjp — kiểm tra luồng tự động."></label>
             <label class="field"><span>URL ảnh mẫu</span><input id="testImageUrl" type="url" value="https://picsum.photos/600"></label>
           </div>
           <label class="field"><span>URL nguồn (cho reply / affiliate)</span><input id="testSourceUrl" type="url" placeholder="https://… link bài viết / video đích — để trống thì hàng reply / affiliate báo thiếu và không chạy"></label>
-          <p class="field-note">Phiên nuôi test để trần ngắn (ít hành động, vài phút). Quét tài khoản và quét sức khoẻ selector không cần đầu vào. Upload YouTube cần URL/file video nên bảng không chạy trực tiếp — xem ghi chú ở hàng Upload.</p>
+          <label class="field"><span>URL video mẫu (cho hàng Tải video lên YouTube)</span><input id="testVideoUrl" type="url" placeholder="https://… link .mp4 trực tiếp — để trống thì hàng Upload chỉ hiện ghi chú, không chạy"></label>
+          <p class="field-note">Phiên nuôi test để trần ngắn (ít hành động, vài phút). Quét tài khoản và quét sức khoẻ selector không cần đầu vào. Hàng Tải video lên (YouTube) chạy task upload THẬT khi đã nhập URL video mẫu ở trên (nội dung mẫu: dòng 1 làm tiêu đề); để trống thì hàng chỉ hiện ghi chú.</p>
         </article>
 
         <article class="card table-card">
@@ -433,6 +437,17 @@
             </table>
           </div>
           <div class="table-footer"><span id="testCountLabel">0 hành động</span><span>Kết quả đối chiếu từ biên lai local, tự cập nhật ~3 giây/lần khi có hàng đang chạy.</span></div>
+        </article>
+
+        <article class="card table-card">
+          <div class="card-header"><div><h3>Hành động nhỏ (test lẻ từng động tác)</h3><p>Mỗi hàng là một động tác nguyên tử qua task <code>micro_action</code> — kiểm chứng riêng từng cử động của module (lướt feed, thả tim, mở thông báo…) tách khỏi phiên nuôi / đăng bài đầy đủ.</p></div></div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead><tr><th>Nền tảng</th><th>Hành động nhỏ</th><th>Đầu vào</th><th>Chạy</th><th>Kết quả gần nhất</th></tr></thead>
+              <tbody id="microTableBody"></tbody>
+            </table>
+          </div>
+          <div class="table-footer"><span id="microCountLabel">0 hành động nhỏ</span><span>Dùng chung biên lai và nhịp poll ~3 giây với bảng chính.</span></div>
         </article>
       </section>
     </main>
