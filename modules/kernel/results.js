@@ -244,13 +244,23 @@
         // một action duy nhất mang status sẵn — cùng khuôn nurtureDone,
         // cộng details (vd {action:'like_first', liked:true}) để trang
         // quản lý hiển thị đúng việc đã làm.
+        // (2.11.17) Gắn nhãn tiếng Việt từ registry MICRO_ACTIONS vào
+        // details.label (nếu tra được) để biên lai/nhật ký đọc được tên
+        // hành động thay vì chỉ khoá key.
+        const microDetails = message.details || null;
+        try {
+          const reg = globalThis.AVJP?.contractData?.MICRO_ACTIONS;
+          const actKey = microDetails && microDetails.action;
+          const entry = reg && actKey ? (reg[platform] || []).find(e => e.key === actKey) : null;
+          if (entry && microDetails && !microDetails.label) microDetails.label = entry.label;
+        } catch (_) {}
         const confirmed = await outbox().deliver({
           type: 'micro_action', taskId: message.taskId, platform, tabId,
           status: message.status || 'failed',
           failure_code: message.failure_code || null,
           resultMessage: message.resultMessage || '',
           resultUrl: message.resultUrl || undefined,
-          details: message.details || null
+          details: microDetails
         });
         return sendResponse({ success: confirmed });
       }
