@@ -22,6 +22,7 @@ const TYPE_LABELS = {
   affiliate: 'Gắn link',
   scan_account: 'Quét tài khoản',
   nurture: 'Nuôi nick',
+  micro_action: 'Hành động nhỏ',
   probe: 'Kiểm tra vòng đời'
 };
 const STATUS_LABELS = {
@@ -386,6 +387,68 @@ function renderActivity() {
         </tr>`;
       }).join('')
     : `<tr><td colspan="5" class="empty-table-cell">${emptyState('Chưa có biên lai phù hợp', 'Kết quả thi hành sẽ được ghi tại đây.', '☰')}</td></tr>`;
+}
+
+/* ---------- Sao chép toàn bộ log (2.11.16) ----------
+ * Chép TOÀN BỘ biên lai thô trong currentState.receipts — cùng nguồn
+ * renderActivity đang hiển thị nhưng KHÔNG qua bộ lọc tìm kiếm/nền
+ * tảng/trạng thái — dạng text thuần đầy đủ để dán đi debug: message
+ * không cắt ngắn, kèm mọi trường lỗi có mặt (details / error /
+ * failure_code). */
+function logFieldText(value) {
+  if (value == null || value === '') return '';
+  return typeof value === 'string' ? value : JSON.stringify(value);
+}
+function formatReceiptForLog(r) {
+  const lines = [
+    `[${fmtTime(r.received_at)}] ${platformLabel(r.platform)} · ${typeLabel(r.type)} · ${statusLabel(r.status)}`,
+    `  Task: ${r.task_id || '—'}`
+  ];
+  if (r.actor_name) lines.push(`  Tài khoản: ${r.actor_name}`);
+  if (r.target_name) lines.push(`  Đích: ${r.target_name}`);
+  if (r.message) lines.push(`  Thông điệp: ${r.message}`);
+  const details = logFieldText(r.details);
+  if (details) lines.push(`  Chi tiết: ${details}`);
+  const error = logFieldText(r.error);
+  if (error) lines.push(`  Lỗi: ${error}`);
+  if (r.failure_code) lines.push(`  Mã lỗi: ${r.failure_code}`);
+  if (Array.isArray(r.items) && r.items.length) {
+    lines.push(`  Neo: ${r.items.map(it => `${it.key} → ${it.found_via || 'none'}${it.spec ? ` (${it.spec.by}: ${it.spec.value})` : ''}`).join('; ')}`);
+  }
+  if (r.result_url) lines.push(`  Kết quả: ${r.result_url}`);
+  if (r.duration_ms) lines.push(`  Thời lượng: ${Math.round(Number(r.duration_ms) / 1000)} giây`);
+  return lines.join('\n');
+}
+async function writeClipboardText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (_) { /* clipboard API bị chặn (quyền/ngữ cảnh) -> rơi xuống fallback */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return Boolean(ok);
+  } catch (_) {
+    return false;
+  }
+}
+async function copyFullLogToClipboard() {
+  const btn = $('copyFullLog');
+  const receipts = currentState.receipts || [];
+  const header = `Auto vjp — log biên lai đầy đủ (${receipts.length} mục) · sao chép lúc ${fmtTime(Date.now())}`;
+  const text = receipts.length
+    ? `${header}\n\n${receipts.map(formatReceiptForLog).join('\n\n')}`
+    : `${header}\n\n(Chưa có biên lai nào.)`;
+  const ok = await writeClipboardText(text);
+  const original = 'Sao chép toàn bộ log';
+  btn.textContent = ok ? 'Đã chép ✓' : 'Chép thất bại — thử lại';
+  setTimeout(() => { btn.textContent = original; }, 2000);
 }
 
 /* ---------- Tài khoản ---------- */
@@ -880,6 +943,14 @@ function bindEvents() {
     runTestAction(btn.dataset.testRun);
   });
 
+  $('microTableBody').addEventListener('click', ev => {
+    const btn = ev.target.closest('[data-micro-run]');
+    if (!btn || btn.disabled) return;
+    runMicroAction(btn.dataset.microRun);
+  });
+
+  $('copyFullLog').addEventListener('click', copyFullLogToClipboard);
+
   $('scanButtons').addEventListener('click', async ev => {
     const btn = ev.target.closest('[data-scan-platform]');
     if (!btn || btn.disabled) return;
@@ -939,7 +1010,11 @@ function bindEvents() {
  *   x:         post, reply, affiliate, scan_account, nurture (KHÔNG có healthscan)
  *   youtube:   post, upload, reply, scan_account, healthscan, nurture
  * Task test là task THẬT qua autovjp.createTask; kết quả đối chiếu từ
- * receipts của autovjp.listState theo task_id do kernel gán khi enqueue. */
+ * receipts của autovjp.listState theo task_id do kernel gán khi enqueue.
+ * 2.11.16: hàng upload chạy thật từ ô "URL video mẫu" (#testVideoUrl);
+ * thêm bảng con "Hành động nhỏ" bên dưới — mỗi hàng là 1 task
+ * {platform, type:'micro_action', payload:{action, seconds?}} để test lẻ
+ * từng động tác nguyên tử, dùng chung testRuns/poll với bảng chính. */
 // Mẫu comment dự phòng cho phiên nuôi test — cùng bộ mẫu trung tính với
 // các nút nuôi mẫu ở sidebar (adapter dùng khi AI chưa sẵn).
 const TEST_NURTURE_TEMPLATES = [
@@ -976,7 +1051,7 @@ const TEST_ACTIONS = [
   { platform: 'youtube', type: 'post', input: 'Community: nội dung mẫu + ảnh mẫu' },
   { platform: 'youtube', type: 'reply', input: 'URL nguồn (link video) + nội dung mẫu', needsSource: true },
   { platform: 'youtube', type: 'nurture', input: 'Phiên ngắn: xem 2 video · tối đa 6 phút' },
-  { platform: 'youtube', type: 'upload', input: 'Cần URL/file video — bảng chưa hỗ trợ nhập', needsFile: true }
+  { platform: 'youtube', type: 'upload', input: 'URL video mẫu + nội dung mẫu (dòng 1 = tiêu đề)', needsVideo: true }
 ];
 const testRowKey = action => `${action.platform}:${action.type}`;
 // testRuns[rowKey] = { state: 'running'|'done'|'note', taskId, startedAt,
@@ -1000,6 +1075,14 @@ function buildTestTask(action) {
     case 'reply':
     case 'affiliate':
       return { ...base, source_url: sourceUrl, content };
+    case 'upload': {
+      // Upload YouTube: media đi qua trường `images` như task upload mẫu ở
+      // sidebar (ytUploadBtn) — automator đọc task.images[0], upload.js đọc
+      // run.images/media_urls rồi fetchImageViaBackground tải file về.
+      // visibility 'public' giữ đúng khuôn task mẫu đã kiểm chứng.
+      const videoUrl = $('testVideoUrl').value.trim();
+      return { ...base, content, images: [videoUrl], visibility: 'public' };
+    }
     case 'nurture': {
       // Trần ngắn cho test — cùng tên trường với các nút nuôi mẫu ở
       // sidebar (nurture-core / adapter từng platform đọc các trường này).
@@ -1065,10 +1148,11 @@ function renderTestActions() {
       <td>${platformChip(action.platform)}</td>
       <td class="content-cell"><strong>${esc(typeLabel(action.type))}</strong><span>${esc(action.type)}</span></td>
       <td>${esc(action.input)}</td>
-      <td><button class="mini-button" type="button" data-test-run="${esc(key)}" ${running ? 'disabled' : ''}>${action.needsFile ? 'Cần file' : (running ? 'Đang chạy…' : 'Chạy')}</button></td>
+      <td><button class="mini-button" type="button" data-test-run="${esc(key)}" ${running ? 'disabled' : ''}>${running ? 'Đang chạy…' : 'Chạy'}</button></td>
       <td class="detail-cell">${testResultCell(run)}</td>
     </tr>`;
   }).join('');
+  renderMicroActions();
 }
 
 function stopTestPollIfIdle() {
@@ -1102,8 +1186,8 @@ function ensureTestPoll() {
 async function runTestAction(key) {
   const action = TEST_ACTIONS.find(a => testRowKey(a) === key);
   if (!action) return;
-  if (action.needsFile) {
-    testRuns[key] = { state: 'note', message: 'Upload YouTube cần URL/file video thật nên bảng test không chạy trực tiếp. Dùng nút "Upload video YouTube (task mẫu)" ở cột trái (video mẫu công khai) hoặc form Viết bài mới với URL mp4 của bạn.' };
+  if (action.needsVideo && !$('testVideoUrl').value.trim()) {
+    testRuns[key] = { state: 'note', message: 'Thiếu URL video — nhập link .mp4 trực tiếp vào ô "URL video mẫu" phía trên rồi bấm Chạy lại. Chưa có task nào được tạo. (Hoặc dùng nút "Upload video YouTube (task mẫu)" ở cột trái để chạy video mẫu công khai.)' };
     renderTestActions();
     return;
   }
@@ -1122,6 +1206,77 @@ async function runTestAction(key) {
     testRuns[key] = { state: 'note', message: `Không đưa được task vào hàng đợi: ${res.error || 'không rõ'}` };
   }
   renderTestActions();
+  refresh();
+}
+
+/* ---------- Bảng con: Hành động nhỏ (micro_action) ----------
+ * Danh sách CỐ ĐỊNH theo đặc tả 2.11.16 — khoá `action` là giao diện với
+ * kernel, không tự đổi tên. `seconds` chỉ áp cho scroll_feed/watch_first
+ * và đi trong payload. Trạng thái chạy dùng chung testRuns với bảng chính
+ * (khoá có tiền tố micro: để không đụng khoá platform:type) nên poll 3
+ * giây + đối chiếu biên lai theo task_id hoạt động y hệt. */
+const MICRO_ACTIONS = [
+  { platform: 'instagram', action: 'scroll_feed', label: 'Lướt feed 30 giây', seconds: 30 },
+  { platform: 'instagram', action: 'like_first', label: 'Thả tim bài đầu' },
+  { platform: 'instagram', action: 'view_first_story', label: 'Xem tin đầu tiên' },
+  { platform: 'instagram', action: 'open_notifications', label: 'Mở thông báo' },
+  { platform: 'instagram', action: 'open_profile', label: 'Mở hồ sơ của mình' },
+  { platform: 'tiktok', action: 'scroll_feed', label: 'Lướt feed 30 giây', seconds: 30 },
+  { platform: 'tiktok', action: 'watch_first', label: 'Xem video đầu 20 giây', seconds: 20 },
+  { platform: 'tiktok', action: 'like_first', label: 'Thả tim bài đầu' },
+  { platform: 'tiktok', action: 'open_notifications', label: 'Mở thông báo' },
+  { platform: 'tiktok', action: 'open_profile', label: 'Mở hồ sơ của mình' },
+  { platform: 'threads', action: 'scroll_feed', label: 'Lướt feed 30 giây', seconds: 30 },
+  { platform: 'threads', action: 'like_first', label: 'Thả tim bài đầu' },
+  { platform: 'threads', action: 'open_notifications', label: 'Mở thông báo' },
+  { platform: 'threads', action: 'open_profile', label: 'Mở hồ sơ của mình' },
+  { platform: 'x', action: 'scroll_feed', label: 'Lướt feed 30 giây', seconds: 30 },
+  { platform: 'x', action: 'like_first', label: 'Thả tim bài đầu' },
+  { platform: 'x', action: 'open_notifications', label: 'Mở thông báo' },
+  { platform: 'x', action: 'open_profile', label: 'Mở hồ sơ của mình' },
+  { platform: 'youtube', action: 'scroll_feed', label: 'Lướt feed 30 giây', seconds: 30 },
+  { platform: 'youtube', action: 'watch_first', label: 'Phát video đầu 20 giây', seconds: 20 },
+  { platform: 'youtube', action: 'open_notifications', label: 'Mở thông báo' },
+  { platform: 'youtube', action: 'open_profile', label: 'Mở hồ sơ của mình' }
+];
+const microRowKey = item => `${item.platform}:micro:${item.action}`;
+
+function renderMicroActions() {
+  const body = $('microTableBody');
+  if (!body) return;
+  const label = $('microCountLabel');
+  if (label) label.textContent = `${MICRO_ACTIONS.length} hành động nhỏ`;
+  body.innerHTML = MICRO_ACTIONS.map(item => {
+    const key = microRowKey(item);
+    const run = testRuns[key];
+    const running = run?.state === 'running';
+    return `<tr>
+      <td>${platformChip(item.platform)}</td>
+      <td class="content-cell"><strong>${esc(item.label)}</strong><span>${esc(item.action)}</span></td>
+      <td>${item.seconds ? `${item.seconds} giây` : 'Không cần đầu vào'}</td>
+      <td><button class="mini-button" type="button" data-micro-run="${esc(key)}" ${running ? 'disabled' : ''}>${running ? 'Đang chạy…' : 'Chạy'}</button></td>
+      <td class="detail-cell">${testResultCell(run)}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function runMicroAction(key) {
+  const item = MICRO_ACTIONS.find(a => microRowKey(a) === key);
+  if (!item) return;
+  testRuns[key] = { state: 'running', taskId: '', startedAt: Date.now() };
+  renderMicroActions();
+  // Giao diện task cố định với kernel: type 'micro_action', payload.action
+  // là khoá động tác; seconds chỉ gửi cho scroll_feed / watch_first.
+  const payload = { action: item.action };
+  if (item.seconds) payload.seconds = item.seconds;
+  const res = await send({ action: 'autovjp.createTask', task: { platform: item.platform, type: 'micro_action', payload } });
+  if (res.success && res.task) {
+    testRuns[key] = { state: 'running', taskId: res.task.id, startedAt: Date.now() };
+    ensureTestPoll();
+  } else {
+    testRuns[key] = { state: 'note', message: `Không đưa được task vào hàng đợi: ${res.error || 'không rõ'}` };
+  }
+  renderMicroActions();
   refresh();
 }
 
