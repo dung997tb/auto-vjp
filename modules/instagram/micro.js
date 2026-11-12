@@ -78,6 +78,46 @@ if (window.top !== window.self) {
   const searchQuery = () => String(payload.query || payload.username || payload.search || '').trim();
 
   // ── Phase (chạy tiếp sau điều hướng) ──
+  // ── PAGE-SIDE CANCEL (2.11.18, Lane P) ──
+  // Kernel ghi cờ huỷ vào chrome.storage.local['autovjp.cancelFlags']
+  // = { <taskId>: <timestamp> } khi user bấm Dừng. Script phía trang tự
+  // thấy cờ thì NGỪNG ngay: báo failed/'user_cancelled' qua report() sẵn
+  // có của file (kernel có thể đã chốt receipt trước - kết quả đến muộn
+  // bị kernel bỏ qua, vô hại) rồi unwind bằng ngoại lệ để không bấm/cuộn
+  // thêm nữa. Định danh task dùng ở đây: taskId = String(run.task_id ||
+  // run.id) - cùng khoá mà phase storage (PHASE_KEY) của file gắn vào.
+  async function avjpCancelRequested() {
+    try {
+      const s = await chrome.storage.local.get('autovjp.cancelFlags');
+      const m = s && s['autovjp.cancelFlags'];
+      return !!(m && typeof m === 'object' && Object.prototype.hasOwnProperty.call(m, taskId));
+    } catch (_) { return false; }
+  }
+  async function avjpSleepCancellable(ms) {
+    const end = Date.now() + Math.max(0, Number(ms) || 0);
+    for (;;) {
+      const rem = end - Date.now();
+      if (rem <= 0) return true;
+      await sleep(Math.min(800, rem));
+      if (await avjpCancelRequested()) return false;
+      if (Date.now() >= end) return true;
+    }
+  }
+  function avjpCancelledError() {
+    const e = new Error('user_cancelled');
+    e.avjpCancelled = true;
+    e.failure_code = 'user_cancelled';
+    e.failureCode = 'user_cancelled';
+    return e;
+  }
+  function avjpAbortCancelled(extra = {}) {
+    try {
+      report('failed', { action, cancelled: true, ...extra }, 'user_cancelled',
+        'Đã dừng theo yêu cầu người dùng (user_cancelled)');
+    } catch (_) {}
+    throw avjpCancelledError();
+  }
+
   const getPhase = async () => {
     const s = await chrome.storage.local.get(PHASE_KEY);
     const p = s[PHASE_KEY];
@@ -119,7 +159,7 @@ if (window.top !== window.self) {
       try { v = fn(); } catch (_) {}
       if (v) return v;
       if (Date.now() >= end) return null;
-      await sleep(stepMs);
+      if (!(await avjpSleepCancellable(stepMs))) avjpAbortCancelled({ phase: 'waitFor' });
     }
   }
   // Click kiểu story.js (chuỗi sự kiện chuột đầy đủ) — đường dự phòng.
@@ -340,7 +380,7 @@ if (window.top !== window.self) {
       const dy = Math.round(rand(300, 750));
       await humanScrollBy(dy);
       totalPx += dy; ticks++;
-      await sleep(Math.min(rand(700, 2000), Math.max(0, end - Date.now())));
+      if (!(await avjpSleepCancellable(Math.min(rand(700, 2000), Math.max(0, end - Date.now()))))) avjpAbortCancelled({ step: 'scroll_feed', ticks });
     }
     done({ seconds: secs, ticks, scrolled_px: totalPx });
   }
@@ -379,7 +419,7 @@ if (window.top !== window.self) {
     const opened = await waitFor(() => location.pathname.startsWith('/stories/') ||
       document.querySelector('[role="dialog"] video, [role="dialog"] img') ? true : null, 6000);
     if (!opened) return failSelector('story_viewer', { clicked: true });
-    await sleep(rand(3000, 5000));
+    if (!(await avjpSleepCancellable(rand(3000, 5000)))) avjpAbortCancelled({ step: 'view_first_story' });
     pressEscape();
     await sleep(400);
     done({ viewed: true, user: found.user }, `Đã xem story đầu của @${found.user}`);
@@ -728,9 +768,9 @@ if (window.top !== window.self) {
       }
       viewed++;
       if (i < count - 1) {
-        await sleep(rand(1800, 3200));
+        if (!(await avjpSleepCancellable(rand(1800, 3200)))) avjpAbortCancelled({ step: 'scroll_reels', viewed });
         await humanScrollBy(window.innerHeight);
-        await sleep(1200);
+        if (!(await avjpSleepCancellable(1200))) avjpAbortCancelled({ step: 'scroll_reels', viewed });
       }
     }
     return {
@@ -1070,6 +1110,7 @@ if (window.top !== window.self) {
     let idx = Number.isInteger(phase.idx) ? phase.idx : 0;
     while (idx < chain.length) {
       const key = chain[idx];
+      if (await avjpCancelRequested()) avjpAbortCancelled({ step: key });
       const isFinal = idx === chain.length - 1;
       const handler = STEP[key];
       if (!handler) {
@@ -1113,7 +1154,7 @@ if (window.top !== window.self) {
       }
       case 'view_first_story': {
         if (location.pathname.startsWith('/stories/')) {
-          await sleep(rand(2500, 4000));
+          if (!(await avjpSleepCancellable(rand(2500, 4000)))) avjpAbortCancelled({ step: 'view_first_story', resumed: true });
           pressEscape();
           return done({ viewed: true, resumed: true, user: phase.storyUser || null }, 'Đã xem story đầu (lượt tiếp)');
         }
