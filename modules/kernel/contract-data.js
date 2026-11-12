@@ -16,7 +16,8 @@ const TASK_TYPES = Object.freeze({
   "NURTURE": "nurture",
   "STORY": "story",
   "UPLOAD": "upload",
-  "HEALTHSCAN": "healthscan"
+  "HEALTHSCAN": "healthscan",
+  "MICRO_ACTION": "micro_action"
 });
 const TASK_STATUS = Object.freeze({
   "PENDING": "pending",
@@ -46,7 +47,9 @@ const FAILURE_CODES = Object.freeze({
   "EXECUTION_ERROR": "execution_error",
   "SESSION_EXPIRED": "session_expired",
   "NO_ELIGIBLE_TARGET": "no_eligible_target",
-  "USER_CANCELLED": "user_cancelled"
+  "USER_CANCELLED": "user_cancelled",
+  "EMULATION_MISSING": "emulation_missing",
+  "MEDIA_TYPE_UNSUPPORTED": "media_type_unsupported"
 });
 const TASK_METADATA = Object.freeze({
   "post": {
@@ -124,6 +127,14 @@ const TASK_METADATA = Object.freeze({
       "selector_not_found",
       "network_error",
       "task_timeout",
+      "execution_error"
+    ]
+  },
+  "micro_action": {
+    "default_timeout_ms": 300000,
+    "retryable_failure_codes": [
+      "selector_not_found",
+      "network_error",
       "execution_error"
     ]
   }
