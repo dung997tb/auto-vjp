@@ -157,14 +157,21 @@ Quy ước khoá đặc biệt:
 - `healthscan_<anchor>` (instagram/youtube/threads/tiktok — đặt ở nền tảng của neo): định vị neo selector mẫu của healthscan (`ig.post.createBtn`, `yt.reply.commentBox`, `th.feed.likeBtn`, `tt.fyp.likeBtn`) qua handler dùng chung `modules/shared/healthscan-micro.js` + `AVJP.heal.locate` — chỉ định vị, không bấm, không markProven.
 
 Tổng 2.11.17: **216 hàng** (instagram 34, threads 23, tiktok 78, x 32, youtube 49) = 207 hành động nguyên tử đã kiểm kê + 4 healthscan + 5 khoá micro tiktok cũ là hành động riêng không trùng 36 hành động nền tảng tiktok.
+#### Dừng hành động, `testState` và Log test (2.11.18)
+
+- **Huỷ task (`user_cancelled`)**: 3 lớp phối hợp. (1) Kernel: `autovjp.cancelTask {taskId}` ghi cờ vào `autovjp.cancelFlags` (`{taskId: timestamp}`, store.js) rồi — nếu task là run hiện tại — `runner.cancelCurrent` chốt ngay receipt **`failed` / `failure_code:'user_cancelled'`** + `forceCleanup` (đóng tab managed); task còn queued thì bị xoá khỏi queue (kèm ghi testState `cancelled` nếu có `meta.testKey`). Kết quả đến muộn của task đã chốt bị outbox bỏ (không khớp run hiện tại / trùng receipt key). `user_cancelled` thuộc nhóm KHÔNG BAO GIỜ retry. (2) Trang: mọi file `modules/<platform>/micro.js` có `avjpSleepCancellable(ms)` (ngủ từng đoạn ≤800ms + kiểm tra cờ `autovjp.cancelFlags` theo `task_id` của phase) nối vào `waitFor` trung tâm + biên mỗi bước + các handler ngủ dài (`scroll_feed`, `watch_first`…) — thấy cờ thì ngừng hành động và báo `failed/user_cancelled` qua đường `microActionDone` sẵn có. (3) Giao diện: mỗi hàng bảng test có task đang chạy/đang chờ thì hiện nút **Dừng** tại hàng; nút **Dừng tất cả đang chạy** (`autovjp.cancelAll` → huỷ run hiện tại + xoá toàn bộ queue) ở đầu khu vực test.
+- **`autovjp.testState`** (store key `autovjp.testState`): rollup trạng thái test lẻ theo hàng, khóa `<platform>:<type>:<actionKey|''>`, giá trị đúng 4 trường `{status, at, message, task_id}`. Task từ bảng test mang `meta.testKey`; kernel ghi `running` ngay trong `autovjp.createTask`, và ghi trạng thái cuối tại điểm chốt receipt trong `outbox.deliver` (bỏ qua receipt trung gian `retrying`). `listState` trả kèm `testState`. Manage backfill 1 lần khi mở trang qua `autovjp.backfillTestState {entries}` (chỉ ghi khóa chưa có) từ các receipt cũ chưa có testKey. Chip trên hàng: `success→PASS`, `failed→FAIL`, `uncertain→Treo`, `cancelled→Đã dừng`, `running` mà task không còn trong run/queue → **Gián đoạn** (trình duyệt/máy tắt giữa chừng).
+- **Panel "Log test"** (manage.html, ngay dưới các bảng test): render theo nhịp poll `listState` sẵn có từ `receipts` — 40 biên lai gần nhất, mỗi dòng giờ + tên hành động + trạng thái + message rút gọn; nút "Xoá khung xem" chỉ ẩn dòng cũ phía hiển thị (biến cục bộ theo mốc thời gian), không xoá dữ liệu. Mục "Nhật ký hoạt động" + nút sao chép toàn bộ log giữ nguyên.
+
 `humanMouse {kind: click|scroll|move, x, y, dy?}` (content → background.js, KHÔNG qua results.js) → `{ok}` — chuột thật qua chrome.debugger cho `AVJP.human` (modules/shared/humanmouse.js, 2.11.16); lỗi/tắt công tắc → `{ok:false}`, content tự fallback click DOM.
 
 Action lạ: listener của kernel **không trả lời** — để lõi FB xử lý action của nó.
 
 ### 5b. Trang quản lý → kernel (tiền tố `autovjp.`)
 `autovjp.createTask {task}` · `autovjp.createSchedule {template, run_at, repeat?}` ·
-`autovjp.deleteSchedule {id}` · `autovjp.cancelTask {taskId}` · `autovjp.setPaused {paused}` ·
-`autovjp.listState` → `{queue, schedules, receipts, outbox, accounts, paused, currentRun, learnedSelectors, platforms}` ·
+`autovjp.deleteSchedule {id}` · `autovjp.cancelTask {taskId}` · `autovjp.cancelAll` (2.11.18) ·
+`autovjp.backfillTestState {entries}` (2.11.18) · `autovjp.setPaused {paused}` ·
+`autovjp.listState` → `{queue, schedules, receipts, outbox, accounts, paused, currentRun, learnedSelectors, platforms, testState}` ·
 `autovjp.probe {echo?}` → chạy task probe xuyên vòng đời, trả receipt · `autovjp.clearReceipts` ·
 `autovjp.healForget {id}` / `autovjp.healForgetAll` → xoá selector đã học (2.9.0).
 
