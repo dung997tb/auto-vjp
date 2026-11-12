@@ -41,6 +41,29 @@
     if (run) await S.touchRun({ lastActiveAt: Date.now() });
   }
 
+  // (2.11.18) Ghi cờ huỷ cho 1 taskId — qua S.set, nuốt lỗi (giống
+  // runner.cancelCurrent): cờ hỏng không được chặn việc huỷ.
+  async function flagCancel(taskId) {
+    if (!taskId) return;
+    try {
+      const flags = (await S.get(K.CANCEL_FLAGS)) || {};
+      flags[String(taskId)] = Date.now();
+      await S.set({ [K.CANCEL_FLAGS]: flags });
+    } catch (_) {}
+  }
+
+  // (2.11.18) Ghi 1 mục testState — withLock, đọc-ghi cả object.
+  // testState[testKey] đúng 4 trường {status, at, message, task_id}.
+  async function writeTestStateEntry(testKey, entry) {
+    await S.withLock(async () => {
+      const testState = (await S.get(K.TEST_STATE)) || {};
+      testState[testKey] = entry;
+      await S.set({ [K.TEST_STATE]: testState });
+    });
+  }
+
+  function isNonEmptyString(v) { return typeof v === 'string' && v !== ''; }
+
   const EXEC_ACTIONS = new Set([
     'postCompleted', 'postFailed', 'postResultUnknown', 'updatePostStatus',
     'storyCompleted', 'storyFailed',
@@ -346,6 +369,12 @@
       switch (action) {
         case 'autovjp.createTask': {
           const task = await globalThis.AVJP.source.enqueue(message.task || {});
+          // (2.11.18) Task test lẻ: ghi testState 'running' ngay khi enqueue xong.
+          if (isNonEmptyString(task.meta?.testKey)) {
+            await writeTestStateEntry(task.meta.testKey, {
+              status: 'running', at: Date.now(), message: '', task_id: task.id
+            });
+          }
           return sendResponse({ success: true, task });
         }
         case 'autovjp.createSchedule': {
@@ -374,16 +403,73 @@
           return sendResponse({ success: true });
         }
         case 'autovjp.cancelTask': {
+          // (2.11.18) ĐẦU TIÊN ghi cờ huỷ cho taskId — kể cả khi task đang queued.
+          await flagCancel(message.taskId);
           const run = await S.getRun();
           if (run && String(run.task_id) === String(message.taskId || '')) {
             await globalThis.AVJP.runner.cancelCurrent('User huỷ từ trang quản lý.');
             return sendResponse({ success: true, cancelled: 'running' });
           }
+          // Nhánh queued: tìm task TRƯỚC khi xoá để lấy meta.testKey.
+          let queuedTask = null;
           await S.withLock(async () => {
             const queue = (await S.get(K.QUEUE)) || [];
+            queuedTask = queue.find(t => String(t.id) === String(message.taskId || '')) || null;
             await S.set({ [K.QUEUE]: queue.filter(t => String(t.id) !== String(message.taskId || '')) });
           });
+          if (queuedTask && isNonEmptyString(queuedTask.meta?.testKey)) {
+            await writeTestStateEntry(queuedTask.meta.testKey, {
+              status: 'cancelled', at: Date.now(), message: 'User huỷ khi đang chờ chạy.', task_id: queuedTask.id
+            });
+          }
           return sendResponse({ success: true, cancelled: 'queued' });
+        }
+        case 'autovjp.cancelAll': {
+          // (2.11.18) Dừng tất cả: huỷ run hiện tại (nếu có) + xoá toàn bộ queue.
+          let cancelled_running = false;
+          const run = await S.getRun();
+          if (run) {
+            await flagCancel(run.task_id);
+            cancelled_running = Boolean(await globalThis.AVJP.runner.cancelCurrent('User dừng tất cả từ trang quản lý.'));
+          }
+          let removedTasks = [];
+          await S.withLock(async () => {
+            const queue = (await S.get(K.QUEUE)) || [];
+            removedTasks = queue;
+            await S.set({ [K.QUEUE]: [] });
+          });
+          // Gộp mọi testState 'cancelled' của task bị xoá trong 1 lần ghi.
+          const cancelledEntries = removedTasks.filter(t => t && isNonEmptyString(t.meta?.testKey));
+          if (cancelledEntries.length) {
+            await S.withLock(async () => {
+              const testState = (await S.get(K.TEST_STATE)) || {};
+              const at = Date.now();
+              for (const t of cancelledEntries) {
+                testState[t.meta.testKey] = {
+                  status: 'cancelled', at, message: 'User dừng tất cả.', task_id: t.id
+                };
+              }
+              await S.set({ [K.TEST_STATE]: testState });
+            });
+          }
+          return sendResponse({ success: true, cancelled_running, removed_queued: removedTasks.length });
+        }
+        case 'autovjp.backfillTestState': {
+          // (2.11.18) Chỉ ghi những key CHƯA có trong testState hiện tại.
+          const entries = (message.entries && typeof message.entries === 'object' && !Array.isArray(message.entries))
+            ? message.entries : {};
+          let added = 0;
+          await S.withLock(async () => {
+            const testState = (await S.get(K.TEST_STATE)) || {};
+            for (const [key, value] of Object.entries(entries)) {
+              if (!Object.prototype.hasOwnProperty.call(testState, key)) {
+                testState[key] = value;
+                added++;
+              }
+            }
+            if (added > 0) await S.set({ [K.TEST_STATE]: testState });
+          });
+          return sendResponse({ success: true, added });
         }
         case 'autovjp.setPaused': {
           await S.set({ [K.PAUSED]: Boolean(message.paused) });
@@ -391,7 +477,7 @@
           return sendResponse({ success: true });
         }
         case 'autovjp.listState': {
-          const stored = await S.getMany([K.QUEUE, K.SCHEDULES, K.RECEIPTS, K.OUTBOX, K.ACCOUNTS, K.PAUSED, K.CANONICAL, K.LEARNED]);
+          const stored = await S.getMany([K.QUEUE, K.SCHEDULES, K.RECEIPTS, K.OUTBOX, K.ACCOUNTS, K.PAUSED, K.CANONICAL, K.LEARNED, K.TEST_STATE]);
           return sendResponse({
             success: true,
             queue: stored[K.QUEUE] || [],
@@ -402,6 +488,7 @@
             paused: Boolean(stored[K.PAUSED]),
             currentRun: stored[K.CANONICAL] || null,
             learnedSelectors: stored[K.LEARNED] || {},
+            testState: stored[K.TEST_STATE] || {},
             platforms: globalThis.AVJP.contract.platformNames.filter(p => p !== 'probe')
           });
         }
