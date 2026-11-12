@@ -69,6 +69,21 @@
     } catch (e) { return null; }
   }
 
+  // (2.11.16) Bấm bằng CHUỘT NGƯỜI cho các điểm bấm chính (like / save /
+  // follow / mở video): khi module shared/humanmouse.js đã được nạp
+  // (window.AVJP.human do contract nạp trước), nhờ SW phát sự kiện chuột
+  // THẬT qua CDP thay cho chuỗi sự kiện tổng hợp của TF.clickEl.
+  // - AVJP.human vắng mặt (inject cũ/thiếu file): giữ nguyên TF.clickEl.
+  // - AVJP.human có mặt: nó TỰ fallback el.click() khi SW không làm
+  //   được và trả false — nơi gọi KHÔNG bấm lại lần nữa, tránh bấm trùng
+  //   thành unlike/bỏ lưu ở các nút dạng công tắc.
+  async function tfHumanClick(el) {
+    var H = (typeof window !== 'undefined' && window.AVJP && window.AVJP.human) ||
+            (typeof AVJP !== 'undefined' ? AVJP.human : null);
+    if (H && typeof H.clickEl === 'function') return H.clickEl(el);
+    return TF.clickEl(el);
+  }
+
   // Chờ chữ ký post đổi (tối đa maxTries lần x 400ms). Không có chữ ký gốc
   // thì không kiểm chứng được -> false ngay, nơi gọi tự xử lý.
   async function tfWaitSigChange(sig0, api, maxTries) {
@@ -406,7 +421,18 @@
           if (kindNow !== 'live' && kindNow !== 'ad') break;
           if (skippedKinds >= 5) return { ok: false, note: 'only_ads_or_live_skipped_5' };
           var adv = await tfAdvanceNext(api);
-          if (!adv.ok) return { ok: false, note: 'skip_stuck_' + adv.note };
+          // (Vá Lane F 2026-11-12) Kẹt KHÔNG lướt qua được post quảng cáo/
+          // LIVE là tình trạng feed thoáng qua (nút next/ArrowDown/wheel
+          // đều không làm đổi chữ ký post), KHÔNG phải lỗi phiên: trả
+          // skip:true (đúng idiom capped:like/save trong cùng file) để
+          // engine ghi 'skipped' và phiên đi tiếp — luot_next cuối vòng
+          // còn một cơ hội lướt nữa. Trước đây trả ok:false thường khiến
+          // bước bắt buộc fail -> loop abort -> cả phiên chết
+          // execution_error (bằng chứng: journal nuc 2026-11-05 và
+          // 2026-11-12 đều gãy đúng note 'skip_stuck_next_no_change' ở
+          // vòng lặp 2). 'only_ads_or_live_skipped_5' ở dưới vẫn là fail
+          // thật (feed hỏng hẳn sau 5 lần lướt thành công).
+          if (!adv.ok) return { ok: false, skip: true, note: 'skip_stuck_' + adv.note };
           skippedKinds++;
           await api.sleep(api.rand(400, 900));
         }
@@ -503,7 +529,14 @@
         // v1.2.7 — KIỂM CHỨNG CHUYỂN POST (xem tfAdvanceNext ở trên; bản
         // cũ báo 'scrolled_next' vô điều kiện). v1.2.10: thân tách thành
         // hàm dùng chung, luot_next chỉ còn là vỏ gọi lại.
-        return tfAdvanceNext(api);
+        // (Vá Lane F 2026-11-12) Cùng cơ chế chết phiên như nhánh
+        // skip_stuck của xem_video: feed không chuyển post được
+        // ('next_no_change') là tình trạng thoáng qua -> skip:true để
+        // vòng lặp đi tiếp (vòng sau xem_video tự xử lý lại post hiện
+        // tại), thay vì ok:false làm chết cả phiên execution_error.
+        var r = await tfAdvanceNext(api);
+        if (!r.ok) return { ok: false, skip: true, note: r.note };
+        return r;
       }
     },
 
@@ -633,7 +666,7 @@
         if (isPressed) {
           return { ok: true, note: 'already_liked' };
         }
-        TF.clickEl(likeBtn);
+        await tfHumanClick(likeBtn);
         api.bumpCounter('like');
         if (ctx.video) ctx.video.liked = true;
         ctx.daLike = true;
@@ -669,7 +702,7 @@
           return { ok: true, note: 'already_saved' };
         }
         var before = favCount(saveBtn);
-        TF.clickEl(saveBtn);
+        await tfHumanClick(saveBtn);
         await api.sleep(api.rand(900, 1300));
         var btn2 = TF.q('saveBtn');
         var after = favCount(btn2);
@@ -682,7 +715,7 @@
           }
           if (after === before - 1) {
             // Video vốn đã lưu, click vừa rồi là BỎ lưu -> click lại để khôi phục.
-            TF.clickEl(btn2);
+            await tfHumanClick(btn2);
             return { ok: true, note: 'already_saved' };
           }
           return { ok: false, note: 'save_unverified' };
@@ -719,7 +752,7 @@
         if (isFollowing) {
           return { ok: true, note: 'already_following' };
         }
-        TF.clickEl(followBtn);
+        await tfHumanClick(followBtn);
         api.bumpCounter('follow');
         await api.sleep(api.rand(800, 1500));
         return { ok: true, note: 'followed' };
@@ -753,7 +786,7 @@
         if (txt.indexOf('đang follow') >= 0 || txt.indexOf('following') >= 0 || txt.indexOf('bạn bè') >= 0) {
           return { ok: true, note: 'already_following' };
         }
-        TF.clickEl(followBtn);
+        await tfHumanClick(followBtn);
         api.bumpCounter('follow');
         await api.sleep(api.rand(800, 1500));
         return { ok: true, note: 'followed:' + user };
@@ -1065,7 +1098,7 @@
           return { ok: false, note: 'not_found:profilePostItem' };
         }
         if (idx >= items.length) return { ok: false, note: 'index_out_of_range:' + items.length };
-        TF.clickEl(items[idx]);
+        await tfHumanClick(items[idx]);
         var v = await TF.qWait('videoEl', 12000);
         if (!v) return { ok: false, note: 'video_not_opened' };
         await api.sleep(800);
