@@ -26,7 +26,7 @@
   async function deliver(result) {
     if (!result || !result.type) return false;
     return S.withLock(async () => {
-      const stored = await S.getMany([K.OUTBOX, K.RECEIPTS, K.RECEIPT_KEYS, K.CANONICAL, K.MANAGED_TABS]);
+      const stored = await S.getMany([K.OUTBOX, K.RECEIPTS, K.RECEIPT_KEYS, K.CANONICAL, K.MANAGED_TABS, K.TEST_STATE, K.CANCEL_FLAGS]);
       const run = stored[K.CANONICAL] || null;
 
       // Chỉ nhận kết quả thuộc run đang giữ (hoặc task scan không qua canonical) — chống kết quả lạc.
@@ -85,6 +85,33 @@
       const nextKeys = seenKeys.concat(key).slice(-200);
       const remainingOutbox = outbox.filter(item => item.receipt_id !== receipt.receipt_id);
       await S.set({ [K.RECEIPTS]: receipts, [K.RECEIPT_KEYS]: nextKeys, [K.OUTBOX]: remainingOutbox });
+
+      // (2.11.18) Hook testState: receipt chung cuộc (không phải 'retrying')
+      // của run có meta.testKey -> chốt testState theo receipt + xoá cờ huỷ
+      // của task này. Gói try/catch riêng: lỗi ở hook TUYỆT ĐỐI không được
+      // làm deliver fail. Các đường return sớm (dedupe / không khớp run /
+      // sai tab) nằm TRƯỚC điểm này nên tự nhiên bỏ qua hook như thiết kế.
+      try {
+        if (receipt.status !== 'retrying' && run
+          && (String(run.task_id) === taskId || String(run.id) === taskId)
+          && run.meta?.testKey) {
+          const testState = (stored[K.TEST_STATE] && typeof stored[K.TEST_STATE] === 'object')
+            ? stored[K.TEST_STATE] : {};
+          testState[run.meta.testKey] = {
+            status: receipt.status, at: now, message: receipt.message || '', task_id: receipt.task_id
+          };
+          const updates = { [K.TEST_STATE]: testState };
+          const cancelFlags = (stored[K.CANCEL_FLAGS] && typeof stored[K.CANCEL_FLAGS] === 'object')
+            ? stored[K.CANCEL_FLAGS] : null;
+          if (cancelFlags && Object.prototype.hasOwnProperty.call(cancelFlags, taskId)) {
+            delete cancelFlags[taskId];
+            updates[K.CANCEL_FLAGS] = cancelFlags;
+          }
+          await S.set(updates);
+        }
+      } catch (hookErr) {
+        console.warn('[Auto vjp][outbox] hook testState lỗi — bỏ qua, deliver vẫn tiếp tục', hookErr);
+      }
 
       // 3) Dọn canonical run nếu là run của task này + đóng tab managed.
       const tabId = result.tabId || run?.tabId || null;
