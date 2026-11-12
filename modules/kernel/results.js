@@ -49,6 +49,7 @@
     'affiliateCommentDone', 'affiliateCommentProgress',
     'commentReplyDone', 'commentReplyProgress', 'tiktokReplyCheckpoint',
     'nurtureProgress', 'nurtureDone', 'nurtureOwnerPing', 'getNurtureAiComment',
+    'microActionDone',
     'healGetLearned', 'healSuggest', 'healMarkProven',
     'healthscanCompleted', 'healthscanFailed',
     'mediaFetchStart', 'mediaFetchChunk', 'mediaFetchEnd', 'fetchImage',
@@ -235,6 +236,21 @@
           failure_code: message.failure_code || null,
           resultMessage: message.resultMessage || '',
           items: Array.isArray(message.items) ? message.items : []
+        });
+        return sendResponse({ success: confirmed });
+      }
+      case 'microActionDone': {
+        // (2.11.16) Hành động nhỏ test lẻ (modules/<platform>/micro.js):
+        // một action duy nhất mang status sẵn — cùng khuôn nurtureDone,
+        // cộng details (vd {action:'like_first', liked:true}) để trang
+        // quản lý hiển thị đúng việc đã làm.
+        const confirmed = await outbox().deliver({
+          type: 'micro_action', taskId: message.taskId, platform, tabId,
+          status: message.status || 'failed',
+          failure_code: message.failure_code || null,
+          resultMessage: message.resultMessage || '',
+          resultUrl: message.resultUrl || undefined,
+          details: message.details || null
         });
         return sendResponse({ success: confirmed });
       }
