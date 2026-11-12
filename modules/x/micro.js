@@ -65,6 +65,46 @@ if (window.top !== window.self) {
     return v;
   };
 
+  // ── PAGE-SIDE CANCEL (2.11.18, Lane P) ──
+  // Kernel ghi cờ huỷ vào chrome.storage.local['autovjp.cancelFlags']
+  // = { <taskId>: <timestamp> } khi user bấm Dừng. Script phía trang tự
+  // thấy cờ thì NGỪNG ngay: báo failed/'user_cancelled' qua report() sẵn
+  // có của file (kernel có thể đã chốt receipt trước - kết quả đến muộn
+  // bị kernel bỏ qua, vô hại) rồi unwind bằng ngoại lệ để không bấm/cuộn
+  // thêm nữa. Định danh task dùng ở đây: taskId = String(run.task_id ||
+  // run.id) - cùng khoá mà phase storage (PHASE_KEY) của file gắn vào.
+  async function avjpCancelRequested() {
+    try {
+      const s = await chrome.storage.local.get('autovjp.cancelFlags');
+      const m = s && s['autovjp.cancelFlags'];
+      return !!(m && typeof m === 'object' && Object.prototype.hasOwnProperty.call(m, taskId));
+    } catch (_) { return false; }
+  }
+  async function avjpSleepCancellable(ms) {
+    const end = Date.now() + Math.max(0, Number(ms) || 0);
+    for (;;) {
+      const rem = end - Date.now();
+      if (rem <= 0) return true;
+      await sleep(Math.min(800, rem));
+      if (await avjpCancelRequested()) return false;
+      if (Date.now() >= end) return true;
+    }
+  }
+  function avjpCancelledError() {
+    const e = new Error('user_cancelled');
+    e.avjpCancelled = true;
+    e.failure_code = 'user_cancelled';
+    e.failureCode = 'user_cancelled';
+    return e;
+  }
+  function avjpAbortCancelled(extra = {}) {
+    try {
+      report('failed', { action, cancelled: true, ...extra }, 'user_cancelled',
+        'Đã dừng theo yêu cầu người dùng (user_cancelled)');
+    } catch (_) {}
+    throw avjpCancelledError();
+  }
+
   const getPhase = async () => {
     const s = await chrome.storage.local.get(PHASE_KEY);
     const p = s[PHASE_KEY];
@@ -129,7 +169,7 @@ if (window.top !== window.self) {
       try { v = fn(); } catch (_) {}
       if (v) return v;
       if (Date.now() >= end) return null;
-      await sleep(stepMs);
+      if (!(await avjpSleepCancellable(stepMs))) avjpAbortCancelled({ phase: 'waitFor' });
     }
   }
   function plainClick(el) {
@@ -446,7 +486,7 @@ if (window.top !== window.self) {
       if (!btn) throw selFail('post_button');
       let tries = 0;
       while (isDisabledBtn(btn) && tries < 4) {
-        await sleep(2000);
+        if (!(await avjpSleepCancellable(2000))) avjpAbortCancelled({ step: 'click_post_button' });
         btn = findPostButton() || btn;
         tries++;
       }
@@ -594,7 +634,7 @@ if (window.top !== window.self) {
         });
         if (links.size >= limit) break;
         window.scrollBy({ top: 500 });
-        await sleep(1500);
+        if (!(await avjpSleepCancellable(1500))) avjpAbortCancelled({ step: 'affiliate_collect_links' });
       }
       if (!links.size) throw selFail('affiliate_post_links');
       return { count: links.size, links: [...links].slice(0, 50) };
@@ -660,7 +700,7 @@ if (window.top !== window.self) {
         const dy = Math.round(rand(300, 750));
         await humanScrollBy(dy);
         totalPx += dy; ticks++;
-        await sleep(Math.min(rand(700, 2000), Math.max(0, end - Date.now())));
+        if (!(await avjpSleepCancellable(Math.min(rand(700, 2000), Math.max(0, end - Date.now()))))) avjpAbortCancelled({ step: 'scroll_feed', ticks });
       }
       return { seconds: secs, ticks, scrolled_px: totalPx };
     },
@@ -890,6 +930,7 @@ if (window.top !== window.self) {
     let merged = { ...(seedDetails || {}) };
     for (const stepKey of steps) {
       if (ctx.completed.has(stepKey)) continue;
+      if (await avjpCancelRequested()) avjpAbortCancelled({ step: stepKey });
       const isPrefix = stepKey !== action;
       try {
         const d = await STEPS[stepKey](ctx);
