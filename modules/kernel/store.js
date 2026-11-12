@@ -17,6 +17,8 @@
     MANAGED_TABS: 'autovjp.managedTabs', // [tabId] tab do tầng module mở
     PAUSED: 'autovjp.paused',            // bool
     LEARNED: 'autovjp.learnedSelectors', // (2.9.0) {"platform:key": {spec, at, hits}} — selector tự chữa đã qua proof, xem modules/kernel/heal.js + modules/shared/HEALER.md
+    TEST_STATE: 'autovjp.testState',     // (2.11.18) {testKey: {status, at, message, task_id}} — trạng thái test lẻ theo testKey
+    CANCEL_FLAGS: 'autovjp.cancelFlags', // (2.11.18) {taskId: timestamp} — cờ huỷ do user đặt cho task
     CANONICAL: 'currentAutomationRun',   // canonical run đang chạy (hợp đồng MUT)
     LAST_STATUS: 'lastStatus'            // dùng chung với MUT/lõi để hiển thị trạng thái gần nhất
   };
