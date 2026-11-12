@@ -73,6 +73,46 @@ if (window.top !== window.self) {
     return Math.min(120, Math.max(1, s));
   };
 
+  // ── PAGE-SIDE CANCEL (2.11.18, Lane P) ──
+  // Kernel ghi cờ huỷ vào chrome.storage.local['autovjp.cancelFlags']
+  // = { <taskId>: <timestamp> } khi user bấm Dừng. Script phía trang tự
+  // thấy cờ thì NGỪNG ngay: báo failed/'user_cancelled' qua report() sẵn
+  // có của file (kernel có thể đã chốt receipt trước - kết quả đến muộn
+  // bị kernel bỏ qua, vô hại) rồi unwind bằng ngoại lệ để không bấm/cuộn
+  // thêm nữa. Định danh task dùng ở đây: taskId = String(run.task_id ||
+  // run.id) - cùng khoá mà phase storage (PHASE_KEY) của file gắn vào.
+  async function avjpCancelRequested() {
+    try {
+      const s = await chrome.storage.local.get('autovjp.cancelFlags');
+      const m = s && s['autovjp.cancelFlags'];
+      return !!(m && typeof m === 'object' && Object.prototype.hasOwnProperty.call(m, taskId));
+    } catch (_) { return false; }
+  }
+  async function avjpSleepCancellable(ms) {
+    const end = Date.now() + Math.max(0, Number(ms) || 0);
+    for (;;) {
+      const rem = end - Date.now();
+      if (rem <= 0) return true;
+      await sleep(Math.min(800, rem));
+      if (await avjpCancelRequested()) return false;
+      if (Date.now() >= end) return true;
+    }
+  }
+  function avjpCancelledError() {
+    const e = new Error('user_cancelled');
+    e.avjpCancelled = true;
+    e.failure_code = 'user_cancelled';
+    e.failureCode = 'user_cancelled';
+    return e;
+  }
+  function avjpAbortCancelled(extra = {}) {
+    try {
+      report('failed', { action, cancelled: true, ...extra }, 'user_cancelled',
+        'Đã dừng theo yêu cầu người dùng (user_cancelled)');
+    } catch (_) {}
+    throw avjpCancelledError();
+  }
+
   const getPhase = async () => {
     const s = await chrome.storage.local.get(PHASE_KEY);
     const p = s[PHASE_KEY];
@@ -113,7 +153,7 @@ if (window.top !== window.self) {
       try { v = fn(); } catch (_) {}
       if (v) return v;
       if (Date.now() >= end) return null;
-      await sleep(stepMs);
+      if (!(await avjpSleepCancellable(stepMs))) avjpAbortCancelled({ phase: 'waitFor' });
     }
   }
   // queryShadow rút gọn (kiểu automator.js): querySelector thường trước,
@@ -251,7 +291,7 @@ if (window.top !== window.self) {
       const dy = Math.round(rand(300, 750));
       await humanScrollBy(dy);
       totalPx += dy; ticks++;
-      await sleep(Math.min(rand(700, 2000), Math.max(0, end - Date.now())));
+      if (!(await avjpSleepCancellable(Math.min(rand(700, 2000), Math.max(0, end - Date.now()))))) avjpAbortCancelled({ step: 'scroll_feed', ticks });
     }
     done({ seconds: secs, ticks, scrolled_px: totalPx });
   }
@@ -273,7 +313,7 @@ if (window.top !== window.self) {
       return report('failed', { action, found: true, target: 'watch_playback', ...extra }, 'execution_error',
         'Đã vào trang xem nhưng video không phát (currentTime không chạy)');
     }
-    await sleep(secs * 1000);
+    if (!(await avjpSleepCancellable(secs * 1000))) avjpAbortCancelled({ step: 'watch_first' });
     done({ watched_seconds: secs, ...extra }, `Đã xem video đầu ${secs} giây`);
   }
 
@@ -559,7 +599,7 @@ if (window.top !== window.self) {
       if (commentsOff()) return fail('execution_error', 'comments_disabled: video đã tắt tính năng bình luận');
       const p = commentBoxParts();
       if (p && (p.placeholder || p.editable)) parts = p;
-      else await sleep(400);
+      else if (!(await avjpSleepCancellable(400))) avjpAbortCancelled({ step: 'open_comment_editor' });
     }
     if (!parts) {
       return commentsSectionRendered()
@@ -575,7 +615,7 @@ if (window.top !== window.self) {
         if (channelCreationPrompt()) return fail('execution_error', 'channel_required: cần tạo kênh YouTube mới bình luận được');
         const p = commentBoxParts();
         if (p && p.editable) opened = p;
-        else await sleep(300);
+        else if (!(await avjpSleepCancellable(300))) avjpAbortCancelled({ step: 'open_comment_editor' });
       }
       if (!opened) return fail('execution_error', 'comment_editor_not_opened: bấm ô soạn nhưng editor không mở');
       parts = opened;
@@ -998,7 +1038,7 @@ if (window.top !== window.self) {
         const skip = document.querySelector('.ytp-skip-ad-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button-modern');
         if (skip) { try { skip.click(); } catch (_) {} }
         last = null;
-        await sleep(1000);
+        if (!(await avjpSleepCancellable(1000))) avjpAbortCancelled({ step: 'nurture_watch_video' });
         continue;
       }
       if (v.paused && !v.ended) { try { await Promise.race([v.play(), sleep(1500)]); } catch (_) {} }
@@ -1006,7 +1046,7 @@ if (window.top !== window.self) {
       if (last != null) { const d = ct - last; if (d > 0 && d < 5) watched += d; }
       last = ct;
       if (v.ended) break;
-      await sleep(1000);
+      if (!(await avjpSleepCancellable(1000))) avjpAbortCancelled({ step: 'nurture_watch_video' });
     }
     if (watched < Math.min(secs, 10) * 0.5 && !v.ended) {
       return fail('execution_error', `Xem nuôi: chỉ tích lũy được ${Math.round(watched)}s xem thật`, { watched_seconds: Math.round(watched) });
@@ -1285,7 +1325,7 @@ if (window.top !== window.self) {
       const clicked = await hc(nextBtn);
       if (!clicked) return { steps, at_end: false, blocked: 'next_click_failed' };
       steps++;
-      await sleep(1800);
+      if (!(await avjpSleepCancellable(1800))) avjpAbortCancelled({ step: 'advance_wizard' });
     }
     return { steps, at_end: Boolean(anyVisibilityRadio() || btnEnabled(findDoneBtn())) };
   }
@@ -1432,7 +1472,7 @@ if (window.top !== window.self) {
       if (/checks complete|upload complete|đã hoàn tất tải lên|hoàn tất xử lý|processing complete/i.test(bodyText) || btnEnabled(findDoneBtn())) {
         return ok({ processing: 'complete', waited_seconds: Math.round((Date.now() - start) / 1000) });
       }
-      await sleep(5000);
+      if (!(await avjpSleepCancellable(5000))) return fail('user_cancelled', 'Đã dừng theo yêu cầu người dùng (user_cancelled)', { reason: 'user_cancelled', cancelled: true });
     }
     return fail('execution_error', `Chờ xử lý/tải lên quá ${Math.round(maxMs / 1000)}s mà chưa xong`, { reason: 'processing_timeout', last_status: lastText });
   }
@@ -1516,6 +1556,7 @@ if (window.top !== window.self) {
     };
     for (const stepKey of chain) {
       if (doneSteps.includes(stepKey)) continue;
+      if (await avjpCancelRequested()) avjpAbortCancelled({ step: stepKey });
       const isMain = stepKey === action;
       const stepDef = REGISTRY[stepKey];
       let res;
@@ -1537,7 +1578,7 @@ if (window.top !== window.self) {
         await persist(stepKey);
         // Trang đích sẽ thay document này; chờ đủ lâu để điều hướng
         // thật sự xảy ra. Document còn sống sau 15s = điều hướng bị nuốt.
-        await sleep(15000);
+        if (!(await avjpSleepCancellable(15000))) avjpAbortCancelled({ step: stepKey });
         if (!reported) {
           const details = { action, step: stepKey, navigation: 'timeout' };
           if (isMain) return report('failed', details, 'execution_error',
