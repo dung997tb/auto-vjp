@@ -481,9 +481,17 @@
   async function cancelCurrent(reason) {
     const run = await S.getRun();
     if (!run) return false;
+    // (2.11.18) Ghi cờ huỷ TRƯỚC khi deliver: các đường thi hành đang
+    // chạy có thể tra CANCEL_FLAGS theo task_id để tự dừng sớm. Nuốt lỗi
+    // — ghi cờ hỏng không được chặn việc huỷ.
+    try {
+      const flags = (await S.get(S.KEYS.CANCEL_FLAGS)) || {};
+      flags[String(run.task_id)] = Date.now();
+      await S.set({ [S.KEYS.CANCEL_FLAGS]: flags });
+    } catch (_) {}
     await globalThis.AVJP.outbox.deliver({
       type: run.type, taskId: run.task_id, platform: run.platform, tabId: run.tabId || null,
-      status: 'cancelled', failure_code: 'user_cancelled', forceCleanup: true,
+      status: 'failed', failure_code: 'user_cancelled', forceCleanup: true,
       resultMessage: reason || 'User huỷ từ trang quản lý.'
     });
     return true;
