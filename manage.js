@@ -1210,12 +1210,17 @@ async function runTestAction(key) {
 }
 
 /* ---------- Bảng con: Hành động nhỏ (micro_action) ----------
- * Danh sách CỐ ĐỊNH theo đặc tả 2.11.16 — khoá `action` là giao diện với
- * kernel, không tự đổi tên. `seconds` chỉ áp cho scroll_feed/watch_first
- * và đi trong payload. Trạng thái chạy dùng chung testRuns với bảng chính
- * (khoá có tiền tố micro: để không đụng khoá platform:type) nên poll 3
- * giây + đối chiếu biên lai theo task_id hoạt động y hệt. */
-const MICRO_ACTIONS = [
+ * (2.11.17) Danh sách KHÔNG còn cố định trong file này: render từ
+ * registry MICRO_ACTIONS ở modules/kernel/contract-data.js (manage.html
+ * nạp contract-data.js trước manage.js) — nguồn sự thật duy nhất, khớp
+ * handler trong modules/<platform>/micro.js. Entry 'context' mang
+ * prefix: runner phía trang tự chạy chuỗi tiền tố rồi mới tới hành
+ * động đích (bảng chỉ enqueue {action}). 'seconds' giữ cho
+ * scroll_feed/watch_first như 2.11.16. Trạng thái chạy dùng chung
+ * testRuns với bảng chính (khoá tiền tố micro:) nên poll 3 giây + đối
+ * chiếu biên lai theo task_id hoạt động y hệt. Nếu registry không nạp
+ * được (không nên xảy ra) thì rơi về 22 hàng cũ 2.11.16. */
+const MICRO_FALLBACK = [
   { platform: 'instagram', action: 'scroll_feed', label: 'Lướt feed 30 giây', seconds: 30 },
   { platform: 'instagram', action: 'like_first', label: 'Thả tim bài đầu' },
   { platform: 'instagram', action: 'view_first_story', label: 'Xem tin đầu tiên' },
@@ -1239,21 +1244,51 @@ const MICRO_ACTIONS = [
   { platform: 'youtube', action: 'open_notifications', label: 'Mở thông báo' },
   { platform: 'youtube', action: 'open_profile', label: 'Mở hồ sơ của mình' }
 ];
+const MICRO_SECONDS = { scroll_feed: 30, watch_first: 20 };
+function microRegistryList() {
+  const reg = (globalThis.AVJP && AVJP.contractData && AVJP.contractData.MICRO_ACTIONS) || null;
+  if (!reg) return MICRO_FALLBACK;
+  const out = [];
+  for (const platform of ['instagram', 'threads', 'tiktok', 'x', 'youtube']) {
+    for (const e of (reg[platform] || [])) {
+      out.push({
+        platform, action: e.key, label: e.label,
+        needs: e.needs || 'standalone',
+        prefix: Array.isArray(e.prefix) ? e.prefix : null,
+        note: e.note || '',
+        seconds: MICRO_SECONDS[e.key] || 0
+      });
+    }
+  }
+  return out.length ? out : MICRO_FALLBACK;
+}
+const MICRO_ACTIONS = microRegistryList();
+let microFilterText = '';
 const microRowKey = item => `${item.platform}:micro:${item.action}`;
 
 function renderMicroActions() {
   const body = $('microTableBody');
   if (!body) return;
+  const q = microFilterText.trim().toLowerCase();
+  const visible = q
+    ? MICRO_ACTIONS.filter(item => `${item.platform} ${item.label} ${item.action}`.toLowerCase().includes(q))
+    : MICRO_ACTIONS;
   const label = $('microCountLabel');
-  if (label) label.textContent = `${MICRO_ACTIONS.length} hành động nhỏ`;
-  body.innerHTML = MICRO_ACTIONS.map(item => {
+  if (label) label.textContent = q
+    ? `${visible.length}/${MICRO_ACTIONS.length} hành động nhỏ`
+    : `${MICRO_ACTIONS.length} hành động nhỏ`;
+  body.innerHTML = visible.map(item => {
     const key = microRowKey(item);
     const run = testRuns[key];
     const running = run?.state === 'running';
+    const input = item.needs === 'context'
+      ? `Chuỗi ${(item.prefix || []).length + 1} bước`
+      : (item.seconds ? `${item.seconds} giây` : 'Không cần đầu vào');
+    const note = item.note ? `<span>${esc(item.note)}</span>` : '';
     return `<tr>
       <td>${platformChip(item.platform)}</td>
-      <td class="content-cell"><strong>${esc(item.label)}</strong><span>${esc(item.action)}</span></td>
-      <td>${item.seconds ? `${item.seconds} giây` : 'Không cần đầu vào'}</td>
+      <td class="content-cell"><strong>${esc(item.label)}</strong><span>${esc(item.action)}</span>${note}</td>
+      <td>${input}</td>
       <td><button class="mini-button" type="button" data-micro-run="${esc(key)}" ${running ? 'disabled' : ''}>${running ? 'Đang chạy…' : 'Chạy'}</button></td>
       <td class="detail-cell">${testResultCell(run)}</td>
     </tr>`;
@@ -1267,8 +1302,17 @@ async function runMicroAction(key) {
   renderMicroActions();
   // Giao diện task cố định với kernel: type 'micro_action', payload.action
   // là khoá động tác; seconds chỉ gửi cho scroll_feed / watch_first.
+  // Hành động 'context' + hành động cần đầu vào đọc thêm từ các ô dùng
+  // chung của bảng chính (đã ghi rõ ở đầu mục): content/query từ ô Nội
+  // dung, target_url từ ô URL nguồn, media_url từ ô URL video.
   const payload = { action: item.action };
   if (item.seconds) payload.seconds = item.seconds;
+  const sharedContent = $('testContent')?.value.trim();
+  if (sharedContent) { payload.content = sharedContent; payload.query = sharedContent; }
+  const sharedSource = $('testSourceUrl')?.value.trim();
+  if (sharedSource) payload.target_url = sharedSource;
+  const sharedVideo = $('testVideoUrl')?.value.trim();
+  if (sharedVideo) payload.media_url = sharedVideo;
   const res = await send({ action: 'autovjp.createTask', task: { platform: item.platform, type: 'micro_action', payload } });
   if (res.success && res.task) {
     testRuns[key] = { state: 'running', taskId: res.task.id, startedAt: Date.now() };
@@ -1284,6 +1328,8 @@ async function runMicroAction(key) {
 populatePlatformFilters();
 bindNavigation();
 bindEvents();
+const microFilterEl = $('microFilter');
+if (microFilterEl) microFilterEl.addEventListener('input', () => { microFilterText = microFilterEl.value; renderMicroActions(); });
 $('sRunAt').value = nextHourValue();
 updatePublishMode();
 updateComposeSummary();
