@@ -440,7 +440,7 @@
         </article>
 
         <article class="card table-card">
-          <div class="card-header"><div><h3>Hành động nhỏ (test lẻ từng động tác)</h3><p>Mỗi hàng là một động tác nguyên tử qua task <code>micro_action</code> — kiểm chứng riêng từng cử động của module (lướt feed, thả tim, mở thông báo…) tách khỏi phiên nuôi / đăng bài đầy đủ.</p></div></div>
+          <div class="card-header"><div><h3>Hành động nhỏ (test lẻ từng động tác)</h3><p>Mỗi hàng là một động tác nguyên tử qua task <code>micro_action</code> — kiểm chứng riêng từng cử động của module tách khỏi phiên nuôi / đăng bài đầy đủ. Danh sách render từ registry <code>MICRO_ACTIONS</code> trong contract-data.js (2.11.17: mở hết mọi hành động nguyên tử của 5 nền tảng). Hàng "context" tự chạy chuỗi bước tiền tố trước. Khi chạy, ô Nội dung / URL nguồn / URL video của bảng chính được dùng chung làm payload (content / target_url / media_url) nếu đã điền.</p></div><input id="microFilter" type="search" placeholder="Lọc hành động nhỏ…"></div>
           <div class="table-responsive">
             <table class="data-table">
               <thead><tr><th>Nền tảng</th><th>Hành động nhỏ</th><th>Đầu vào</th><th>Chạy</th><th>Kết quả gần nhất</th></tr></thead>
@@ -453,6 +453,7 @@
     </main>
   </div>
 </div>
+<script src="modules/kernel/contract-data.js"></script>
 <script src="manage.js"></script>
 </body>
 </html>
