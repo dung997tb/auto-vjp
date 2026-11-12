@@ -81,6 +81,46 @@ if (window.top !== window.self) {
     return Math.min(120, Math.max(1, s));
   };
 
+  // ── PAGE-SIDE CANCEL (2.11.18, Lane P) ──
+  // Kernel ghi cờ huỷ vào chrome.storage.local['autovjp.cancelFlags']
+  // = { <taskId>: <timestamp> } khi user bấm Dừng. Script phía trang tự
+  // thấy cờ thì NGỪNG ngay: báo failed/'user_cancelled' qua report() sẵn
+  // có của file (kernel có thể đã chốt receipt trước - kết quả đến muộn
+  // bị kernel bỏ qua, vô hại) rồi unwind bằng ngoại lệ để không bấm/cuộn
+  // thêm nữa. Định danh task dùng ở đây: taskId = String(run.task_id ||
+  // run.id) - cùng khoá mà phase storage (PHASE_KEY) của file gắn vào.
+  async function avjpCancelRequested() {
+    try {
+      const s = await chrome.storage.local.get('autovjp.cancelFlags');
+      const m = s && s['autovjp.cancelFlags'];
+      return !!(m && typeof m === 'object' && Object.prototype.hasOwnProperty.call(m, taskId));
+    } catch (_) { return false; }
+  }
+  async function avjpSleepCancellable(ms) {
+    const end = Date.now() + Math.max(0, Number(ms) || 0);
+    for (;;) {
+      const rem = end - Date.now();
+      if (rem <= 0) return true;
+      await sleep(Math.min(800, rem));
+      if (await avjpCancelRequested()) return false;
+      if (Date.now() >= end) return true;
+    }
+  }
+  function avjpCancelledError() {
+    const e = new Error('user_cancelled');
+    e.avjpCancelled = true;
+    e.failure_code = 'user_cancelled';
+    e.failureCode = 'user_cancelled';
+    return e;
+  }
+  function avjpAbortCancelled(extra = {}) {
+    try {
+      report('failed', { action, cancelled: true, ...extra }, 'user_cancelled',
+        'Đã dừng theo yêu cầu người dùng (user_cancelled)');
+    } catch (_) {}
+    throw avjpCancelledError();
+  }
+
   const getPhase = async () => {
     const s = await chrome.storage.local.get(PHASE_KEY);
     const p = s[PHASE_KEY];
@@ -121,7 +161,7 @@ if (window.top !== window.self) {
       try { v = fn(); } catch (_) {}
       if (v) return v;
       if (Date.now() >= end) return null;
-      await sleep(stepMs);
+      if (!(await avjpSleepCancellable(stepMs))) avjpAbortCancelled({ phase: 'waitFor' });
     }
   }
   function plainClick(el) {
@@ -370,7 +410,7 @@ if (window.top !== window.self) {
       const dy = Math.round(rand(300, 750));
       await humanScrollBy(dy);
       totalPx += dy; ticks++;
-      await sleep(Math.min(rand(700, 2000), Math.max(0, end - Date.now())));
+      if (!(await avjpSleepCancellable(Math.min(rand(700, 2000), Math.max(0, end - Date.now()))))) avjpAbortCancelled({ step: 'scroll_feed', ticks });
     }
     done({ seconds: secs, ticks, scrolled_px: totalPx });
   }
@@ -547,7 +587,7 @@ if (window.top !== window.self) {
       const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'files')?.set;
       if (nativeSetter) nativeSetter.call(fileInput, dt.files); else fileInput.files = dt.files;
       fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-      await sleep(3000);
+      if (!(await avjpSleepCancellable(3000))) avjpAbortCancelled({ step: 'attach_media_url' });
       const previewSeen = !!dialogRoot().querySelector('img[src^="blob:"], video[src^="blob:"], video');
       return okStep({
         attached: true, mime, size: file.size, media_url: mediaUrl,
@@ -691,7 +731,7 @@ if (window.top !== window.self) {
       while (Date.now() < end) {
         window.scrollBy({ top: Math.floor(window.innerHeight * 0.85), behavior: 'smooth' });
         rounds++;
-        await sleep(Math.min(rand(1200, 2200), Math.max(0, end - Date.now())));
+        if (!(await avjpSleepCancellable(Math.min(rand(1200, 2200), Math.max(0, end - Date.now()))))) avjpAbortCancelled({ step: 'nurture_feed_scroll', rounds });
         maxUnits = Math.max(maxUnits, nurtureUnits().length);
       }
       if (maxUnits === 0) return failStep('nurture_feed_units', { rounds });
@@ -810,6 +850,7 @@ if (window.top !== window.self) {
     for (let i = startIdx; i < chainKeys.length; i++) {
       const key = chainKeys[i];
       const isFinal = i === chainKeys.length - 1;
+      if (await avjpCancelRequested()) avjpAbortCancelled({ step: key });
       await setPhase({ completed: chainKeys.slice(0, i), acc, current: key });
       const stepFn = resolveStep(key);
       let res;
