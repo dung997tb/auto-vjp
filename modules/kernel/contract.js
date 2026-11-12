@@ -21,6 +21,10 @@
   // TRƯỚC automator ở spec 'post' (instagram/threads/x); automator không
   // thấy helper thì tự rơi về asset gói sẵn. Xem modules/shared/default-image.js.
   const DEFAULT_IMAGE = 'modules/shared/default-image.js';
+  // Chuột người (2.11.16): AVJP.human (clickEl/scrollBy mô phỏng thao tác
+  // tay) — nạp TRƯỚC micro.js ở spec 'micro_action'; micro.js tự rơi về
+  // click thường khi AVJP.human vắng mặt. Xem modules/shared/humanmouse.js.
+  const HUMAN_MOUSE = 'modules/shared/humanmouse.js';
 
   // scriptsFor(platform, type, task) -> { files:[...], mainWorldBefore:[...], frameTopOnly:bool }
   // Khớp bảng inject của MUT tab-automation-runner (đã đối chiếu file:dòng ở TONG-HOP②),
@@ -35,14 +39,21 @@
         // (2.9.0) post/story nạp thêm HEALER trước module: automator +
         // story.js định vị nút Tạo/Share/công cụ text qua AVJP.heal.
         if (task.type === 'post') return { files: [CANONICAL, HEALER, DEFAULT_IMAGE, 'modules/instagram/automator.js'] };
-        // story (2.7.0): đăng Story IG (ảnh/video) — script riêng, đọc
-        // canonical run trực tiếp, báo storyCompleted/storyFailed. Xem
-        // modules/instagram/story.js + MODULE.md §7.
-        if (task.type === 'story') return { files: [CANONICAL, HEALER, 'modules/instagram/story.js'] };
+        // story (2.11.16): viết lại theo giao diện MOBILE web — bản
+        // desktop 2.7.0 đã chết (IG web desktop không có trình tạo
+        // story, probe live 2026-11-05). Runner đọc cờ emulation:
+        // 'mobile' để gắn giả lập thiết bị TRƯỚC khi điều hướng (xem
+        // runner.js). story.js neo theo text + URL /create/story/
+        // (bản đồ spike 2026-11-12) nên không cần HEALER nữa;
+        // HUMAN_MOUSE đứng trước story.js cho AVJP.human.clickEl.
+        if (task.type === 'story') return { files: [CANONICAL, HUMAN_MOUSE, 'modules/instagram/story.js'], emulation: 'mobile' };
         if (task.type === 'healthscan') return { files: [CANONICAL, HEALER, HEALTHSCAN] };
         if (task.type === 'reply') return { files: [CANONICAL, 'modules/instagram/interaction.js'] };
         if (task.type === 'affiliate') return { files: [CANONICAL, 'modules/instagram/affiliate-commenter.js'] };
         if (task.type === 'scan_account') return { files: [SCAN_UTILS, METRICS, 'modules/instagram/accounts-scanner.js'], scan: true };
+        // micro_action (2.11.16): hành động nhỏ test lẻ (lướt feed, like
+        // bài đầu, xem story...) — script riêng modules/instagram/micro.js.
+        if (task.type === 'micro_action') return { files: [HUMAN_MOUSE, 'modules/instagram/micro.js'], frameTopOnly: true };
         // nurture (2.2.0): lõi nuôi dùng chung + adapter Instagram. Xem
         // modules/nurture-core/README.md + modules/instagram-nurture/MODULE.md.
         if (task.type === 'nurture') {
@@ -66,6 +77,7 @@
         if (task.type === 'reply') return { files: [CANONICAL, 'modules/threads/interaction.js'] };
         if (task.type === 'affiliate') return { files: [CANONICAL, 'modules/threads/affiliate-commenter.js'] };
         if (task.type === 'scan_account') return { files: [SCAN_UTILS, 'modules/threads/accounts-scanner.js'], scan: true };
+        if (task.type === 'micro_action') return { files: [HUMAN_MOUSE, 'modules/threads/micro.js'], frameTopOnly: true };
         if (task.type === 'healthscan') return { files: [CANONICAL, HEALER, HEALTHSCAN] };
         // nurture (2.3.0): lõi nuôi dùng chung + adapter Threads. Xem
         // modules/nurture-core/README.md + modules/threads-nurture/MODULE.md.
@@ -102,13 +114,14 @@
           };
         }
         if (task.type === 'scan_account') return { files: [SCAN_UTILS, METRICS, 'modules/tiktok/accounts-scanner.js'], scan: true };
+        if (task.type === 'micro_action') return { files: [HUMAN_MOUSE, 'modules/tiktok/micro.js'], frameTopOnly: true };
         if (task.type === 'healthscan') return { files: [CANONICAL, HEALER, HEALTHSCAN], frameTopOnly: true };
         // nurture (2.1.0): engine TikTok Farmer port nguyên khối — thứ tự nạp
         // đúng manifest gốc của Farmer (selectors -> modules -> engine ->
         // content) + adapter.js của Auto vjp nạp cuối. Xem modules/tiktok-nurture/MODULE.md.
         if (task.type === 'nurture') {
           return {
-            files: [CANONICAL,
+            files: [CANONICAL, HUMAN_MOUSE,
               'modules/tiktok-nurture/selectors.js',
               'modules/tiktok-nurture/modules.js',
               'modules/tiktok-nurture/engine.js',
@@ -129,6 +142,7 @@
         if (task.type === 'reply') return { files: [CANONICAL, 'modules/x/interaction.js'] };
         if (task.type === 'affiliate') return { files: [CANONICAL, 'modules/x/affiliate-commenter.js'] };
         if (task.type === 'scan_account') return { files: [SCAN_UTILS, METRICS, 'modules/x/accounts-scanner.js'], scan: true };
+        if (task.type === 'micro_action') return { files: [HUMAN_MOUSE, 'modules/x/micro.js'], frameTopOnly: true };
         // nurture (2.4.0): lõi nuôi dùng chung + adapter X. Xem
         // modules/nurture-core/README.md + modules/x-nurture/MODULE.md.
         if (task.type === 'nurture') {
@@ -167,6 +181,7 @@
         if (task.type === 'reply') return { files: [CANONICAL, HEALER, 'modules/youtube/interaction.js'] };
         if (task.type === 'healthscan') return { files: [CANONICAL, HEALER, HEALTHSCAN] };
         if (task.type === 'scan_account') return { files: [SCAN_UTILS, 'modules/youtube/discovery.js'], scan: true };
+        if (task.type === 'micro_action') return { files: [HUMAN_MOUSE, 'modules/youtube/micro.js'], frameTopOnly: true };
         // nurture (2.5.0): lõi nuôi dùng chung + adapter YouTube. Xem
         // modules/nurture-core/README.md + modules/youtube-nurture/MODULE.md.
         if (task.type === 'nurture') {
@@ -196,6 +211,12 @@
     if (!pl) return null;
     if (task.type === 'scan_account') return pl.scanHome || pl.home;
     if (task.type === 'story') return pl.home;
+    // micro_action (2.11.16): mở trang chủ nền tảng; TikTok phải vào
+    // /foryou (trang gốc headless render rỗng — cùng lý do scanHome).
+    if (task.type === 'micro_action') {
+      if (p === 'tiktok') return 'https://www.tiktok.com/foryou';
+      return pl.home;
+    }
     // healthscan (2.9.0): mở bề mặt chứa neo mẫu của từng nền tảng —
     // YouTube cần 1 trang watch mẫu để ô comment tồn tại trong DOM.
     if (task.type === 'healthscan') {
@@ -263,6 +284,6 @@
     isVideoPost,
     defaultTimeoutMs,
     INACTIVITY_TIMEOUT_MS: 5 * 60 * 1000,
-    TASK_TYPES: ['post', 'reply', 'affiliate', 'scan_account', 'probe', 'nurture', 'story', 'upload', 'healthscan']
+    TASK_TYPES: ['post', 'reply', 'affiliate', 'scan_account', 'probe', 'nurture', 'story', 'upload', 'healthscan', 'micro_action']
   };
 })();
