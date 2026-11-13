@@ -141,7 +141,7 @@ window.TF = window.TF || {};
     var m = Object.assign({ type: type }, extra || {});
     try {
       if (typeof window.__AVJP_TF_LISTENER === 'function') window.__AVJP_TF_LISTENER(m);
-    } catch (e) {}
+    } catch (e) { console.debug("[Auto vjp][content] bỏ qua lỗi:", e); }
     return tfHandleMessage(m);
   }
 

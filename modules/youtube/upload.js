@@ -63,7 +63,7 @@ window.__avjpYtUploadInjected = true;
     const timeStr = new Date().toLocaleTimeString('vi-VN', { hour12: false });
     logs.push(`[${timeStr}] ${msg}`);
     console.log('[Auto vjp][YT-Upload]', msg);
-    try { chrome.storage.local.set({ lastStatus: msg }); } catch (_) {}
+    try { chrome.storage.local.set({ lastStatus: msg }); } catch (_) { console.debug("[Auto vjp][upload] bỏ qua lỗi:", _); }
     let el = document.getElementById('avjp-yt-upload-status');
     if (!el && document.body) {
       el = document.createElement('div');
@@ -105,7 +105,7 @@ window.__avjpYtUploadInjected = true;
     try {
       const direct = root.querySelector(selector);
       if (direct) return direct;
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][upload] bỏ qua lỗi:", _); }
     let allEls;
     try { allEls = root.querySelectorAll('*'); } catch (_) { return null; }
     for (const el of allEls) {
@@ -120,7 +120,7 @@ window.__avjpYtUploadInjected = true;
     if (!root) return results;
     try {
       root.querySelectorAll(selector).forEach(el => results.push(el));
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][upload] bỏ qua lỗi:", _); }
     let allEls;
     try { allEls = root.querySelectorAll('*'); } catch (_) { return results; }
     for (const el of allEls) {
@@ -138,7 +138,7 @@ window.__avjpYtUploadInjected = true;
       const rect = target.getBoundingClientRect();
       const clientX = rect.left + rect.width / 2;
       const clientY = rect.top + rect.height / 2;
-      try { target.focus?.(); } catch (_) {}
+      try { target.focus?.(); } catch (_) { console.debug("[Auto vjp][upload] bỏ qua lỗi:", _); }
       const pointerOptions = { bubbles: true, cancelable: true, clientX, clientY, pointerId: 1, pointerType: 'mouse', isPrimary: true };
       target.dispatchEvent(new PointerEvent('pointerdown', pointerOptions));
       target.dispatchEvent(new MouseEvent('mousedown', pointerOptions));
@@ -146,7 +146,7 @@ window.__avjpYtUploadInjected = true;
       target.dispatchEvent(new MouseEvent('mouseup', pointerOptions));
       target.click();
     } catch (e) {
-      try { el.click(); } catch (_) {}
+      try { el.click(); } catch (_) { console.debug("[Auto vjp][upload] bỏ qua lỗi:", _); }
     }
   }
 
@@ -213,7 +213,7 @@ window.__avjpYtUploadInjected = true;
     const now = Date.now();
     if (now - lastTouch < 45000) return;
     lastTouch = now;
-    try { chrome.runtime.sendMessage({ action: 'postUploadStarted', postId: taskId }, () => void chrome.runtime.lastError); } catch (_) {}
+    try { chrome.runtime.sendMessage({ action: 'postUploadStarted', postId: taskId }, () => void chrome.runtime.lastError); } catch (_) { console.debug("[Auto vjp][upload] bỏ qua lỗi:", _); }
   }
 
   // ── AI (dùng chung đường họ nuôi qua SW — bản từ story.js) ──
@@ -741,14 +741,14 @@ window.__avjpYtUploadInjected = true;
           const v = document.createElement('video');
           v.preload = 'metadata';
           v.muted = true;
-          const timer = setTimeout(() => { try { URL.revokeObjectURL(objUrl); } catch (_) {} finish(null); }, 15000);
+          const timer = setTimeout(() => { try { URL.revokeObjectURL(objUrl); } catch (_) { console.debug("[Auto vjp][upload] bỏ qua lỗi:", _); } finish(null); }, 15000);
           v.onloadedmetadata = () => {
             clearTimeout(timer);
             const m = { duration: v.duration, width: v.videoWidth, height: v.videoHeight };
-            try { URL.revokeObjectURL(objUrl); } catch (_) {}
+            try { URL.revokeObjectURL(objUrl); } catch (_) { console.debug("[Auto vjp][upload] bỏ qua lỗi:", _); }
             finish(m);
           };
-          v.onerror = () => { clearTimeout(timer); try { URL.revokeObjectURL(objUrl); } catch (_) {} finish(null); };
+          v.onerror = () => { clearTimeout(timer); try { URL.revokeObjectURL(objUrl); } catch (_) { console.debug("[Auto vjp][upload] bỏ qua lỗi:", _); } finish(null); };
           v.src = objUrl;
         } catch (_) { finish(null); }
       });
@@ -768,7 +768,7 @@ window.__avjpYtUploadInjected = true;
     // Song song: thấy dấu hiệu "chưa có kênh" (Studio hiện lời mời tạo
     // kênh) mà không có nút Create -> no_youtube_channel; thấy bề mặt
     // đăng nhập -> session_expired.
-    // BẰNG CHỨNG LIVE (probe 2026-11-05, FORK-CHANGES #88): trong
+    // BẰNG CHỨNG LIVE (probe 2026-11-05): trong
     // Chrome headless công nhân, studio.youtube.com KHÔNG vào thẳng
     // dashboard — nó dừng ở trang chặn "trình duyệt không được hỗ
     // trợ" (title "YouTube Creator Studio", chỉ có link các trình
@@ -974,10 +974,10 @@ window.__avjpYtUploadInjected = true;
     // textContent + sự kiện input. Kiểm chứng bằng nội dung đọc lại.
     async function fillTextbox(box, value, label) {
       if (!box) return false;
-      try { box.focus(); } catch (_) {}
+      try { box.focus(); } catch (_) { console.debug("[Auto vjp][upload] bỏ qua lỗi:", _); }
       doClick(box);
       await sleep(250);
-      try { document.execCommand('selectAll', false, null); } catch (_) {}
+      try { document.execCommand('selectAll', false, null); } catch (_) { console.debug("[Auto vjp][upload] bỏ qua lỗi:", _); }
       let wrote = false;
       try { wrote = document.execCommand('insertText', false, value); } catch (_) { wrote = false; }
       if (!wrote || !normalize(box.textContent).startsWith(normalize(value).slice(0, 15))) {

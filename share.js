@@ -67,7 +67,7 @@
 
   async function ownTabId(){
     if(ownTabIdCache)return ownTabIdCache;
-    try{const response=await chrome.runtime.sendMessage({action:"getSenderTabId"});ownTabIdCache=parseInt(response?.tabId)||0;}catch(_){ }
+    try{const response=await chrome.runtime.sendMessage({action:"getSenderTabId"});ownTabIdCache=parseInt(response?.tabId)||0;}catch(_){ console.debug("[Auto vjp][share] bỏ qua lỗi:", _); }
     return ownTabIdCache;
   }
   async function readRun(runId=currentRunId){
@@ -124,7 +124,7 @@
     // thực tế) — rơi về click thẳng trên element cho an toàn.
     const hit=document.elementFromPoint(x,y);
     if(hit&&(hit===element||element.contains(hit)||hit.contains(element))){
-      try{const response=await chrome.runtime.sendMessage({action:"trustedMouse",kind:"click",x,y});if(response?.ok)return true;}catch{}
+      try{const response=await chrome.runtime.sendMessage({action:"trustedMouse",kind:"click",x,y});if(response?.ok)return true;}catch (e) { console.debug("[Auto vjp][share] bỏ qua lỗi:", e); }
     }
     try{element.click();return true;}catch{return false;}
   }
@@ -305,7 +305,7 @@
 
   function groupRouteIds(group){
     const ids=[];
-    try{const id=new URL(String(group?.url||""),location.href).pathname.match(/^\/groups\/([^/?#]+)/i)?.[1];if(id)ids.push(String(id).toLowerCase());}catch(_){ }
+    try{const id=new URL(String(group?.url||""),location.href).pathname.match(/^\/groups\/([^/?#]+)/i)?.[1];if(id)ids.push(String(id).toLowerCase());}catch(_){ console.debug("[Auto vjp][share] bỏ qua lỗi:", _); }
     const legacy=String(group?.id||"").trim().toLowerCase();if(legacy&&!ids.includes(legacy))ids.push(legacy);return ids;
   }
   function currentGroupMatches(group){
@@ -406,7 +406,7 @@
       try{
         const opener=findComposerOpener();
         if(opener)return opener;
-      }catch(_){ }
+      }catch(_){ console.debug("[Auto vjp][share] bỏ qua lỗi:", _); }
       const notMember=shareGroupNotMemberSignal();
       if(notMember){
         if(!notMemberSince)notMemberSince=Date.now();
@@ -503,7 +503,7 @@
     const deadline=Date.now()+timeout;
     while(Date.now()<deadline){
       if(!await stillActive(runId,index))return null;
-      try{const value=predicate();if(value)return value;}catch(_){ }
+      try{const value=predicate();if(value)return value;}catch(_){ console.debug("[Auto vjp][share] bỏ qua lỗi:", _); }
       if(!await shareSleep(300,runId,index))return null;
     }
     return null;
@@ -607,7 +607,7 @@
   function selectSourceUrlText(editor,sourceUrl){
     if(!editor||!sourceUrl)return false;
     const target=String(sourceUrl),variants=[target];
-    try{const decoded=decodeURIComponent(target);if(decoded!==target)variants.push(decoded);}catch(_){ }
+    try{const decoded=decodeURIComponent(target);if(decoded!==target)variants.push(decoded);}catch(_){ console.debug("[Auto vjp][share] bỏ qua lỗi:", _); }
     const walker=document.createTreeWalker(editor,NodeFilter.SHOW_TEXT),nodes=[];let node;
     while(node=walker.nextNode())nodes.push(node);
     let found=null;
@@ -644,7 +644,7 @@
     if(!selectSourceUrlText(editor,sourceUrl))return false;
     let removed=false;
     if(!await stillActive(runId,index))return false;
-    try{const response=await chrome.runtime.sendMessage({action:"trustedKey",key:"Backspace",code:"Backspace",windowsVirtualKeyCode:8,abortStorageKey:"groupShareActive",abortRunId:runId});removed=!!response?.ok;}catch(_){ }
+    try{const response=await chrome.runtime.sendMessage({action:"trustedKey",key:"Backspace",code:"Backspace",windowsVirtualKeyCode:8,abortStorageKey:"groupShareActive",abortRunId:runId});removed=!!response?.ok;}catch(_){ console.debug("[Auto vjp][share] bỏ qua lỗi:", _); }
     if(!removed){
       if(!await stillActive(runId,index))return false;
       try{removed=!!document.execCommand("delete",false,null);}catch(_){removed=false;}
@@ -657,7 +657,7 @@
     // bằng execCommand trên selection mới, tuyệt đối không bấm Đăng nếu URL còn đó.
     if(selectSourceUrlText(liveEditor,sourceUrl)){
       if(!await stillActive(runId,index))return false;
-      try{document.execCommand("delete",false,null);}catch(_){ }
+      try{document.execCommand("delete",false,null);}catch(_){ console.debug("[Auto vjp][share] bỏ qua lỗi:", _); }
     }
     if(!await shareSleep(450,runId,index))return false;
     // Facebook có thể dựng lại contenteditable lần nữa trong lúc chờ; đọc lại
@@ -714,7 +714,7 @@
         // once from scratch before giving up on this group entirely.
         if(!await stillActive(runId,index))throw new Error(t("sh2.stoppedTyping"));
         const live=findComposerDialog(),box=(live&&findComposerEditor(live))||editor;
-        try{box.focus();document.execCommand("selectAll",false,null);document.execCommand("delete",false,null);}catch(_){ }
+        try{box.focus();document.execCommand("selectAll",false,null);document.execCommand("delete",false,null);}catch(_){ console.debug("[Auto vjp][share] bỏ qua lỗi:", _); }
         if(!await shareSleep(400,runId,index))throw new Error(t("sh2.stoppedTyping"));
       }
     }
@@ -868,7 +868,7 @@
 
   async function handleSource(state,runId){
     const cfg=state.groupShareConfig,expected=cfg.sourceUrl,recent=Date.now()-Number(state.groupShareSourceNavigationAt||0)<30000;
-    let alias=false;try{const url=new URL(expected);alias=url.hostname==="fb.watch"||/\/share\/(?:p|r|v)\/|\/(?:story|permalink|photo)\.php/i.test(url.pathname)||url.searchParams.has("story_fbid")||url.searchParams.has("fbid");}catch(_){ }
+    let alias=false;try{const url=new URL(expected);alias=url.hostname==="fb.watch"||/\/share\/(?:p|r|v)\/|\/(?:story|permalink|photo)\.php/i.test(url.pathname)||url.searchParams.has("story_fbid")||url.searchParams.has("fbid");}catch(_){ console.debug("[Auto vjp][share] bỏ qua lỗi:", _); }
     if(!sourceUrlMatches(location.href,expected)&&!(alias&&recent)){
       if(!await setStatus(runId,t("sh2.renavSource"),{groupShareSourceNavigationAt:Date.now()}))return;
       if(!await stillActive(runId))return;
@@ -1013,7 +1013,7 @@
         // đang điều hướng), vẫn phải ép tắt cờ active bằng mọi giá — nếu
         // không mọi tính năng khác sẽ bị khoá vĩnh viễn bởi cờ groupShareActive.
         console.error("[GroupShare] stopRun cũng lỗi, ép tắt cờ active",stopError);
-        try{await chrome.storage.local.set({groupShareActive:false});}catch{}
+        try{await chrome.storage.local.set({groupShareActive:false});}catch (e) { console.debug("[Auto vjp][share] bỏ qua lỗi:", e); }
       }
     }
     finally{loopActive=false;}

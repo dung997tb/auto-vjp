@@ -181,7 +181,7 @@ async function waitForNewStableResponse(getNewElements, timeout) {
       // Tự động cuộn xuống cuối câu trả lời để hiển thị cho người dùng và cập nhật DOM
       try {
         el.scrollIntoView({ behavior: 'auto', block: 'end' });
-      } catch (e) {}
+      } catch (e) { console.debug("[Auto vjp][ai-bridge] bỏ qua lỗi:", e); }
     }
 
     // Kiểm tra các tín hiệu đang sinh nội dung trong DOM để tránh lấy nội dung quá sớm

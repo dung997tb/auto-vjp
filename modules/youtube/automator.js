@@ -14,7 +14,7 @@
     // Lưu vào extension log (bảng Đang xử lý)
     try {
       chrome.storage.local.set({ lastStatus: text });
-    } catch(e) {}
+    } catch(e) { console.debug("[Auto vjp][automator] bỏ qua lỗi:", e); }
     
     // Ghi ra màn hình
     const timeStr = new Date().toLocaleTimeString('vi-VN', {hour12:false});
@@ -55,7 +55,7 @@
     try {
       const direct = root.querySelector(selector);
       if (direct) return direct;
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][automator] bỏ qua lỗi:", _); }
 
     const allEls = root.querySelectorAll('*');
     for (const el of allEls) {
@@ -72,7 +72,7 @@
     try {
       const direct = root.querySelectorAll(selector);
       direct.forEach(el => results.push(el));
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][automator] bỏ qua lỗi:", _); }
 
     const allEls = root.querySelectorAll('*');
     for (const el of allEls) {
@@ -325,7 +325,7 @@
     try {
       const cached = sessionStorage.getItem(YT_HANDLE_CACHE_KEY);
       if (cached) return cached;
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][automator] bỏ qua lỗi:", _); }
     let handle = ytHandleInDom();
     if (!handle) {
       // Mở menu tài khoản bằng nút avatar rồi đọc #channel-handle trong
@@ -359,7 +359,7 @@
       }
     }
     if (handle) {
-      try { sessionStorage.setItem(YT_HANDLE_CACHE_KEY, handle); } catch (_) {}
+      try { sessionStorage.setItem(YT_HANDLE_CACHE_KEY, handle); } catch (_) { console.debug("[Auto vjp][automator] bỏ qua lỗi:", _); }
     }
     return handle;
   }
@@ -401,7 +401,7 @@
         try {
           navCount = Number(sessionStorage.getItem(ytNavKey(task.id)) || 0);
           sessionStorage.setItem(ytNavKey(task.id), String(navCount + 1));
-        } catch (_) {}
+        } catch (_) { console.debug("[Auto vjp][automator] bỏ qua lỗi:", _); }
         if (navCount >= 4) throw new Error('community_composer_not_found: đã điều hướng về tab Community nhiều lần mà vẫn chưa tới được trang soạn bài.');
         log('Điều hướng tới tab Community của kênh @' + handle);
         location.href = `https://www.youtube.com/@${handle}/community`;

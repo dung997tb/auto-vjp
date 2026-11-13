@@ -24,7 +24,7 @@
     try {
       const st = getComputedStyle(el);
       if (st.display === "none" || st.visibility === "hidden" || st.visibility === "collapse") return false;
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0;
   };
@@ -39,7 +39,7 @@
   }
 
   async function setStatus(text, extra = {}) {
-    try { await chrome.storage.local.set({ [STATUS_KEY]: String(text || ""), ...extra }); } catch (_) {}
+    try { await chrome.storage.local.set({ [STATUS_KEY]: String(text || ""), ...extra }); } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
   }
 
   function sendMsg(msg) {
@@ -52,8 +52,8 @@
 
   async function trustedClick(el) {
     if (!el || !visible(el)) return false;
-    try { el.scrollIntoView({ block: "nearest" }); } catch (_) {}
-    try { el.scrollIntoView({ block: "center" }); } catch (_) {}
+    try { el.scrollIntoView({ block: "nearest" }); } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
+    try { el.scrollIntoView({ block: "center" }); } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
     await sleep(300);
     if (!visible(el)) return false;
     const r = el.getBoundingClientRect();
@@ -107,7 +107,7 @@
         const blob = await (await fetch(res.dataUrl)).blob();
         const ext = (res.mime || "").includes("video") ? "mp4" : "jpg";
         return new File([blob], `story-${Date.now()}.${ext}`, { type: res.mime || blob.type || "image/jpeg", lastModified: Date.now() });
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
     }
     // Fallback thử fetch trực tiếp phía content script
     try {
@@ -116,7 +116,7 @@
         const blob2 = await res2.blob();
         return new File([blob2], defaultName, { type: blob2.type || "image/jpeg", lastModified: Date.now() });
       }
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
     return null;
   }
 
@@ -241,7 +241,7 @@
     const closer = [...document.querySelectorAll('[role="button"], button')].filter(visible)
       .find(el => /^(?:đóng|close)$/i.test(clean(el.getAttribute("aria-label") || "")) || /^(?:đóng|close)$/i.test(labelOf(el)));
     if (closer) { await trustedClick(closer); await sleep(500); return; }
-    try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true })); } catch (_) {}
+    try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true })); } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
     await sleep(400);
   }
 
@@ -339,7 +339,7 @@
       // Bấm ra ngoài hoặc phím Escape để hoàn tất nhập chữ
       try {
         document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }));
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
       return true;
     } catch (_) {
       await setStatus("Lỗi khi nhập chữ story — tiếp tục đăng story trơn");
@@ -582,7 +582,7 @@
       const s = await chrome.storage.local.get([BASELINE_KEY, "personalActorName"]);
       rec = s[BASELINE_KEY];
       actorName = clean(s.personalActorName || "");
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
     const item = isStoriesListPage()
       ? readOwnStoryListItem(actorName)
       : readOwnStoryTrayItem(actorName);
@@ -631,7 +631,7 @@
         rec.stale = true;
       }
       await chrome.storage.local.set({ [BASELINE_KEY]: rec });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
   }
 
   // PROOF: so mục story với BASELINE chụp trước khi đăng trên
@@ -766,7 +766,7 @@
           return { ok: false, code: "navigated" };
         }
       }
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
 
     if (!(await live(id))) return { ok: false, code: "stopped" };
 
@@ -851,7 +851,7 @@
         if (aiRes?.ok && aiRes.text) {
           storyText = clean(aiRes.text).slice(0, 80);
         }
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
     }
     if (storyText) {
       await setStatus(`[${index + 1}/${total}] Đang chèn chữ vào story: "${storyText.slice(0, 30)}..."`);
@@ -867,7 +867,7 @@
     if (cfg.crossIg) {
       await setStatus(`[${index + 1}/${total}] Đang tìm tuỳ chọn đăng chéo sang Instagram...`);
       crossIg = await tryEnableCrossIg(id);
-      try { await chrome.storage.local.set({ [CROSS_KEY]: crossIg }); } catch (_) {}
+      try { await chrome.storage.local.set({ [CROSS_KEY]: crossIg }); } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
       if (crossIg === "enabled") {
         await setStatus(`[${index + 1}/${total}] Đã bật đăng chéo sang Instagram (cross_ig: enabled)`);
       } else if (crossIg === "not_available") {
@@ -891,12 +891,12 @@
     // Ghi phase sang proof trước khi trang có thể chuyển đổi
     try {
       await chrome.storage.local.set({ [PHASE_KEY]: "proving", fbStoryProvingUrl: mediaUrl, fbStoryProvingAt: Date.now() });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
 
     // 10. PROOF thật: khay story thay đổi so với baseline chụp trước
     // khi đăng (hoặc đường viewer cũ khớp) trong 60s.
     const proofRes = await proofStoryPublished(id, 60000);
-    try { await chrome.storage.local.remove([PHASE_KEY]); } catch (_) {}
+    try { await chrome.storage.local.remove([PHASE_KEY]); } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
     if (!proofRes.ok) {
       return { ok: false, code: proofRes.error || "fb_story_proof_failed", message: "Không thấy story trong khay sau 60s (fb_story_proof_failed)" };
     }
@@ -929,7 +929,7 @@
       try {
         const ps = await chrome.storage.local.get([PHASE_KEY, "fbStoryProvingUrl"]);
         if (ps[PHASE_KEY] === "proving") provingUrl = String(ps.fbStoryProvingUrl || "");
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
 
       if (!provingUrl) {
         // Chụp BASELINE story ngay đầu phiên (trước story đầu
@@ -956,7 +956,7 @@
           // tiếp proof, TUYỆT ĐỐI không đăng lại.
           provingUrl = "";
           const proofRes = await proofStoryPublished(id, 60000);
-          try { await chrome.storage.local.remove([PHASE_KEY]); } catch (_) {}
+          try { await chrome.storage.local.remove([PHASE_KEY]); } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
           if (proofRes.ok) {
             await refreshBaselineAfterProof(id, proofRes.observed || null);
             res = { ok: true, at: proofRes.at || Date.now(), crossIg: "" };
@@ -1005,7 +1005,7 @@
       active = false;
       try {
         await chrome.storage.local.set({ [FLAG]: false, [STATUS_KEY]: `Lỗi Story: ${String(e?.message || e || "").slice(0, 150)}` });
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
     } finally {
       active = false;
     }
@@ -1083,7 +1083,7 @@
           catch (_) { res(null); }
         });
         if (r?.tabId && s[OWNER_KEY] && r.tabId !== s[OWNER_KEY]) ownerOk = false;
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
       if (!ownerOk) return;
 
       config = { ...s[CONFIG_KEY] };
@@ -1091,7 +1091,7 @@
       active = true;
       await sleep(1500);
       if (active) fbStoryLoop(runId);
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][fbStory] bỏ qua lỗi:", _); }
   })();
 
   console.log("[fbStory] fbStory.js loaded");

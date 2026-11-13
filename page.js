@@ -46,7 +46,7 @@
       log.push({t:Date.now(),feature:"tag",msg:String(msg||"").slice(0,300)});
       if(log.length>500)log.splice(0,log.length-500);
       await chrome.storage.local.set({activityLog:log});
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
   }
   const clean = value => String(value || "").replace(/[\u200B-\u200D\u2060\uFEFF]/g, "").replace(/\s+/g, " ").trim();
   // Lột placeholder {tagName} khỏi prompt thường khi lượt này KHÔNG tag.
@@ -471,12 +471,12 @@
       if (!dialog) return;
       const close = actorMenuCandidates(dialog).find(item => /^(?:đóng|close)$/i.test(labelOf(item)));
       if (close) {
-        try { close.click(); } catch (_) {}
+        try { close.click(); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
         await sleep(350);
         if (!visible(dialog)) return;
         continue;
       }
-      try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) {}
+      try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       await sleep(200);
       if (!visible(dialog)) return;
       // Click vào vùng trống ngoài dialog (góc trên bên trái, xa menu)
@@ -489,7 +489,7 @@
         } else {
           document.body.click();
         }
-      } catch (_) { try { document.body.click(); } catch (_) {} }
+      } catch (_) { try { document.body.click(); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); } }
       await sleep(300);
     }
   }
@@ -775,7 +775,7 @@
     let aimed = false;
     for (let attempt = 0; attempt < 3 && !aimed; attempt++) {
       try { element.scrollIntoView({ behavior: "instant", block: "center", inline: "center" }); }
-      catch (_) { try { element.scrollIntoView({ block: "center", inline: "center" }); } catch (_) {} }
+      catch (_) { try { element.scrollIntoView({ block: "center", inline: "center" }); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); } }
       await sleep(attempt === 0 ? 320 : 500);
       if (!(await live(runId))) return false;
       if (!element.isConnected || !visible(element)) return false;
@@ -783,7 +783,7 @@
       // Nếu element bị che bởi header cố định (y quá nhỏ), cuộn thêm xuống
       const NAV_H = 70;
       if (rect.top < NAV_H) {
-        try { window.scrollBy({ top: -(rect.top - NAV_H - 20), behavior: "instant" }); } catch (_) {}
+        try { window.scrollBy({ top: -(rect.top - NAV_H - 20), behavior: "instant" }); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
         await sleep(120);
       }
       const r2 = element.getBoundingClientRect();
@@ -810,7 +810,7 @@
     try {
       const trusted = await chrome.runtime.sendMessage({ action: "trustedMouse", kind: "click", x, y });
       if (trusted?.ok) return true;
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
     try { element.click(); return true; } catch (_) { return false; }
   }
 
@@ -852,12 +852,12 @@
       const overlays = [...document.querySelectorAll('[role="dialog"],[aria-modal="true"],[data-pagelet="Notifications"]')]
         .filter(d => visible(d) && !overlayHasRealPost(d) && !questionDialogLabel.test(clean(d.innerText || d.getAttribute("aria-label") || "")));
       if (!overlays.length) return;
-      try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) {}
+      try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       await sleep(180);
       const stillOpen = [...document.querySelectorAll('[role="dialog"],[aria-modal="true"],[data-pagelet="Notifications"]')]
         .filter(d => visible(d) && !overlayHasRealPost(d) && !questionDialogLabel.test(clean(d.innerText || d.getAttribute("aria-label") || "")));
       if (!stillOpen.length) return;
-      try { document.body.click(); } catch (_) {}
+      try { document.body.click(); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       await sleep(250);
     }
   }
@@ -877,7 +877,7 @@
       try {
         if (close) close.click();
         else document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true }));
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       await sleep(500);
     }
   }
@@ -893,7 +893,7 @@
       if (!strays.length) return;
       for (const stray of strays) {
         const close = [...stray.querySelectorAll('button,[role="button"],[aria-label]')].filter(visible).find(b => /^(?:đóng|close)$/i.test(labelOf(b)));
-        if (close) { try { close.click(); } catch (_) {} }
+        if (close) { try { close.click(); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); } }
       }
       await sleep(250);
     }
@@ -976,7 +976,7 @@
       // Thử CDP trustedMouse trước, fallback .click() nếu không aimed được
       const ok = await controlledClick(label, runId);
       if (ok) return true;
-      try { label.click(); return true; } catch (_) {}
+      try { label.click(); return true; } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       try { box.click(); return true; } catch (_) { return false; }
     }
     // div[role="checkbox"]: thử controlledClick trước, fallback sang dispatchEvent
@@ -1133,7 +1133,7 @@
             const actual = clean(input.value || input.innerText || input.textContent);
             typedOk = !!typed?.ok && actual.length >= 2;
             if (!typedOk) await sleep(400);
-          } catch (_) {}
+          } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
         }
         if (typedOk) filled++;
       }
@@ -1226,11 +1226,11 @@
   async function closeActorPicker() {
     for (let attempt = 0; attempt < 6; attempt++) {
       if (!actorPickerDialog()) return true;
-      try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) {}
+      try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       await sleep(250);
       if (!actorPickerDialog()) return true;
       const opener = actorPickerOpener();
-      if (opener) { try { opener.click(); } catch (_) {} }
+      if (opener) { try { opener.click(); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); } }
       await sleep(300);
     }
     return !actorPickerDialog();
@@ -1341,7 +1341,7 @@
       const rows = Array.isArray(stored.pageGroupJoinHistory) ? stored.pageGroupJoinHistory : [];
       rows.push({ pageKey: pageKey(currentConfig?.page), groupKey: item?.key || "", groupName: item?.name || "", keyword: currentConfig?.keyword || "", status: "skipped:" + code, reason: String(status || "").slice(0, 160), at: Date.now() });
       await chrome.storage.local.set({ pageGroupJoinHistory: rows.slice(-500) });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
     return false;
   }
 
@@ -1358,7 +1358,7 @@
         pageGroupJoinKeywordIndex: keywordIndex,
         pageGroupJoinKeywordDone: [...keywordDone]
       });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
   }
   // Chuyển sang từ khóa kế tiếp trong cùng 1 lượt chạy: đồng bộ route mới,
   // lưu config để resume/popup bám theo, rồi điều hướng (reload sẽ resume).
@@ -1444,13 +1444,13 @@
     // Comment nhóm, Đăng bán): mỗi Page một danh sách riêng, cộng dồn.
     try {
       await savePageJoinedGroup(currentConfig.page, { key: item.key, url: item.url || groupUrlFromKey(item.key), name: item.name || "", keyword: currentConfig.keyword||"" }, "join");
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
     // Đếm tổng cộng dồn qua các phiên (đếm phiên reset mỗi Start nên không
     // phản ánh đúng số nhóm Page đã tham gia — đã được báo).
     try {
       const life = await chrome.storage.local.get("pageGroupJoinLifetimeJoined");
       await chrome.storage.local.set({ pageGroupJoinLifetimeJoined: (Number(life.pageGroupJoinLifetimeJoined) || 0) + 1 });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
     await writeState({ status: t("pg.confirmed", { name: item.name }), joined, skipped });
     return true;
   }
@@ -1589,14 +1589,14 @@
 
   async function pageFeatureClick(element, flag, runId) {
     if (!element || !visible(element) || !(await pageFeatureLive(flag, runId))) return false;
-    try { element.scrollIntoView({ behavior: "instant", block: "center" }); } catch (_) { try { element.scrollIntoView({ block: "center" }); } catch (_) {} }
+    try { element.scrollIntoView({ behavior: "instant", block: "center" }); } catch (_) { try { element.scrollIntoView({ block: "center" }); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); } }
     await sleep(180);
     if (!(await pageFeatureLive(flag, runId))) return false;
     const rect = element.getBoundingClientRect();
     try {
       const trusted = await chrome.runtime.sendMessage({ action: "trustedMouse", kind: "click", x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) });
       if (trusted?.ok) return true;
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
     try { element.click(); return true; } catch (_) { return false; }
   }
 
@@ -1699,9 +1699,9 @@
         const lbl = labelOf(b);
         return /hiển thị.*phông nền|show.*background|^aa$/i.test(lbl) && !/^ẩn/i.test(lbl) && b.closest('[role="dialog"],[aria-modal="true"]');
       });
-    const diagShr = (extra = {}) => { try { window.__pageBgDiag = Object.assign({ at: Date.now() }, extra); } catch (_) {} };
+    const diagShr = (extra = {}) => { try { window.__pageBgDiag = Object.assign({ at: Date.now() }, extra); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); } };
     if (showBgBtn) {
-      try { showBgBtn.click(); } catch (_) {}
+      try { showBgBtn.click(); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       await sleep(900);
     } else {
       diagShr({ stage: "no-palette-btn" });
@@ -1747,7 +1747,7 @@
           if (r.width < 80 || r.height < 50) continue;
           const bc = getComputedStyle(el).backgroundColor;
           if (knownRgb.has(bc)) found.add(bc);
-        } catch (_) {}
+        } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       }
       // Pass 2: màu lạ trong dialog — chỉ phần tử đủ lớn (>60x60) để bỏ qua
       // các nút palette nhỏ (~36px) vốn luôn hiện sẵn trước khi click nền màu.
@@ -1759,7 +1759,7 @@
           if (!bc || defaultBg.has(bc)) continue;
           found.add(bc); // chấp nhận bất kỳ màu mới nào — so sánh before/after
           debugAll.push(bc);
-        } catch (_) {}
+        } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       }
       // Pass 3: inline style + ancestor của editor
       const editor = document.querySelector('[role="dialog"] [contenteditable],[aria-modal="true"] [contenteditable]');
@@ -1771,10 +1771,10 @@
             if (bc && !defaultBg.has(bc)) found.add(bc);
             const inlineBc = cur.style?.backgroundColor;
             if (inlineBc && !defaultBg.has(inlineBc)) found.add(inlineBc);
-          } catch (_) {}
+          } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
         }
       }
-      try { window.__snapDebug = [...new Set(debugAll)].slice(0, 15); } catch (_) {}
+      try { window.__snapDebug = [...new Set(debugAll)].slice(0, 15); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       return found;
     };
     const btnChecked = () => {
@@ -1784,7 +1784,7 @@
     const bgBefore = snapBgColors();
     await dismissPageStraysOnly(btn);
     if (!(await pageFeatureClick(btn, flag, runId))) {
-      try { btn.click(); } catch (_) {}
+      try { btn.click(); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
     }
     await sleep(1200);
     const bgAfter = snapBgColors();
@@ -1826,13 +1826,13 @@
     // Focus chắc chắn bằng trusted click giữa editor: DOM click/focus thường
     // không đủ để Lexical nhận phím thật, khiến Ctrl+A+Backspace rơi vào body
     // (đã tái hiện: bản nháp còn nguyên sau khi "xóa", phiên sau kẹt draftBusy).
-    try { await pageFeatureClick(editor, flag, runId); } catch (_) {}
-    try { editor.focus(); editor.click(); } catch (_) {}
+    try { await pageFeatureClick(editor, flag, runId); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
+    try { editor.focus(); editor.click(); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
     // Approach 1: trustedKey Ctrl+A + Backspace (lặp 2 lần cho đoạn rỗng còn sót của Lexical)
     const mod = /Mac|iPhone|iPad/i.test(navigator.platform || "") ? 4 : 2;
     for (let round = 0; round < 2; round++) {
-      try { await chrome.runtime.sendMessage({ action: "trustedKey", key: "a", code: "KeyA", windowsVirtualKeyCode: 65, modifiers: mod, abortStorageKey: flag, abortRunId: runId }); } catch (_) {}
-      try { await chrome.runtime.sendMessage({ action: "trustedKey", key: "Backspace", code: "Backspace", windowsVirtualKeyCode: 8, abortStorageKey: flag, abortRunId: runId }); } catch (_) {}
+      try { await chrome.runtime.sendMessage({ action: "trustedKey", key: "a", code: "KeyA", windowsVirtualKeyCode: 65, modifiers: mod, abortStorageKey: flag, abortRunId: runId }); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
+      try { await chrome.runtime.sendMessage({ action: "trustedKey", key: "Backspace", code: "Backspace", windowsVirtualKeyCode: 8, abortStorageKey: flag, abortRunId: runId }); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       await sleep(250);
       if (!clean(editor.innerText || editor.textContent || editor.value)) return true;
       if (!(await pageFeatureLive(flag, runId))) return false;
@@ -1847,7 +1847,7 @@
       sel.addRange(range);
       document.execCommand("delete");
       editor.dispatchEvent(new InputEvent("input", { bubbles: true, cancelable: true }));
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
     await sleep(200);
     if (!clean(editor.innerText || editor.textContent || editor.value)) return true;
     // Approach 3: Close and reopen the dialog (FB sometimes restores draft on open)
@@ -1855,7 +1855,7 @@
       const closeBtn = [...document.querySelectorAll('[role="dialog"] [aria-label],[aria-modal="true"] [aria-label]')]
         .find(b => /đóng|close/i.test(labelOf(b)));
       if (closeBtn) { closeBtn.click(); await sleep(800); }
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
     return false;
   }
   function pageGroupPostVisible(content) {
@@ -1889,7 +1889,7 @@
     const liveBefore = pageGroupPostDialog(), editorBefore = liveBefore && pageGroupPostEditor(liveBefore);
     const actualBefore = clean(editorBefore?.innerText || editorBefore?.textContent || editorBefore?.value || "");
     if (actualBefore !== expectedContent) {
-      try { await chrome.storage.local.set({ pageGroupPostLastDiag: { at: Date.now(), group: groupName, phase: "content-mismatch-before-submit", expectedLen: expectedContent.length, actualLen: actualBefore.length } }); } catch (_) {}
+      try { await chrome.storage.local.set({ pageGroupPostLastDiag: { at: Date.now(), group: groupName, phase: "content-mismatch-before-submit", expectedLen: expectedContent.length, actualLen: actualBefore.length } }); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       return false;
     }
     await chrome.storage.local.set({ pageGroupPostStage: "submit-armed", pageGroupPostStatus: t("pgp.submitting", { name: groupName }) });
@@ -1908,7 +1908,7 @@
       await sleep(500);
     }
     if (!button) {
-      try { await chrome.storage.local.set({ pageGroupPostLastDiag: { at: Date.now(), group: groupName, phase: "button-gone", dialogOpen: !!pageGroupPostDialog() } }); } catch (_) {}
+      try { await chrome.storage.local.set({ pageGroupPostLastDiag: { at: Date.now(), group: groupName, phase: "button-gone", dialogOpen: !!pageGroupPostDialog() } }); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       return false;
     }
     // Re-find nút Đăng ngay trước cú bấm: dialog React của Facebook re-render
@@ -1943,7 +1943,7 @@
     const hadPending = pageGroupPendingSignal();
     let pendingProof = false;
     if (!(await pageFeatureClick(freshBtn, flag, runId))) {
-      try { await chrome.storage.local.set({ pageGroupPostLastDiag: { at: Date.now(), group: groupName, phase: "click-failed", click: clickDetail, dialogOpen: !!pageGroupPostDialog() } }); } catch (_) {}
+      try { await chrome.storage.local.set({ pageGroupPostLastDiag: { at: Date.now(), group: groupName, phase: "click-failed", click: clickDetail, dialogOpen: !!pageGroupPostDialog() } }); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       return false;
     }
     await chrome.storage.local.set({ pageGroupPostStage: "submit-dispatched", pageGroupPostSubmitAt: Date.now() });
@@ -1968,7 +1968,7 @@
       const statusText = clean([...document.querySelectorAll('[role="status"],[role="alert"]')].filter(visible).map(labelOf).join(" "));
       const ed = dialogEl?.querySelector?.('[contenteditable="true"]');
       await chrome.storage.local.set({ pageGroupPostLastDiag: { at: Date.now(), group: groupName, click: clickDetail, alerts: String(statusText || "").slice(0, 300), editorLen: ed ? (ed.innerText || "").length : -1, dialogOpen: !!(dialogEl && document.contains(dialogEl) && visible(dialogEl)) } });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
     return false;
   }
   function pagePostSkipCount() {
@@ -1982,9 +1982,9 @@
       const dialog = pageGroupPostDialog();
       if (!dialog) return true;
       const close = [...dialog.querySelectorAll('button,[role="button"]')].filter(visible).find(button => /^(?:đóng|close)$/i.test(labelOf(button)));
-      if (close) { try { close.click(); } catch (_) {} await sleep(400); }
+      if (close) { try { close.click(); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); } await sleep(400); }
       const discard = [...document.querySelectorAll('button,[role="button"]')].filter(visible).find(button => /^(?:bỏ|bỏ bài viết|xóa(?: bài viết)?|hủy(?: bỏ)?|discard(?: post)?|delete(?: post)?)$/i.test(labelOf(button)));
-      if (discard) { try { discard.click(); } catch (_) {} await sleep(400); }
+      if (discard) { try { discard.click(); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); } await sleep(400); }
       if (!pageGroupPostDialog()) return true;
       await sleep(300);
     }
@@ -2089,8 +2089,8 @@
       if (!bgOk && bgCfg.fallback === "skip") {
         await closePageGroupComposer();
         let bgWhy = null;
-        try { bgWhy = window.__pageBgDiag || null; window.__pageBgDiag = null; } catch (_) {}
-        try { await chrome.storage.local.set({ pageGroupPostLastDiag: { at: Date.now(), group: groupName, phase: "bg-select-fail", bg: bgWhy } }); } catch (_) {}
+        try { bgWhy = window.__pageBgDiag || null; window.__pageBgDiag = null; } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
+        try { await chrome.storage.local.set({ pageGroupPostLastDiag: { at: Date.now(), group: groupName, phase: "bg-select-fail", bg: bgWhy } }); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
         await chrome.storage.local.set({ pageGroupPostSkipped: pagePostSkipCount(), pageGroupPostStatus: t("pgp.bgFailed", { name: groupName }) });
         return false;
       }
@@ -2101,7 +2101,7 @@
           const proof = window.__pageBgDiag || {};
           await chrome.storage.local.set({ pageGroupPostLastBackground: { at: Date.now(), group: groupName, ...proof } });
           window.__pageBgDiag = null;
-        } catch (_) {}
+        } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       }
       // Sau khi chọn nền, editor element có thể thay đổi → lấy lại
       const freshEditor = pageGroupPostEditor(composer.dialog);
@@ -2172,8 +2172,8 @@
       // Focus chắc chắn vào đúng editor và xác minh activeElement trước khi gõ
       let focused = false, activeDesc = "";
       for (let f = 0; f < 3 && !focused; f++) {
-        try { await pageFeatureClick(composer.editor, PAGE_POST_FLAG, runId); } catch (_) {}
-        try { composer.editor.focus(); } catch (_) {}
+        try { await pageFeatureClick(composer.editor, PAGE_POST_FLAG, runId); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
+        try { composer.editor.focus(); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
         await sleep(200);
         try {
           const ae = document.activeElement;
@@ -2185,7 +2185,7 @@
       round.editorAlive = !!(composer.editor?.isConnected);
       if (!focused) {
         typeDiag.push(round);
-        try { await chrome.storage.local.set({ pageGroupPostLastDiag: { at: Date.now(), group: groupName, phase: "type-focus-fail", rounds: [...typeDiag] } }); } catch (_) {}
+        try { await chrome.storage.local.set({ pageGroupPostLastDiag: { at: Date.now(), group: groupName, phase: "type-focus-fail", rounds: [...typeDiag] } }); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
         await sleep(600); continue;
       }
       // Gõ nguyên tử trong MỘT evaluate đồng bộ (focus → selectAll →
@@ -2241,12 +2241,12 @@
       typedOk = !!typed?.ok && gotText === wantText;
       round.typedOk = typedOk;
       typeDiag.push(round);
-      try { await chrome.storage.local.set({ pageGroupPostLastDiag: { at: Date.now(), group: groupName, phase: "type-round", rounds: [...typeDiag] } }); } catch (_) {}
+      try { await chrome.storage.local.set({ pageGroupPostLastDiag: { at: Date.now(), group: groupName, phase: "type-round", rounds: [...typeDiag] } }); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       if (!typedOk) await sleep(600);
     }
     if (misplaced) {
       await closePageGroupComposer();
-      try { await chrome.storage.local.set({ pageGroupPostLastDiag: { at: Date.now(), group: groupName, phase: "typed-misplaced", rounds: typeDiag } }); } catch (_) {}
+      try { await chrome.storage.local.set({ pageGroupPostLastDiag: { at: Date.now(), group: groupName, phase: "typed-misplaced", rounds: typeDiag } }); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       await chrome.storage.local.set({ pageGroupPostSkipped: pagePostSkipCount(), pageGroupPostStatus: t("pgp.typeFailed", { name: groupName }) });
       return false;
     }
@@ -2264,7 +2264,7 @@
       const liveLen = [...clean(liveEd?.innerText || liveEd?.textContent || liveEd?.value || "")].length;
       if (liveLen > (bgCfgAfter.maxChars || 130)) {
         await closePageGroupComposer();
-        try { await chrome.storage.local.set({ pageGroupPostLastDiag: { at: Date.now(), group: groupName, phase: "bg-too-long", editorLen: liveLen, max: bgCfgAfter.maxChars || 130 } }); } catch (_) {}
+        try { await chrome.storage.local.set({ pageGroupPostLastDiag: { at: Date.now(), group: groupName, phase: "bg-too-long", editorLen: liveLen, max: bgCfgAfter.maxChars || 130 } }); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
         await chrome.storage.local.set({ pageGroupPostSkipped: pagePostSkipCount(), pageGroupPostStatus: t("pgp.bgFailed", { name: groupName }) });
         return false;
       }
@@ -2318,7 +2318,7 @@
             await chrome.storage.local.set({ pageGroupPostStage: "" });
           }
         }
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       for (let index = startIndex; index < target; index++) {
         if (!(await pageFeatureLive(PAGE_POST_FLAG, runId))) return;
         // chrome.storage.onChanged có thể null hoá pagePostConfig ngay giữa 2
@@ -2444,7 +2444,7 @@
       if (!(await pageNewsLive(runId))) return null;
       const dialog = pageGroupPostDialog() || composer?.dialog, editor = dialog && pageGroupPostEditor(dialog);
       if (!editor) { await sleep(700); continue; }
-      try { await pageFeatureClick(editor, PAGE_NEWS_FLAG, runId); editor.focus(); } catch (_) {}
+      try { await pageFeatureClick(editor, PAGE_NEWS_FLAG, runId); editor.focus(); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       const typed = await chrome.runtime.sendMessage({ action: "trustedInput", text: content, pressEnter: false, typingMinDelay: tc.minDelay ?? 18, typingMaxDelay: tc.maxDelay ?? 35, abortStorageKey: PAGE_NEWS_FLAG, abortRunId: runId, abortRunIdKey: "pageNewsWallActiveRunId" }).catch(() => null);
       await sleep(700);
       const freshDialog = pageGroupPostDialog() || dialog, freshEditor = freshDialog && pageGroupPostEditor(freshDialog);
@@ -2582,7 +2582,7 @@
       if (!input && scope !== composerRoot) input = pageSalesFileInput(composerRoot);
     }
     if (!input) throw new Error("Facebook chưa có ô tải ảnh/video");
-    try { input.multiple = true; } catch (_) {}
+    try { input.multiple = true; } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
     const transfer = new DataTransfer();
     picked.forEach(file => transfer.items.add(file));
     input.files = transfer.files;
@@ -2617,8 +2617,8 @@
       }
       let focused = false;
       for (let f = 0; f < 3 && !focused; f++) {
-        try { await pageFeatureClick(composer.editor, PAGE_SALES_FLAG, runId); } catch (_) {}
-        try { composer.editor.focus(); } catch (_) {}
+        try { await pageFeatureClick(composer.editor, PAGE_SALES_FLAG, runId); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
+        try { composer.editor.focus(); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
         await sleep(200);
         try { focused = !!(composer.editor.contains?.(document.activeElement) || composer.editor === document.activeElement); } catch (_) { focused = false; }
       }
@@ -2725,7 +2725,7 @@
             try {
               const life = await chrome.storage.local.get("pageSalesPostLifetimeDone");
               await chrome.storage.local.set({ pageSalesPostLifetimeDone: (Number(life.pageSalesPostLifetimeDone) || 0) + 1 });
-            } catch (_) {}
+            } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
           }
           if (pIdx < products.length - 1 && await pageSalesLive(runId)) await sleep(3000);
         }
@@ -2917,8 +2917,8 @@
     const wantComment = clean(text), wantPrefix = wantComment.slice(0, 35);
     let focused = false;
     for (let f = 0; f < 3 && !focused; f++) {
-      try { await pageFeatureClick(box, PAGE_GROUP_COMMENT_FLAG, runId); } catch (_) {}
-      try { box.focus(); box.click(); } catch (_) {}
+      try { await pageFeatureClick(box, PAGE_GROUP_COMMENT_FLAG, runId); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
+      try { box.focus(); box.click(); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       await sleep(200);
       try { focused = !!(box.contains?.(document.activeElement) || box === document.activeElement); } catch (_) { focused = false; }
     }
@@ -2928,7 +2928,7 @@
       const sel = window.getSelection(), range = document.createRange();
       range.selectNodeContents(box); sel.removeAllRanges(); sel.addRange(range);
       if (document.execCommand("selectAll", false, null)) document.execCommand("delete");
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
     await sleep(200);
     const tc = pageGroupCommentConfig?.typingConfig || {};
     const doType = () => chrome.runtime.sendMessage({ action: "trustedInput", text, pressEnter: false, typingMinDelay: tc.minDelay ?? 20, typingMaxDelay: tc.maxDelay ?? 45, abortStorageKey: PAGE_GROUP_COMMENT_FLAG, abortRunId: runId, abortRunIdKey: "pageGroupCommentRunId" }).catch(() => null);
@@ -2936,7 +2936,7 @@
     let typed = await doType();
     let gotComment = readBox();
     if ((!typed?.ok || !gotComment.includes(wantPrefix) || gotComment.length < wantComment.length * 0.6) && await pageFeatureLive(PAGE_GROUP_COMMENT_FLAG, runId)) {
-      try { box.focus(); const sel = window.getSelection(), range = document.createRange(); range.selectNodeContents(box); sel.removeAllRanges(); sel.addRange(range); if (document.execCommand("selectAll", false, null)) document.execCommand("delete"); } catch (_) {}
+      try { box.focus(); const sel = window.getSelection(), range = document.createRange(); range.selectNodeContents(box); sel.removeAllRanges(); sel.addRange(range); if (document.execCommand("selectAll", false, null)) document.execCommand("delete"); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       await sleep(300);
       typed = await doType();
       gotComment = readBox();
@@ -2959,7 +2959,7 @@
       doSend: (btn) => pageFeatureClick(btn, PAGE_GROUP_COMMENT_FLAG, runId),
       proofExists: (root, pr) => pageCommentProof(root, text),
       proofRoots: () => [composer.scope, postScope, ...(pageLooksLikePostUrl(location.href) ? [document] : [])],
-      scrollIntoView: () => { try { (composer.scope?.isConnected ? composer.scope : postScope)?.scrollIntoView?.({ behavior: "smooth", block: "center" }); } catch (_) {} },
+      scrollIntoView: () => { try { (composer.scope?.isConnected ? composer.scope : postScope)?.scrollIntoView?.({ behavior: "smooth", block: "center" }); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); } },
       onCounted: async () => {
         await closePageCommentView(composer.scope);
         if (postScope?.isConnected) postScope.dataset.pgcDone = "1";
@@ -3036,7 +3036,7 @@
       const slim = { ...cfg };
       if (slim.aiConfig) slim.aiConfig = { provider: slim.aiConfig.provider, model: slim.aiConfig.model, url: slim.aiConfig.url };
       await chrome.storage.local.set({ pageGroupCommentConfig: slim });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
   }
   async function pageGroupCommentDropPlink(groupKey) {
     // Ưu tiên drop theo groupKey (tránh trường hợp trang đã redirect về home trước khi hàm chạy).
@@ -3116,7 +3116,7 @@
       if (fallback && clean(fallback.innerText || "").length >= 150) return fallback;
       return null;
     };
-    try { window.scrollTo(0, 0); } catch (_) {}
+    try { window.scrollTo(0, 0); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
     await sleep(4000);
     root = findRoot();
     // Điều hướng SPA tới permalink đôi khi chỉ dựng skeleton mà không hydrate
@@ -3169,7 +3169,7 @@
     try {
       const result = await postPageGroupComment(item, built.comment, runId, built.tagEntity);
       if (result === true) {
-        try { await globalThis.FbTagMention?.markPostSig?.(postText); } catch (_) {}
+        try { await globalThis.FbTagMention?.markPostSig?.(postText); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
         return true;
       }
       return result === "stopped" ? "stopped" : "skip";
@@ -3237,7 +3237,7 @@
               try {
                 const g = await chrome.storage.local.get("pageGroupCommentGroupDone");
                 gdNow = Math.max(0, parseInt(g.pageGroupCommentGroupDone) || 0) + 1;
-              } catch (_) {}
+              } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
               await chrome.storage.local.set({ pageGroupCommentDone: done, pageGroupCommentGroupDone: gdNow, pageGroupCommentStatus: `Đã comment ${done} bài (nhóm ${index + 1}/${groups.length}): ${group.name}` });
             }
             await pageGroupCommentDropPlink(groupKey);
@@ -3297,7 +3297,7 @@
             await chrome.storage.local.set({ [PAGE_GROUP_COMMENT_FLAG]: false, pageGroupCommentGroupDone: 0, pageGroupCommentStatus: `Hoàn tất: ${done} comment, bỏ qua ${skipped} nhóm` });
             return;
           }
-        } catch (_) {}
+        } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
         // Còn link permalink chờ xử lý của nhóm này (sau khi quay về từ bài
         // chi tiết) → mở link kế tiếp thay vì cào lại feed.
         {
@@ -3365,7 +3365,7 @@
             // thì bỏ qua, tránh đăng trùng.
             if (pageHasOwnComment(item.article)) { chrome.storage.local.set({ pageGroupCommentDiag: { stage: "feed-skip-own", processed: processedInGroup, group: group.name?.slice(0, 30) } }); item.article.dataset.pgcDone = "skip"; continue; }
             // Sổ cái chữ ký (feed.js): chặn đăng trùng chéo phiên/tag-không-tag.
-            try { if (await globalThis.FbTagMention?.postSigMarked?.(postText)) { chrome.storage.local.set({ pageGroupCommentDiag: { stage: "feed-skip-sig", processed: processedInGroup, group: group.name?.slice(0, 30) } }); item.article.dataset.pgcDone = "skip"; continue; } } catch (_) {}
+            try { if (await globalThis.FbTagMention?.postSigMarked?.(postText)) { chrome.storage.local.set({ pageGroupCommentDiag: { stage: "feed-skip-sig", processed: processedInGroup, group: group.name?.slice(0, 30) } }); item.article.dataset.pgcDone = "skip"; continue; } } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
             await chrome.storage.local.set({ pageGroupCommentStatus: `AI đang tạo comment bài ${groupDone + 1}/${perGroup} — nhóm ${group.name}` });
             const built = await pageGroupCommentBuildComment(postText, runId);
             if (built === "stopped") return;
@@ -3377,7 +3377,7 @@
             item.article.dataset.pgcDone = "1";
             if (result === true) {
               groupDone++; done++;
-              try { await globalThis.FbTagMention?.markPostSig?.(postText); } catch (_) {}
+              try { await globalThis.FbTagMention?.markPostSig?.(postText); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
               await chrome.storage.local.set({ pageGroupCommentDone: done, pageGroupCommentGroupDone: groupDone, pageGroupCommentStatus: `Đã comment ${done} bài (nhóm ${index + 1}/${groups.length}): ${group.name}` });
             }
             if (groupDone < perGroup && (await pageFeatureLive(PAGE_GROUP_COMMENT_FLAG, runId))) {
@@ -3638,7 +3638,7 @@
   async function closePageCommentView(scope) {
     if (!scope || scope === document.body || scope === document) return true;
     const close = [...scope.querySelectorAll('button,[role="button"]')].filter(visible).find(control => /^(?:đóng|close|quay lại|back)$/i.test(labelOf(control)));
-    if (close) { try { close.click(); } catch (_) {} await sleep(400); }
+    if (close) { try { close.click(); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); } await sleep(400); }
     return true;
   }
   async function postPageComment(article, text, key, runId, tagEntity = null) {
@@ -3663,8 +3663,8 @@
     // Focus chắc chắn + dọn nháp cũ trong ô trước khi gõ để không nối đuôi.
     let focused = false;
     for (let f = 0; f < 3 && !focused; f++) {
-      try { await pageFeatureClick(box, PAGE_COMMENT_FLAG, runId); } catch (_) {}
-      try { box.focus(); box.click(); } catch (_) {}
+      try { await pageFeatureClick(box, PAGE_COMMENT_FLAG, runId); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
+      try { box.focus(); box.click(); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       await sleep(200);
       try { focused = !!(box.contains?.(document.activeElement) || box === document.activeElement); } catch (_) { focused = false; }
     }
@@ -3674,7 +3674,7 @@
       const sel = window.getSelection(), range = document.createRange();
       range.selectNodeContents(box); sel.removeAllRanges(); sel.addRange(range);
       if (document.execCommand("selectAll", false, null)) document.execCommand("delete");
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
     await sleep(200);
     const tc = pageCommentConfig?.typingConfig || {};
     const typeIt = (content) => chrome.runtime.sendMessage({ action: "trustedInput", text: content, pressEnter: false, typingMinDelay: tc.minDelay ?? 20, typingMaxDelay: tc.maxDelay ?? 45, abortStorageKey: PAGE_COMMENT_FLAG, abortRunId: runId, abortRunIdKey: "pageCommentRunId" }).catch(() => null);
@@ -3688,7 +3688,7 @@
         const sel = window.getSelection(), range = document.createRange();
         range.selectNodeContents(box); sel.removeAllRanges(); sel.addRange(range);
         if (document.execCommand("selectAll", false, null)) document.execCommand("delete");
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       await sleep(300);
       typed = await typeIt(text);
       gotComment = readBox();
@@ -3714,7 +3714,7 @@
       doSend: (btn) => pageFeatureClick(btn, PAGE_COMMENT_FLAG, runId),
       proofExists: (root, pr) => pageCommentProof(root, text),
       proofRoots: () => [composer.scope, postScope],
-      scrollIntoView: () => { try { (composer.scope?.isConnected ? composer.scope : postScope)?.scrollIntoView?.({ behavior: "smooth", block: "center" }); } catch (_) {} },
+      scrollIntoView: () => { try { (composer.scope?.isConnected ? composer.scope : postScope)?.scrollIntoView?.({ behavior: "smooth", block: "center" }); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); } },
       onCounted: async () => {
         await closePageCommentView(composer.scope);
         if (postScope?.isConnected) postScope.dataset.pageCommentDone = "1";
@@ -3739,7 +3739,7 @@
     // tốn lượt gọi AI để rồi vẫn phải bỏ vì đăng chồng.
     if (pageHasOwnComment(item?.article)) { await pageTagLog("@tag bỏ qua (pageComment: own-comment)"); return "skip"; }
     // Sổ cái chữ ký (feed.js): chặn đăng trùng chéo phiên/tag-không-tag.
-    try { if (await globalThis.FbTagMention?.postSigMarked?.(item.text)) { await pageTagLog("@tag bỏ qua (pageComment: sig-seen)"); return "skip"; } } catch (_) {}
+    try { if (await globalThis.FbTagMention?.postSigMarked?.(item.text)) { await pageTagLog("@tag bỏ qua (pageComment: sig-seen)"); return "skip"; } } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
     // Dùng đúng hồ sơ AI của Comment Page (pageCommentConfig.aiConfig), không
     // dùng liveAiConfig() của luồng Join (cùng lỗi như Page đăng bài nhóm).
     const ai = (pageCommentConfig?.aiConfig && pageCommentConfig.aiConfig.provider)
@@ -3825,7 +3825,7 @@
           const e = history[k];
           if (e && e.state !== "confirmed" && now - (Number(e.time) || 0) > 30 * 86400000) delete history[k];
         }
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
       // Tab lạnh/lazy-load: feed ban đầu chỉ có skeleton rỗng. Đợi tối đa ~40s
       // cho bài thật (article có text) thay vì đốt 4 vòng rỗng rồi kết thúc
       // 0 bài (đã tái hiện live: 2 skeleton, withCommentBtn 0).
@@ -3895,7 +3895,7 @@
           if (!pageCommentConfig) return;
           if (result === true) {
             pageCommentConfig.done = (pageCommentConfig.done || 0) + 1; history[item.key] = { time: Date.now(), source: pageCommentConfig.source, state: "confirmed" };
-            try { await globalThis.FbTagMention?.markPostSig?.(item.text); } catch (_) {}
+            try { await globalThis.FbTagMention?.markPostSig?.(item.text); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
           }
           else history[item.key] = { time: Date.now(), source: pageCommentConfig.source, state: "unconfirmed" };
           if (result !== true) pageCommentSkippedShown++;
@@ -4052,7 +4052,7 @@
             if (s[PAGE_COMMENT_FLAG] && s.pageCommentRunId === pageCommentRunId && s.pageCommentPhase === "starting" && Date.now() - (Number(s.pageCommentPhaseAt) || startAt) >= 45000) {
               await chrome.storage.local.set({ [PAGE_COMMENT_FLAG]: false, pageCommentStatus: "Lỗi: Page Comment không khởi động được", pageCommentPhase: "start-timeout", pageCommentPhaseAt: Date.now() });
             }
-          } catch (_) {}
+          } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
         }, 45000);
       }).catch(error => chrome.storage.local.set({ [PAGE_COMMENT_FLAG]: false, pageCommentStatus: "Lỗi: " + String(error?.message || error || ""), pageCommentPhase: "persist-error", pageCommentPhaseAt: Date.now() }));
       sendResponse({ ok: true });
@@ -4169,10 +4169,10 @@
       // với get bên trong pageFeatureLive và vẫn đọc giá trị cũ (đã tái hiện:
       // menu không bao giờ mở, switch chết lặng, không báo lỗi).
       (async () => {
-        try { await chrome.storage.local.set({ pageGroupScan: true, pageGroupScanRunId: "scan" }); } catch (_) {}
+        try { await chrome.storage.local.set({ pageGroupScan: true, pageGroupScanRunId: "scan" }); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
         let ok = false;
         try { ok = await pageSwitchActor(page, "pageGroupScan", "scan"); } catch (_) { ok = false; }
-        try { await chrome.storage.local.set({ pageGroupScan: false, pageGroupScanRunId: "" }); } catch (_) {}
+        try { await chrome.storage.local.set({ pageGroupScan: false, pageGroupScanRunId: "" }); } catch (_) { console.debug("[Auto vjp][page] bỏ qua lỗi:", _); }
         sendResponse({ ok: !!ok });
       })();
       return true;

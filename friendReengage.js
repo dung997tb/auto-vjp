@@ -37,7 +37,7 @@
 
   async function getSyncCfg() {
     let s = {};
-    try { s = await SYNC.get(null); } catch (_) {}
+    try { s = await SYNC.get(null); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
     const cfg = {};
     for (const k of Object.keys(DEFAULTS)) {
       const key = "friendReengage" + k[0].toUpperCase() + k.slice(1);
@@ -58,7 +58,7 @@
     } catch (_) { return {}; }
   }
   async function setStatus(text) {
-    try { await LS.set({ friendReengageStatus: String(text || "") }); } catch (_) {}
+    try { await LS.set({ friendReengageStatus: String(text || "") }); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
   }
   async function alive(runId) {
     const s = await getState();
@@ -265,7 +265,7 @@
         if (!/(auto|scroll)/i.test(st.overflowY || "")) continue;
         const links = el.querySelectorAll('a[href^="/"], a[href*="facebook.com/"]').length;
         if (links > bestLinks) { bestLinks = links; best = el; }
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
     }
     return best || document.scrollingElement || document.documentElement;
   }
@@ -303,8 +303,8 @@
         const r = (scroller && scroller.getBoundingClientRect) ? scroller.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
         const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + Math.min(r.height - 100, r.height * 0.7));
         await reengageTrustedWheel(x, y, 700, runId);
-      } catch (_) {}
-    } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
+    } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
   }
   // Một lượt quét list: cuộn tới khi 3 vòng liên tiếp không tăng (tối đa rounds).
   // Trả về số bạn tối đa thấy được, -1 khi bị dừng giữa chừng.
@@ -317,7 +317,7 @@
       await reengageScrollOnce(runId);
       if (!(await waitCancellable(5000, runId))) return -1;
       const n = collectFriendLinks(400).length;
-      try { await LS.set({ friendReengageDbg: "pass i=" + i + " before=" + best + " after=" + n }); } catch (_) {}
+      try { await LS.set({ friendReengageDbg: "pass i=" + i + " before=" + best + " after=" + n }); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
       if (n > best) { best = n; flat = 0; }
       else { flat++; if (flat >= 2) break; }
     }
@@ -394,11 +394,11 @@
         try {
           const storyMsg = cont.querySelector('[data-ad-rendering-role="story_message"]');
           if (storyMsg) bodyText = (storyMsg.innerText || "").trim();
-        } catch (_) {}
+        } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
         if (!bodyText) {
           try {
             const clone = cont.cloneNode(true);
-            clone.querySelectorAll('[role="article"], [role="dialog"], [contenteditable="true"], [role="textbox"]').forEach(n => { try { n.remove(); } catch (_) {} });
+            clone.querySelectorAll('[role="article"], [role="dialog"], [contenteditable="true"], [role="textbox"]').forEach(n => { try { n.remove(); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); } });
             // Rác còn lại sau stripping: đếm số (167…), nhãn nút/bộ lọc bằng cả
             // 2 ngôn ngữ UI. innerText lúc có lúc không xuống dòng (layout gộp
             // dính kiểu "1674332Xem thêm bình luận…") nên lọc 2 lớp: từng dòng
@@ -419,7 +419,7 @@
         if (text.length < 2 && !cont.querySelector("img,video")) continue;
         const alreadyLiked = Array.from(found.bar.querySelectorAll('[role="button"]')).some((b) => isUnlikeSignal(actionLabel(b)));
         out.push({ art: cont, text, href, likeBtn: found.like, commentBtn: found.cmt, alreadyLiked });
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
     }
     return out;
   }
@@ -474,7 +474,7 @@
             if (isUnlikeSignal(actionLabel(b))) return true;
           }
         }
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
       // Nhìn lại 1 lần: nếu đã true từ trước thì coi như đã like rồi (không đếm trùng ở caller).
       return likeBtn.getAttribute("aria-pressed") === "true";
     } catch (_) { return false; }
@@ -508,7 +508,7 @@
         tagEntity: null, tagConfig: null,
         alive: () => alive(runId),
         onEvent: () => {},
-        clearDraft: () => { try { box.blur(); } catch (_) {} },
+        clearDraft: () => { try { box.blur(); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); } },
         findSend: () => Array.from(scope.querySelectorAll("[aria-label]"))
           .find((b) => /^(Đăng|Gửi|Post)$/i.test((b.getAttribute("aria-label") || "").trim()) && b.isConnected) || null,
         sendEnter: () => { box.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true })); return true; },
@@ -518,7 +518,7 @@
           return hay.includes(needle);
         },
         proofRoots: () => [art.isConnected ? art : document, document],
-        scrollIntoView: () => { try { art.scrollIntoView({ block: "center" }); } catch (_) {} },
+        scrollIntoView: () => { try { art.scrollIntoView({ block: "center" }); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); } },
         onCounted: () => true,
       });
       if (rRes === true) return "ok";
@@ -555,7 +555,7 @@
     return null;
   }
   function closeStoryViewer() {
-    try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); } catch (_) {}
+    try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
   }
   async function storyInteract(runId, cfg) {
     try {
@@ -738,7 +738,7 @@
   }
   async function runLoopInner(runId) {
     const traceKey = "friendReengageTrace";
-    const trace = async (msg) => { try { const s = await LS.get(traceKey); const arr = Array.isArray(s[traceKey]) ? s[traceKey] : []; arr.push(Date.now() + " " + msg); await LS.set({ [traceKey]: arr.slice(-40) }); } catch (_) {} };
+    const trace = async (msg) => { try { const s = await LS.get(traceKey); const arr = Array.isArray(s[traceKey]) ? s[traceKey] : []; arr.push(Date.now() + " " + msg); await LS.set({ [traceKey]: arr.slice(-40) }); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); } };
     await trace("ENTER " + runId + " @ " + location.href.slice(0, 60));
     const st0 = await getState();
     if (st0.friendReengageOwnerTabId && st0.friendReengageOwnerTabId !== 0) {
@@ -748,7 +748,7 @@
         const tabOk = await sendCancellable({ action: "friendReengageAmIOwner", runId }, runId, 10000);
         if (tabOk && tabOk.stopped) return;
         if (tabOk && tabOk.ok && tabOk.r && tabOk.r.ok === false) return;
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
     }
     let cfg = (await getState()).friendReengageConfig || await getSyncCfg();
     let s = await getState();
@@ -778,7 +778,7 @@
         doneStory, storyTarget, likeHist, cmtHist, storyHist, deadWalls,
       };
     }
-    async function persistDeadWalls() { try { await LS.set({ friendReengageDeadWalls: deadWalls }); } catch (_) {} }
+    async function persistDeadWalls() { try { await LS.set({ friendReengageDeadWalls: deadWalls }); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); } }
     async function noteDeadWall(key, reason) {
       if (!key) return;
       deadWalls[key] = nextDeadWallEntry(deadWalls, key, reason, runId, now());
@@ -790,7 +790,7 @@
           const e = deadWalls[k];
           if (!e || !Number(e.at) || (t - Number(e.at)) >= maxTtl) delete deadWalls[k];
         }
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
       await persistDeadWalls();
     }
     async function clearDeadWall(key) {
@@ -799,7 +799,7 @@
     // Nhật ký AI I/O gần nhất (1 bản ghi, ghi đè) để chẩn đoán "comment chưa sát
     // bài": xem AI đã thấy postText gì và trả về comment gì. Chỉ text, không key.
     async function logAiExchange(postText, comment, verdict) {
-      try { await LS.set({ friendReengageLastAi: { at: now(), runId, verdict: String(verdict || ""), post: String(postText || "").slice(0, 300), comment: String(comment || "").slice(0, 300) } }); } catch (_) {}
+      try { await LS.set({ friendReengageLastAi: { at: now(), runId, verdict: String(verdict || ""), post: String(postText || "").slice(0, 300), comment: String(comment || "").slice(0, 300) } }); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
     }
 
     const onFriendsList = /\/friends(\/list)?\/?(\?|$)/.test(location.pathname);
@@ -812,8 +812,8 @@
 
     let emptyRounds = 0;
     let deadPasses = 0;
-    try { await LS.set({ friendReengageDbgLoop: "loop@ " + location.href.slice(0, 80) + " a=" + document.querySelectorAll("a").length + " t=" + Date.now() }); } catch (_) {}
-    const trace2 = async (m) => { try { const s = await LS.get(traceKey); const a = Array.isArray(s[traceKey]) ? s[traceKey] : []; a.push(Date.now() + " " + m); await LS.set({ [traceKey]: a.slice(-40) }); } catch (_) {} };
+    try { await LS.set({ friendReengageDbgLoop: "loop@ " + location.href.slice(0, 80) + " a=" + document.querySelectorAll("a").length + " t=" + Date.now() }); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
+    const trace2 = async (m) => { try { const s = await LS.get(traceKey); const a = Array.isArray(s[traceKey]) ? s[traceKey] : []; a.push(Date.now() + " " + m); await LS.set({ [traceKey]: a.slice(-40) }); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); } };
     // Lưới an toàn ngoài cùng: lỗi bất ngờ (DOM Facebook đổi, exception lẻ)
     // thì dừng sạch với trạng thái rõ ràng — không bao giờ treo Active=true
     // vĩnh viễn như trước.
@@ -838,7 +838,7 @@
           await trace("settle w=" + w + " cands=" + candidates.length + " waitMs=" + (Date.now() - w0) + " wok=" + wok);
           if (!wok) return;
         }
-        try { await LS.set({ friendReengageDbgLoop: "SETTLE doneMs=" + (Date.now() - settleT0) + " cands=" + candidates.length }); } catch (_) {}
+        try { await LS.set({ friendReengageDbgLoop: "SETTLE doneMs=" + (Date.now() - settleT0) + " cands=" + candidates.length }); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
         // Quét top-down tới đâu làm tới đó (KHÔNG cuộn sâu gom hết list trước —
         // Facebook tái chế các hàng đã cuộn qua làm mất href, cuộn sâu xong quay
         // lại thì còn 0 link hợp lệ). Chỉ cuộn thêm khi trong view <15 bạn HOẶC
@@ -876,7 +876,7 @@
       }
       if (!candidates.length) {
         emptyRounds++;
-        try { await LS.set({ friendReengageDbgLoop: "EMPTY#" + emptyRounds + "@ " + location.href.slice(0, 80) + " a=" + document.querySelectorAll("a").length + " t=" + Date.now() }); } catch (_) {}
+        try { await LS.set({ friendReengageDbgLoop: "EMPTY#" + emptyRounds + "@ " + location.href.slice(0, 80) + " a=" + document.querySelectorAll("a").length + " t=" + Date.now() }); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
         await trace2("EMPTY#" + emptyRounds);
         if (emptyRounds >= 5) { await finishRun(runId, "empty"); return; }
         await setStatus("Chưa thấy bạn nào, chờ Facebook tải…");
@@ -935,9 +935,9 @@
             if (modeHasLike && doneLike < likeTarget && !likeHist[cycleKey]) { likeHist[cycleKey] = { at, skip: 1, reason: "already-known", runId }; }
             if (modeHasComment && doneCmt < cmtTarget && !cmtHist[cycleKey]) { cmtHist[cycleKey] = { at, skip: 1, reason: "already-known", runId }; }
             if ((modeHasStory || cfg.storyEnabled) && cfg.storyEnabled && doneStory < storyTarget && !storyHist[cycleKey]) { storyHist[cycleKey] = { at, skip: 1, reason: "already-known", runId }; }
-            try { await LS.set({ friendReengageLikeHistory: likeHist, friendReengageCommentHistory: cmtHist, friendReengageStoryHistory: storyHist }); } catch (_) {}
+            try { await LS.set({ friendReengageLikeHistory: likeHist, friendReengageCommentHistory: cmtHist, friendReengageStoryHistory: storyHist }); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
             idx++;
-            try { await LS.set({ friendReengageIndex: idx }); } catch (_) {}
+            try { await LS.set({ friendReengageIndex: idx }); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
             location.href = "https://www.facebook.com/friends/list/";
             return;
           }
@@ -951,7 +951,7 @@
           for (let h = 0; h < 5; h++) {
             posts = collectProfilePosts(6, cfg);
             if (posts.length) break;
-            try { window.scrollBy(0, 600); } catch (_) {}
+            try { window.scrollBy(0, 600); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
             if (!(await waitCancellable(3000, runId))) return;
           }
         }
@@ -1115,7 +1115,7 @@
         // Trang list vừa tải có thể chưa render hết card — quét lại tối đa 5 lượt
         // trước khi kết luận hết vòng, tránh chết yểu như test live.
         deadPasses++;
-        try { await LS.set({ friendReengageDbgLoop: "DEAD#" + deadPasses + " cands=" + candidates.length + " filt=" + nFiltered + " want=" + nWant + "@ " + location.href.slice(0, 60) }); } catch (_) {}
+        try { await LS.set({ friendReengageDbgLoop: "DEAD#" + deadPasses + " cands=" + candidates.length + " filt=" + nFiltered + " want=" + nWant + "@ " + location.href.slice(0, 60) }); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
         if (deadPasses < 5) {
           await setStatus("Đã quét " + candidates.length + " bạn, bỏ qua " + nFiltered + " đã tương tác (" + deadPasses + "/5)…");
           const seen = await reengageScrollPass(runId, 4);
@@ -1131,13 +1131,13 @@
       }
     }
     } catch (e) {
-      try { await trace2("FATAL " + String((e && e.message) || e).slice(0, 120)); } catch (_) {}
+      try { await trace2("FATAL " + String((e && e.message) || e).slice(0, 120)); } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
       try {
         const s = await getState();
         if (!s.friendReengageRunId || s.friendReengageRunId === runId) {
           await LS.set({ friendReengageActive: false, friendReengageStatus: "Lỗi không mong đợi, đã dừng an toàn: " + String((e && e.message) || e).slice(0, 160) });
         }
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
       return;
     }
   }
@@ -1188,12 +1188,12 @@
       if (!owner) return;
       const me = await sendCancellable({ action: "friendReengageAmIOwner", runId: s.friendReengageRunId }, s.friendReengageRunId, 10000);
       if (me && me.ok && me.r && me.r.ok) runLoop(s.friendReengageRunId);
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
   }, 1200);
 
   try {
     chrome.storage.onChanged.addListener((ch, area) => {
       if (area === "local" && ch.friendReengageActive && ch.friendReengageActive.newValue === false) { /* dừng vòng lặp qua alive() */ }
     });
-  } catch (_) {}
+  } catch (_) { console.debug("[Auto vjp][friendReengage] bỏ qua lỗi:", _); }
 })();

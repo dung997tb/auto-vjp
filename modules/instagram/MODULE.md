@@ -178,7 +178,7 @@ Bản port sẵn đã có khung đăng video: nạp file → Next → caption �
 - Ghi details end-to-end: content script gửi `details` trong `storyCompleted`/`postCompleted` → `results.js` chuyển vào outbox → receipt có trường `details` → manage (Nhật ký) hiển thị trong cột chi tiết. Mã có thể gặp: `ai_used`, `ai_fallback`, `ai_overlay_failed`.
 - Manage: 2 nút mẫu "Đăng Story Instagram (task mẫu)" / "Đăng Reels Instagram (task mẫu)" đều để sẵn `ai_prompt` mẫu; form Viết bài + Lịch trình có ô "Prompt AI (tuỳ chọn)" và type `story` (chỉ Instagram).
 
-### 7.4 Bằng chứng DOM live — vòng vá selector 1 (2026-11-05, FORK-CHANGES #85)
+### 7.4 Bằng chứng DOM live — vòng vá selector 1 (2026-11-05)
 
 Probe DOM live trên nuc (profile công nhân `langlehoaanhdao`, IG web desktop, UI **EN**) — kết quả ÂM TÍNH cho trình tạo story, và đây là selector thật đã verify:
 
@@ -189,7 +189,7 @@ Probe DOM live trên nuc (profile công nhân `langlehoaanhdao`, IG web desktop,
 - Hệ quả đã áp vào `story.js` (#85): dialog story phải có tín hiệu story dương tính (`create story|your story|tin của bạn|close friends|bạn thân` trong aria/text) và không mang dấu hiệu đăng bài; input file chỉ lấy trong dialog story đã xác minh (xoá fallback toàn trang); vòng chờ editor rà bề mặt đăng bài mỗi vòng và huỷ ngay `story_create_not_found` (đã bỏ bấm Next trung gian — editor story thật không có Next). Trên bề mặt hiện tại task story sẽ fail nhanh + đúng mã `story_create_not_found`; editor story thật (hàng nút "Tin của bạn"/"Bạn thân", công cụ text Aa, ô nhập chữ) **vẫn chưa từng xuất hiện** nên các selector đó vẫn là suy đoán — chỉ kích hoạt được khi IG mở trình tạo story cho tài khoản/layout khác. Đăng story IG thật cần đường ngoài DOM desktop (vd giả lập mobile) — ngoài phạm vi vòng vá.
 - Reels: điểm chưa chắc chắn là biến thể IG hỏi Post/Reel (có/không, hiện ở bước nào) và HTML của trang `/<username>/reels/` khi fetch-parse (nội dung render phía client có thể không chứa link reel trong HTML thô — khi đó proof rơi về URL profile như cũ, không fail oan).
 
-### 7.5 Tự chữa selector (2.9.0, FORK-CHANGES #87)
+### 7.5 Tự chữa selector (2.9.0)
 
 - Contract cộng `modules/shared/healer.js` (HEALER) vào trước module ở spec `post` và `story`: `[CANONICAL, HEALER, automator.js]` / `[CANONICAL, HEALER, story.js]`. Kiến trúc + spec format + giới hạn: `modules/shared/HEALER.md`.
 - Điểm đấu: story.js — `ig.story.createEntry` (nút Tạo, sau finder gốc; chốt âm tính `isPostComposerSurface` giữ nguyên và chạy trước khi file được nạp), `ig.story.shareRow` (nút "Tin của bạn" — sau 10s finder gốc mù thì heal 1 lần, `root` = dialog story đã xác minh), `ig.story.textTool` (công cụ Aa). automator.js — `ig.post.createBtn`, `ig.post.shareBtn` (heal 1 lần khi vào giai đoạn share mà finder gốc mù; phần tử heal được tin là nút Share dù nhãn khác regex cũ).

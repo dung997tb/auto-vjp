@@ -13,7 +13,7 @@
       log.push({t:Date.now(),feature,msg:String(msg||"").slice(0,300)});
       if(log.length>500)log.splice(0,log.length-500);
       await chrome.storage.local.set({activityLog:log});
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
   }
   let isFeedInteracting = false;
   let feedCount = 0, feedTarget = 20;
@@ -93,7 +93,7 @@ let aiBasePrompt="";
     const entity=pickTagEntity(tagConfig);
     if(!entity?.name)return null;
     if(isGenericTagName(entity.name)){
-      try{logActivity("tag","@tag bỏ qua (generic-name: \""+String(entity.name).slice(0,40)+"\" giống nhãn UI, không phải tên Page/Nhóm)");}catch(_){}
+      try{logActivity("tag","@tag bỏ qua (generic-name: \""+String(entity.name).slice(0,40)+"\" giống nhãn UI, không phải tên Page/Nhóm)");}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       return null;
     }
     // Slider cho phép 0% (bật tag nhưng không gắn) nên không được dùng `||70`
@@ -162,7 +162,7 @@ let aiBasePrompt="";
   // bất thường (exception/treo await), cờ isAICommenting vẫn true và status
   // đóng băng mãi — load-time check bên dưới sẽ chốt dừng an toàn thay vì treo.
   async function aiHeartbeat(stage){
-    try{await chrome.storage.local.set({aiHeartbeat:{stage:String(stage||"").slice(0,40),at:Date.now()}});}catch(_){}
+    try{await chrome.storage.local.set({aiHeartbeat:{stage:String(stage||"").slice(0,40),at:Date.now()}});}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
   }
   // Quy tắc DỪNG BẰNG MỌI GIÁ + chống chạy trùng: resume sau reload chỉ chạy
   // trên đúng tab sở hữu. Tab khác thấy cờ nhưng bỏ qua (Dừng thì dọn cờ).
@@ -225,7 +225,7 @@ let aiBasePrompt="";
       const {postedSignatures}=await chrome.storage.local.get("postedSignatures");
       const arr=Array.isArray(postedSignatures)?postedSignatures:[];
       if(!arr.some(e=>e&&e.sig===s)){arr.push({sig:s,t:Date.now()});if(arr.length>2000)arr.splice(0,arr.length-2000);await chrome.storage.local.set({postedSignatures:arr});}
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
   }
   // Chốt chặn cuối trước khi đăng: loại U+FFFD và surrogate lẻ (emoji bị chẻ)
   // để comment không dính ký tự lỗi và không bị Facebook từ chối.
@@ -243,7 +243,7 @@ let aiBasePrompt="";
     try {
       el.scrollIntoView({behavior:"instant",block:"center"});
     } catch {
-      try { el.scrollIntoView({behavior:"smooth",block:"center"}); } catch {}
+      try { el.scrollIntoView({behavior:"smooth",block:"center"}); } catch (e) { console.debug("[Auto vjp][feed] bỏ qua lỗi:", e); }
     }
     await sleep(200);
     if(isStillActive&&!await isStillActive())return false;
@@ -256,7 +256,7 @@ let aiBasePrompt="";
         try{
           const res=await chrome.runtime.sendMessage({action:"trustedMouse",kind,x,y});
           if(res?.ok) debuggerOk = true;
-        }catch(_){}
+        }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       }
     }
     if(debuggerOk) return true;
@@ -513,7 +513,7 @@ let aiBasePrompt="";
       leaves.sort((a,b)=>Math.abs(a.y-b.y)>4?a.y-b.y:a.x-b.x);
       const assembled=leaves.map(o=>o.t).join("").replace(/\s+/g,"").toLocaleLowerCase("vi");
       if(/sponsored|đượctàitrợ|quảngcáo/.test(assembled))return true;
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     return false;
   }
   // Bài bán hàng organic (không có marker tài trợ nên isSponsoredPost không
@@ -724,7 +724,7 @@ let aiBasePrompt="";
           article.dataset.postUid=stable;
           return stable;
         }
-      }catch(_){ }
+      }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     }
 
     const attrId=article.getAttribute("data-story-id")||article.getAttribute("data-post-id")||article.getAttribute("data-id");
@@ -817,20 +817,20 @@ let aiBasePrompt="";
   // Trả: true | "skip" | "stopped" | "unconfirmed-skip" |
   //       "tag-proof-missing" | "navigated"
   async function unifiedSendProofDwell(o){
-    if(!await o.alive()){ try{await o.clearDraft();}catch(_){} return "stopped"; }
+    if(!await o.alive()){ try{await o.clearDraft();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); } return "stopped"; }
     let tagApplied=!o.tagEntity;
     try{
       if(o.tagEntity&&o.box?.isConnected)
         tagApplied=await appendTagMention(o.box,o.tagConfig,()=>o.alive(),o.tagEntity);
-      else if(o.tagEntity){ try{logActivity("tag","@tag bỏ qua (unified: box-chết)");}catch(_){} }
-    }catch(e){ tagApplied=false; try{logActivity("tag","@tag lỗi (unified): "+String(e?.message||e).slice(0,80));}catch(_){} }
-    if(o.tagEntity&&tagProofRequired(o.tagConfig)&&!tagApplied){ try{await o.clearDraft();}catch(_){} return "tag-proof-missing"; }
-    if(!await o.alive()){ try{await o.clearDraft();}catch(_){} return "stopped"; }
+      else if(o.tagEntity){ try{logActivity("tag","@tag bỏ qua (unified: box-chết)");}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); } }
+    }catch(e){ tagApplied=false; try{logActivity("tag","@tag lỗi (unified): "+String(e?.message||e).slice(0,80));}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); } }
+    if(o.tagEntity&&tagProofRequired(o.tagConfig)&&!tagApplied){ try{await o.clearDraft();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); } return "tag-proof-missing"; }
+    if(!await o.alive()){ try{await o.clearDraft();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); } return "stopped"; }
     const sendBtn=await o.findSend();
     const doSend=o.doSend||(async (btn)=>{ try{return !!await trustedMouse(btn,"click",()=>o.alive());}catch(_){return false;} });
     let submitted=false;
-    if(sendBtn){ try{submitted=!!await doSend(sendBtn);}catch(_){} }
-    else if(o.sendEnter){ try{submitted=!!await o.sendEnter();}catch(_){} }
+    if(sendBtn){ try{submitted=!!await doSend(sendBtn);}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); } }
+    else if(o.sendEnter){ try{submitted=!!await o.sendEnter();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); } }
     if(!submitted)return "skip";
     o.onEvent("verifying");
     const proofFn=o.proofExists||commentProofExists;
@@ -841,8 +841,8 @@ let aiBasePrompt="";
       const roots=await o.proofRoots();
       const hit=roots.find(r=>r&&proofFn(r,o.proof));
       if(hit){
-        try{await o.clearDraft();}catch(_){}
-        try{await o.scrollIntoView();}catch(_){}
+        try{await o.clearDraft();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
+        try{await o.scrollIntoView();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
         let lastSig="",stablePolls=0;
         for(let hold=0;hold<30;hold++){
           if(!await o.alive())return "stopped";
@@ -852,14 +852,14 @@ let aiBasePrompt="";
           if(sig&&sig!==lastSig){lastSig=sig;stablePolls=0;}
           await sleep(500);
         }
-        if(o.onCounted){ let fin=false; try{ fin=await o.onCounted(hit); }catch(e){ try{logActivity("tag","@lõi chung onCounted lỗi: "+String(e?.message||e).slice(0,120));}catch(_){} return "stopped"; } if(fin===false)return "stopped"; }
+        if(o.onCounted){ let fin=false; try{ fin=await o.onCounted(hit); }catch(e){ try{logActivity("tag","@lõi chung onCounted lỗi: "+String(e?.message||e).slice(0,120));}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); } return "stopped"; } if(fin===false)return "stopped"; }
         return true;
       }
       if(Date.now()>=deadline)break;
       o.onEvent("waitProof");
     }
-    if(!await o.alive()){ try{await o.clearDraft();}catch(_){} return "stopped"; }
-    try{await o.clearDraft();}catch(_){}
+    if(!await o.alive()){ try{await o.clearDraft();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); } return "stopped"; }
+    try{await o.clearDraft();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     o.onEvent("unconfirmed");
     return "unconfirmed-skip";
   }
@@ -1103,8 +1103,8 @@ let aiBasePrompt="";
       return false;
     }
     console.warn(`[Feed] scope route recover #${runtime.routeRecoveries} ${scope.id}: back to feed`);
-    try{if(!feedScopeRouteMatches(location.href,scope))location.assign(feedScopeUrl(scope));}catch(_){}
-    try{logActivity("tag","["+scope.id+"] route-recover #"+runtime.routeRecoveries+" (quay lại feed, bỏ bài lạc route)");}catch(_){}
+    try{if(!feedScopeRouteMatches(location.href,scope))location.assign(feedScopeUrl(scope));}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
+    try{logActivity("tag","["+scope.id+"] route-recover #"+runtime.routeRecoveries+" (quay lại feed, bỏ bài lạc route)");}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     return true;
   }
   function feedScopeActionMode(value,legacyAiEnabled=false){
@@ -1119,12 +1119,12 @@ let aiBasePrompt="";
     const add=(article,likeButton=null)=>{
       if(!article)return;
       let key="",contentKey="";
-      try{key=postIdentity(article)||"";}catch(_){ }
+      try{key=postIdentity(article)||"";}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       // Một số card trên feed Bạn bè không có permalink/identity ổn định.
       // Dùng thêm hash nội dung để card quảng cáo đã fail-closed không bị
       // chọn lại vô hạn sau mỗi vòng quét/SPA rerender.
       if(feedScopeUsesComment(runtime)){
-        try{contentKey=postContentKey(extractPostText(article))||"";}catch(_){ }
+        try{contentKey=postContentKey(extractPostText(article))||"";}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
         if(runtime.aiSkippedKeys?.has(key)||runtime.aiSkippedKeys?.has(contentKey))return;
       }
       const mapKey=key||contentKey||article;
@@ -1181,7 +1181,7 @@ let aiBasePrompt="";
   }
   async function generateFeedScopeComment(scope,runtime,postText,contentKey){
     const tagEntity=decideTagForPost(runtime.tagConfig,runtime.aiCount);
-    try{logActivity("tag","["+scope.id+"] decide: cfg="+(!!runtime.tagConfig)+" rate="+(runtime.tagConfig?.rate)+" ent="+(tagEntity?tagEntity.name.slice(0,30):"null"));}catch(_){}
+    try{logActivity("tag","["+scope.id+"] decide: cfg="+(!!runtime.tagConfig)+" rate="+(runtime.tagConfig?.rate)+" ent="+(tagEntity?tagEntity.name.slice(0,30):"null"));}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     if(runtime.aiEconomyMode==="max")return {comment:fallbackComment(postText),cached:false,fallback:true,tagEntity};
     const cacheMaxAge=Math.max(0,parseInt(runtime.aiCacheDays)||7)*86400000;
     // Cache chỉ dùng cho nhánh KHÔNG tag: comment có tag phải luôn sinh mới,
@@ -1288,7 +1288,7 @@ let aiBasePrompt="";
         return null;
       },
       proofRoots:()=>{const live=findFeedPostByIdentity(identity)||article;return [commentScope,live];},
-      scrollIntoView:()=>{const live=findFeedPostByIdentity(identity)||article;try{(live&&live.isConnected?live:article)?.scrollIntoView({behavior:"smooth",block:"center"});}catch(_){}},
+      scrollIntoView:()=>{const live=findFeedPostByIdentity(identity)||article;try{(live&&live.isConnected?live:article)?.scrollIntoView({behavior:"smooth",block:"center"});}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }},
       onCounted:()=>true,
     });
     if(sendRes==="stopped")return "stopped";
@@ -1300,7 +1300,7 @@ let aiBasePrompt="";
   async function runFeedScopeComment(scope,runtime,article){
     if(!await feedScopeCommentAlive(scope,runtime)||!article)return "skip";
     // Mở rộng bài thu gọn trước để AI đọc toàn văn, không đọc cụt "... Xem thêm".
-    try{await expandArticleSeeMore(article);}catch(_){}
+    try{await expandArticleSeeMore(article);}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     const text=extractPostText(article),identity=postIdentity(article),contentKey=postContentKey(text);
     const history=runtime.aiHistory&&typeof runtime.aiHistory==="object"?runtime.aiHistory:{};
     // Facebook có thể tái sử dụng cùng một DOM identity khi feed recycle bài.
@@ -1334,9 +1334,9 @@ let aiBasePrompt="";
       // Dùng history.back() trước (SPA, không reload trang); chỉ fallback
       // location.assign nếu sau 1.5s vẫn chưa về feed.
       if(feedScopeRouteMatches(location.href,scope))return;
-      try{history.back();}catch(_){}
+      try{history.back();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       await sleep(1500);
-      if(!feedScopeRouteMatches(location.href,scope)){try{location.assign(feedScopeUrl(scope));}catch(_){}}
+      if(!feedScopeRouteMatches(location.href,scope)){try{location.assign(feedScopeUrl(scope));}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }}
     };
     if(result===true||result==="already-commented"){
       await markPostSig(text);
@@ -1358,7 +1358,7 @@ let aiBasePrompt="";
           await chrome.storage.local.set({[scope.aiStatusKey]:t("fd2.aiUnconfirmed",{done:runtime.aiCount,target:runtime.aiTarget})});
           return "skip";
         }
-      }catch(_){}
+      }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       return "stopped";
     }
     // Thất bại thường (box-timeout/skip/...) mà đang lạc khỏi feed: quay lại
@@ -1553,12 +1553,12 @@ let aiBasePrompt="";
           return r.width>0&&r.height>0;
         });
         for(const el of cands.slice(0,2)){
-          try{el.click();expanded++;}catch(_){}
+          try{el.click();expanded++;}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
           await sleep(700);
           if(!article.isConnected)return expanded;
         }
       }
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     return expanded;
   }
   function extractPostText(article){
@@ -1853,13 +1853,13 @@ let aiBasePrompt="";
     // yank-cycle, aiCount kẹt 0). Draft text đã xóa ở bước trước nên ở đây
     // không còn gì để dọn; việc quay lại feed (nếu cần) do caller quyết định
     // rõ ràng bằng location.assign.
-    try{if(typeof isFacebookPostDetailPage==="function"&&isFacebookPostDetailPage())return;}catch(_){}
+    try{if(typeof isFacebookPostDetailPage==="function"&&isFacebookPostDetailPage())return;}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     const close=[...scope.querySelectorAll('[role="button"],button')].filter(btn=>{
       if(!isRenderedElement(btn))return false;
       const label=buttonLabel(btn);
       return /^(đóng|close|thoát|quay lại|back)(?:\s|$)/i.test(label);
     });
-    if(close[0]){try{await trustedMouse(close[0],"click");}catch(_){}}
+    if(close[0]){try{await trustedMouse(close[0],"click");}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }}
   }
   function commentDraftText(box){
     if(!box)return "";
@@ -1909,7 +1909,7 @@ let aiBasePrompt="";
     if(readyReplacement?.isConnected&&readyReplacement!==box&&!commentComposerText(readyReplacement))box=readyReplacement;
     if(!box?.isConnected||isMessengerChatBox(box))return {ok:false,reason:"box-timeout",box};
     if(commentComposerText(box))return {ok:false,reason:"draft",box};
-    try{box.focus();box.click();}catch(_){ }
+    try{box.focus();box.click();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     if(document.activeElement!==box&&!box.contains(document.activeElement))return {ok:false,reason:"box-timeout",box};
     let typed=await chrome.runtime.sendMessage({
       action:"trustedInput",
@@ -1927,7 +1927,7 @@ let aiBasePrompt="";
       return {ok:false,reason:"stopped",box};
     }
     if(!typed?.ok){
-      try{box.focus();document.execCommand("insertText",false,commentText);}catch{ }
+      try{box.focus();document.execCommand("insertText",false,commentText);}catch (e) { console.debug("[Auto vjp][feed] bỏ qua lỗi:", e); }
     }
     const exact=await waitForExactCommentDraft(box,commentText,resolveReplacement,stillActive);
     if(exact)return {ok:true,box:exact};
@@ -1981,26 +1981,26 @@ let aiBasePrompt="";
   async function clearAICommentDraft(box){
     if(!box?.isConnected||isMessengerChatBox(box))return true;
     if(!commentDraftText(box))return true;
-    try{box.focus();box.click();}catch(_){ }
+    try{box.focus();box.click();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     // Facebook đôi khi nhận focus DOM nhưng không cập nhật composer nội bộ;
     // click tin cậy trước khi gửi phím giúp đồng bộ đúng editor trong modal.
-    try{await trustedMouse(box,"click");}catch(_){ }
+    try{await trustedMouse(box,"click");}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     // Facebook giữ draft ở contenteditable; Ctrl+A + Backspace qua CDP làm
     // thay đổi giống thao tác người dùng và cập nhật state nội bộ của Facebook.
     const selectModifier=/Mac|iPhone|iPad/i.test(navigator.platform||"")?4:2;
-    try{await chrome.runtime.sendMessage({action:"trustedKey",key:"a",code:"KeyA",windowsVirtualKeyCode:65,modifiers:selectModifier});}catch(_){ }
-    try{await chrome.runtime.sendMessage({action:"trustedKey",key:"Backspace",code:"Backspace",windowsVirtualKeyCode:8});}catch(_){ }
+    try{await chrome.runtime.sendMessage({action:"trustedKey",key:"a",code:"KeyA",windowsVirtualKeyCode:65,modifiers:selectModifier});}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
+    try{await chrome.runtime.sendMessage({action:"trustedKey",key:"Backspace",code:"Backspace",windowsVirtualKeyCode:8});}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     await sleep(250);
     if(commentDraftText(box)){
       // Fallback cho layout Facebook không nhận Ctrl+A từ debugger.
       try{
         const selection=window.getSelection(),range=document.createRange();
         range.selectNodeContents(box);selection.removeAllRanges();selection.addRange(range);
-        try{document.execCommand("selectAll",false,null);}catch(_){ }
+        try{document.execCommand("selectAll",false,null);}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
         document.execCommand("delete",false,null);
         box.dispatchEvent(new InputEvent("beforeinput",{bubbles:true,inputType:"deleteContentBackward",data:null}));
         box.dispatchEvent(new InputEvent("input",{bubbles:true,inputType:"deleteContentBackward",data:null}));
-      }catch(_){ }
+      }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       await sleep(250);
     }
     if(commentDraftText(box)){
@@ -2009,11 +2009,11 @@ let aiBasePrompt="";
       try{
         box.textContent="";
         box.innerHTML="";
-        try{document.execCommand("insertText",false,"");}catch(_){ }
+        try{document.execCommand("insertText",false,"");}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
         box.dispatchEvent(new InputEvent("beforeinput",{bubbles:true,inputType:"deleteContentBackward",data:null}));
         box.dispatchEvent(new InputEvent("input",{bubbles:true,inputType:"deleteContentBackward",data:null}));
         box.dispatchEvent(new Event("change",{bubbles:true}));
-      }catch(_){ }
+      }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       await sleep(250);
     }
     return !commentDraftText(box);
@@ -2283,7 +2283,7 @@ let aiBasePrompt="";
       }
       if(currentArticle.querySelector('a[href*="/reel/"],a[href*="/watch/"],a[href^="https://l.facebook.com/l.php"],a[href^="http://l.facebook.com/l.php"]')) return "skip";
 
-      try { currentArticle.scrollIntoView({behavior:"instant",block:"center"}); } catch {}
+      try { currentArticle.scrollIntoView({behavior:"instant",block:"center"}); } catch (e) { console.debug("[Auto vjp][feed] bỏ qua lỗi:", e); }
       await sleep(400);
       if(!currentArticle.isConnected) continue;
 
@@ -2344,7 +2344,7 @@ let aiBasePrompt="";
         commentActivationStarted=true;
         rememberAIActivation(null,currentArticle);
         boxWaitStartedAt=Date.now();
-        try{commentBtn.click();}catch(_){ }
+        try{commentBtn.click();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
         await sleep(500);
 
         // Tuyệt đối không bình luận ở trang chi tiết hoặc trong nhóm. Nếu
@@ -2383,7 +2383,7 @@ let aiBasePrompt="";
             if(errDialog){
               console.warn("[AI] Dialog lỗi bài không hiển thị, đóng và bỏ qua bài này");
               const closeBtn=errDialog.querySelector('[aria-label="Đóng"],[aria-label="Close"],[role="button"]');
-              if(closeBtn)try{closeBtn.click();}catch(_){}
+              if(closeBtn)try{closeBtn.click();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
               commentActivationStarted=false;activationPreviousBoxes=new Set();
               clearAIActivationMemory();
               return "skip";
@@ -2455,14 +2455,14 @@ let aiBasePrompt="";
         return (await finishCommentView(commentScope))?"already-commented":"stopped";
       }
 
-      try { box.scrollIntoView({behavior:"instant",block:"center"}); } catch {}
+      try { box.scrollIntoView({behavior:"instant",block:"center"}); } catch (e) { console.debug("[Auto vjp][feed] bỏ qua lỗi:", e); }
       await sleep(300);
       // Ưu tiên focus trực tiếp. Gọi chuột hệ thống dù ô đã focus có thể
       // trúng một khung Messenger nổi khi Facebook vừa render lại bố cục.
       let boxFocused=false;
-      try{box.focus();box.click();boxFocused=document.activeElement===box||box.contains(document.activeElement);}catch(_){ }
+      try{box.focus();box.click();boxFocused=document.activeElement===box||box.contains(document.activeElement);}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       if(!boxFocused&&box.isConnected){
-        try{await trustedMouse(box,"click");boxFocused=document.activeElement===box||box.contains(document.activeElement);}catch(_){ }
+        try{await trustedMouse(box,"click");boxFocused=document.activeElement===box||box.contains(document.activeElement);}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       }
       await sleep(300);
       if(!boxFocused||isMessengerChatBox(document.activeElement)){
@@ -2554,22 +2554,22 @@ let aiBasePrompt="";
           return null;
         },
         proofRoots:()=>[commentScope,currentArticle],
-        scrollIntoView:()=>{ try{(currentArticle&&currentArticle.isConnected?currentArticle:commentScope)?.scrollIntoView?.({behavior:"smooth",block:"center"});}catch(_){} },
+        scrollIntoView:()=>{ try{(currentArticle&&currentArticle.isConnected?currentArticle:commentScope)?.scrollIntoView?.({behavior:"smooth",block:"center"});}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); } },
         onCounted:async (hit)=>{
           // Proof đã xác nhận ở trên: dù dọn overlay/quay feed trục trặc
           // (returnToMainFeedViaHistory false) vẫn phải tính bài đã đăng —
           // vòng lặp sẽ tự về feed ở lượt sau. Mất đếm ở đây từng làm ca
           // dừng 0/3 dù comment đã hiện (bắt live 29/10).
           try{ if(await finishCommentView(hit))return true; }catch(e){
-            try{logActivity("tag","@lõi chung onCounted lỗi: "+String(e?.message||e).slice(0,120));}catch(_){}
+            try{logActivity("tag","@lõi chung onCounted lỗi: "+String(e?.message||e).slice(0,120));}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
           }
           try{
             const s=await chrome.storage.local.get("isAICommenting");
             if(isAICommenting&&s.isAICommenting!==false){
-              try{logActivity("tag","@lõi chung giữ đếm dù finishCommentView trục trặc (proof đã thấy)");}catch(_){}
+              try{logActivity("tag","@lõi chung giữ đếm dù finishCommentView trục trặc (proof đã thấy)");}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
               return true;
             }
-          }catch(_){}
+          }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
           return false;
         },
       });
@@ -2706,7 +2706,7 @@ let aiBasePrompt="";
     isAICommenting=true;
     if(!resume)aiCount=0;
     let loopOwnerTabId=0;
-    try{loopOwnerTabId=(await chrome.runtime.sendMessage({action:"getSenderTabId"}))?.tabId||0;}catch{}
+    try{loopOwnerTabId=(await chrome.runtime.sendMessage({action:"getSenderTabId"}))?.tabId||0;}catch (e) { console.debug("[Auto vjp][feed] bỏ qua lỗi:", e); }
     chrome.storage.local.set({ aiStatus:resume?t("ai2.resumed",{from:aiCount,to:aiTarget}):t("ai2.starting"), aiCount, isAICommenting:true,aiActiveConfig:aiCommentRunConfig({ownerTabId:loopOwnerTabId}) });
     let idle=0;
     let sawPost=false;
@@ -2748,7 +2748,7 @@ let aiBasePrompt="";
           continue;
         }
         const postKey=postIdentity(art);
-        try{await expandArticleSeeMore(art);}catch(_){}
+        try{await expandArticleSeeMore(art);}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
         const text = extractPostText(art);
         if(!text || text.trim().length < 15){
           console.warn("[AI] Không lấy được đủ nội dung bài viết để tạo comment, bỏ qua bài này");
@@ -2786,7 +2786,7 @@ let aiBasePrompt="";
               try{
                 const result=await doReact(likeBtn,aiReactionPref,()=>isAICommenting);
                 if(result&&result.success)liked=true;
-              }catch(e){}
+              }catch(e){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", e); }
             }
           }
           seenPostKeys.add(postKey);
@@ -2827,7 +2827,7 @@ let aiBasePrompt="";
             }
           }catch(e){console.warn("[AI] tag comment rieng loi, dung cau mau",e);commentText=fallbackComment(text);aiPostTagEntity=null;}
         }
-        try{logActivity("tag","[ai] decide: cfg="+(!!aiTagConfig)+" ent="+(aiPostTagEntity?aiPostTagEntity.name.slice(0,30):"null"));}catch(_){}
+        try{logActivity("tag","[ai] decide: cfg="+(!!aiTagConfig)+" ent="+(aiPostTagEntity?aiPostTagEntity.name.slice(0,30):"null"));}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
         if(!aiPostTagEntity&&!commentText){
         if(cacheMaxAge&&commentCache[cacheKey]?.comment){commentText=commentCache[cacheKey].comment;cacheHits++;}
         else if(aiEconomyMode==="max")commentText=fallbackComment(text);
@@ -2843,7 +2843,7 @@ let aiBasePrompt="";
             const batch=[text.slice(0,500)];
             const batchKeys=new Set([cacheKey]);
             for(const candidate of articles.slice(artIndex+1)){
-              try{await expandArticleSeeMore(candidate);}catch(_){}
+              try{await expandArticleSeeMore(candidate);}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
               const tx=extractPostText(candidate);
               const candidateKey=tx&&tx.length>=15?postContentKey(tx):"";
               if(tx&&tx.length>=15&&!batchKeys.has(candidateKey)&&!commentCache[candidateKey]){
@@ -2952,7 +2952,7 @@ let aiBasePrompt="";
                 return /^(thích|thich|like)$/i.test(lb);
               });
               if(likeBtn){likeBtn.click();await sleep(600);}
-            }catch(_){}
+            }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
           }
           if(aiCount<aiTarget){
             const delayMs=rand(aiMinDelay,aiMaxDelay),nextAt=Date.now()+delayMs;
@@ -3158,7 +3158,7 @@ let aiBasePrompt="";
           const m=t.match(/^(\d[\d.,]*)\s*nhóm$/i)||t.match(/(\d[\d.,]*)\s*groups?(?:\s+total|\s+you[' ]|$)/i)||t.match(/member(?:s)? of\s+(\d[\d.,]*)\s+groups?/i);
           if(m){const n=parseInt(m[1].replace(/[.,]/g,""));if(n>0&&n>total)total=n;}
         }
-      }catch{}
+      }catch (e) { console.debug("[Auto vjp][feed] bỏ qua lỗi:", e); }
       return total;
     }
     // Phát hiện spinner đang load thêm nhóm trong sidebar/main
@@ -3409,7 +3409,7 @@ let aiBasePrompt="";
   // Guard chung trước mọi lần đổi nhóm của Tương tác nhóm/Comment AI.
   async function prepareGroupCommentTransition(mode="reaction",reason="đổi nhóm"){
     // Xóa beforeunload để Chrome không bật dialog native "Rời khỏi trang web?"
-    try{window.onbeforeunload=null;}catch(_){}
+    try{window.onbeforeunload=null;}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     // Dismiss hộp thoại Facebook nếu đang hiện
     if(groupCommentLeaveWarningVisible()){
       await dismissLeaveWarningDialog();
@@ -3574,12 +3574,12 @@ let aiBasePrompt="";
   }
   async function appendTagMention(box,tagConfig,isActive,prePickedEntity=null){
     if(!box?.isConnected||!tagConfig){
-      try{logActivity("tag","@tag bỏ qua (invalid-box)");}catch(_){}
+      try{logActivity("tag","@tag bỏ qua (invalid-box)");}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       return false;
     }
     const entity=prePickedEntity||pickTagEntity(tagConfig);
     if(!entity?.name){
-      try{logActivity("tag","@tag bỏ qua (no-entity)");}catch(_){}
+      try{logActivity("tag","@tag bỏ qua (no-entity)");}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       return false;
     }
     if(!prePickedEntity){
@@ -3603,7 +3603,7 @@ let aiBasePrompt="";
     // Gõ từng ký tự qua trustedInsertText (CDP trusted) — kích Lexical mention autocomplete
     // trustedInsertText gửi 1 ký tự/lần (CDP attach/detach mỗi lần) — phải dùng delay giữa chars
     const trustedType=async(ch)=>{
-      try{const r=await chrome.runtime.sendMessage({action:"trustedInsertText",text:ch});if(r?.ok)return;}catch(_){}
+      try{const r=await chrome.runtime.sendMessage({action:"trustedInsertText",text:ch});if(r?.ok)return;}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       document.execCommand('insertText',false,ch);
       box.dispatchEvent(new InputEvent("input",{bubbles:true,composed:true,inputType:"insertText",data:ch}));
     };
@@ -3633,11 +3633,11 @@ let aiBasePrompt="";
           }
           acc+=len;
         }
-      }catch(_){}
+      }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       try{
         const r=document.createRange();r.selectNodeContents(box);r.collapse(false);
         const sel=window.getSelection();sel.removeAllRanges();sel.addRange(r);
-      }catch(_){}
+      }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       return true;
     };
     // Caret về ngay sau "@partial" trước khi Backspace (vị trí tag giờ ngẫu
@@ -3648,7 +3648,7 @@ let aiBasePrompt="";
         const t=box.textContent||"";
         const i=t.indexOf("@"+q);
         if(i>=0)setCaretAtOffset(box,i+1+q.length);
-      }catch(_){}
+      }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     };
   // Vòng xoay vị trí tag bền qua chrome.storage.local (tagPosRotateIdx).
     let tagPos="inline";
@@ -3661,7 +3661,7 @@ let aiBasePrompt="";
       // từng gây 3/3 mid liên tiếp (bắt live 29/10).
       const canMid=!!(m&&m.index>10);
       let rIdx=0;
-      try{ rIdx=parseInt((await chrome.storage.local.get(["tagPosRotateIdx"])).tagPosRotateIdx)||0; }catch(_){}
+      try{ rIdx=parseInt((await chrome.storage.local.get(["tagPosRotateIdx"])).tagPosRotateIdx)||0; }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       if(!canMid)tagPos="end";
       else{ tagPos=(rIdx%2===0)?"mid":"end"; }
       box.focus();
@@ -3755,7 +3755,7 @@ let aiBasePrompt="";
           await trustedTypeString(" ",40);
           await sleep(200);
         }
-      }catch(_){}
+      }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       // Tìm và click đúng option trong dropdown
       let deadline=Date.now()+9000;
       const typedAt=Date.now();
@@ -3791,12 +3791,12 @@ let aiBasePrompt="";
           if(sel){const r=document.createRange();r.selectNodeContents(box);r.collapse(false);sel.removeAllRanges();sel.addRange(r);}
           await sleep(100);
           if(await trustedTypeString(" @"+partial,70)){await sleep(400);typedLanded=queryLanded();}
-        }catch(_){}
+        }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       }
       if(!typedLanded){
         try{
           globalThis.FbTagMention.lastResult={ok:false,reason:"untyped",entity:String(entity.name).slice(0,80),partial,urlId:entityUrlId||null};
-        }catch(_){}
+        }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
         logActivity("tag","@tag bỏ qua (untyped: @"+partial+" không vào được box) entity="+String(entity.name).slice(0,60));
         return false;
       }
@@ -3815,12 +3815,12 @@ let aiBasePrompt="";
           if(sel2){const r2=document.createRange();r2.selectNodeContents(box);r2.collapse(false);sel2.removeAllRanges();sel2.addRange(r2);}
           await sleep(100);
           if(await trustedTypeString(" @"+partial,70))await sleep(400);
-        }catch(_){}
+        }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
         if(!queryLanded()||!leftBoundaryOk()){
           const tailNow=String(box.innerText||box.textContent||"").slice(-40);
           try{
             globalThis.FbTagMention.lastResult={ok:false,reason:"glued",entity:String(entity.name).slice(0,80),partial,urlId:entityUrlId||null};
-          }catch(_){}
+          }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
           logActivity("tag","@tag bỏ qua (glued: @"+partial+" dính từ trước, tail="+tailNow.slice(-30)+") entity="+String(entity.name).slice(0,60));
           // Dọn query dính để comment submit sạch
           try{
@@ -3829,7 +3829,7 @@ let aiBasePrompt="";
               box.dispatchEvent(new InputEvent("input",{bubbles:true,inputType:"deleteContentBackward"}));
               await sleep(150);
             }
-          }catch(_){}
+          }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
           return false;
         }
       }
@@ -3837,7 +3837,7 @@ let aiBasePrompt="";
       // CDP trustedInsertText insert text OK nhưng không luôn fire đủ events Lexical cần.
       try{
         box.dispatchEvent(new InputEvent("input",{bubbles:true,composed:true,inputType:"insertText",data:partial.slice(-1)||"a"}));
-      }catch(_){}
+      }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       await sleep(300);
       const triedOpts=new WeakSet();
       let retrigger=false;
@@ -3868,7 +3868,7 @@ let aiBasePrompt="";
           await sleep(100);
           caretAfterQuery(partial);
           for(let d=0;d<delCount;d++){
-            try{await chrome.runtime.sendMessage({action:"trustedKey",key:"Backspace",code:"Backspace",windowsVirtualKeyCode:8});}catch(_){}
+            try{await chrome.runtime.sendMessage({action:"trustedKey",key:"Backspace",code:"Backspace",windowsVirtualKeyCode:8});}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
             await sleep(30);
             if(!await isActive())return false;
           }
@@ -3890,7 +3890,7 @@ let aiBasePrompt="";
             caretAfterQuery(partial);
             // Xóa "@partial" (delCount+1 ký tự kể @ )
             for(let d=0;d<delCount+1;d++){
-              try{await chrome.runtime.sendMessage({action:"trustedKey",key:"Backspace",code:"Backspace",windowsVirtualKeyCode:8});}catch(_){}
+              try{await chrome.runtime.sendMessage({action:"trustedKey",key:"Backspace",code:"Backspace",windowsVirtualKeyCode:8});}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
               await sleep(25);
               if(!await isActive())return false;
             }
@@ -3903,7 +3903,7 @@ let aiBasePrompt="";
               if(Date.now()+5000>deadline)deadline=Date.now()+5000;
               try{
                 box.dispatchEvent(new InputEvent("input",{bubbles:true,composed:true,inputType:"insertText",data:slugQuery.slice(-1)||"a"}));
-              }catch(_){}
+              }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
             }
           }
         }
@@ -3962,7 +3962,7 @@ let aiBasePrompt="";
               skipReasonOverride="generic";
               try{
                 globalThis.FbTagMention.lastResult={ok:false,reason:"generic",entity:String(entity.name).slice(0,80),partial,urlId:entityUrlId||null};
-              }catch(_){}
+              }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
               logActivity("tag","@tag bỏ qua (generic: tên giống nhãn UI, không phải tên Page/Nhóm) pos="+tagPos+" partial=@"+partial+" entity="+String(entity.name).slice(0,60));
               abortDropdown=true;
               break;
@@ -3970,7 +3970,7 @@ let aiBasePrompt="";
             skipReasonOverride="ambiguous";
             try{
               globalThis.FbTagMention.lastResult={ok:false,reason:"ambiguous-wait",entity:String(entity.name).slice(0,80),partial,urlId:entityUrlId||null};
-            }catch(_){}
+            }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
             continue;
           }
           if(!pick)continue;
@@ -3989,12 +3989,12 @@ let aiBasePrompt="";
           const nameSpansBefore=countNameSpans(box,matchedText);
           // Gửi ArrowDown qua trustedKey (CDP Input.dispatchKeyEvent, isTrusted=true)
           for(let k=0;k<targetIdx;k++){
-            try{await chrome.runtime.sendMessage({action:"trustedKey",key:"ArrowDown",code:"ArrowDown",windowsVirtualKeyCode:40});}catch(_){}
+            try{await chrome.runtime.sendMessage({action:"trustedKey",key:"ArrowDown",code:"ArrowDown",windowsVirtualKeyCode:40});}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
             await sleep(120);
             if(!await isActive())return false;
           }
           // Enter để chọn option đang được highlight
-          try{await chrome.runtime.sendMessage({action:"trustedKey",key:"Enter",code:"Enter",windowsVirtualKeyCode:13});}catch(_){}
+          try{await chrome.runtime.sendMessage({action:"trustedKey",key:"Enter",code:"Enter",windowsVirtualKeyCode:13});}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
           await sleep(800);
           const innerAfter=box.innerText||'';
           // Verify CHẶT (bắt live báo OK giả): @query phải biến mất KHỎI box VÀ số
@@ -4028,10 +4028,10 @@ let aiBasePrompt="";
           const cls=String(box.className||"").split(" ").slice(0,4).join(".");
           const inDlg=!!(box.closest&&box.closest('[role="dialog"]'));
           dbg=" focusInBox="+(ae===box||(box.contains&&box.contains(ae)))+" allLb="+allLb+" newLb="+newLb+" inDlg="+inDlg+" boxCls="+cls.slice(0,60)+" route="+location.href.slice(0,80)+" tail="+tail;
-        }catch(_){}
+        }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
         try{
           globalThis.FbTagMention.lastResult={ok:false,reason,entity:String(entity.name).slice(0,80),partial,urlId:entityUrlId||null,dbg};
-        }catch(_){}
+        }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
         logActivity("tag","@tag bỏ qua ("+reason+") pos="+tagPos+" partial=@"+partial+" entity="+String(entity.name).slice(0,60)+dbg);
         box.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",code:"Escape",bubbles:true,cancelable:true}));
         await sleep(150);
@@ -4042,7 +4042,7 @@ let aiBasePrompt="";
         caretAfterQuery(partial);
         const charsToDelete=('@'+partial).length;
         for(let i=0;i<charsToDelete;i++){
-          try{await chrome.runtime.sendMessage({action:"trustedKey",key:"Backspace",code:"Backspace",windowsVirtualKeyCode:8});}catch(_){}
+          try{await chrome.runtime.sendMessage({action:"trustedKey",key:"Backspace",code:"Backspace",windowsVirtualKeyCode:8});}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
           await sleep(30);
         }
         await sleep(100);
@@ -4056,16 +4056,16 @@ let aiBasePrompt="";
       }else{
         try{
           globalThis.FbTagMention.lastResult={ok:true,entity:String(entity.name).slice(0,80),partial,via:matchVia,matched:matchedText,matchedId:matchedId||null};
-        }catch(_){}
+        }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
         // Tag thành công mới tiến vòng xoay để lần sau đổi vị trí mid/end.
         try{
           const cur=await chrome.storage.local.get(["tagPosRotateIdx"]);
           await chrome.storage.local.set({tagPosRotateIdx:(parseInt(cur.tagPosRotateIdx)||0)+1});
-        }catch(_){}
+        }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
         logActivity("tag","@tag OK ["+matchVia+"→"+matchedText+" id="+(matchedId||"?")+" pos="+tagPos+"]: "+String(entity.name).slice(0,60));
       }
       return selected;
-    }catch(e){console.warn("[TagMention]",e);try{logActivity("tag","@tag lỗi: "+String(e?.message||e).slice(0,100));}catch(_){}return false;}
+    }catch(e){console.warn("[TagMention]",e);try{logActivity("tag","@tag lỗi: "+String(e?.message||e).slice(0,100));}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }return false;}
   }
   function isGroupPendingMembership(){
     const btns=document.querySelectorAll('[role="button"],[type="button"],button');
@@ -4151,7 +4151,7 @@ let aiBasePrompt="";
     const commentBtn=findCommentButton(currentArticle);
     if(!commentBtn) return "skip";
     if(runId&&!await groupModeRunActive(mode,runId)) return "stopped";
-    try{await trustedMouse(commentBtn,"click",()=>groupModeRunActive(mode,runId));}catch(_){ }
+    try{await trustedMouse(commentBtn,"click",()=>groupModeRunActive(mode,runId));}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     let box=null,scope=currentArticle;
     for(let wait=0;wait<30;wait++){
       if(modeStopped()||(runId&&!await groupModeRunActive(mode,runId))) return "stopped";
@@ -4188,12 +4188,12 @@ let aiBasePrompt="";
     }
     if(!box||!box.isConnected) return "box-timeout";
     if(isMessengerChatBox(box)) return "box-timeout";
-    try{box.scrollIntoView({behavior:"instant",block:"center"});}catch{ }
+    try{box.scrollIntoView({behavior:"instant",block:"center"});}catch (e) { console.debug("[Auto vjp][feed] bỏ qua lỗi:", e); }
     await sleep(300);
     let focused=false;
-    try{box.focus();box.click();focused=document.activeElement===box||box.contains(document.activeElement);}catch(_){ }
+    try{box.focus();box.click();focused=document.activeElement===box||box.contains(document.activeElement);}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     if(!focused&&box.isConnected){
-      try{await trustedMouse(box,"click");focused=document.activeElement===box||box.contains(document.activeElement);}catch(_){ }
+      try{await trustedMouse(box,"click");focused=document.activeElement===box||box.contains(document.activeElement);}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     }
     if(!focused||isMessengerChatBox(document.activeElement)) return "box-timeout";
     // Ghi nhớ ngay khi đã xác nhận ô đang rỗng. Nếu Facebook thay composer
@@ -4294,7 +4294,7 @@ let aiBasePrompt="";
         if(location.pathname.includes("/groups/"))arr.push(document);
         return arr;
       },
-      scrollIntoView:()=>{ try{box.scrollIntoView({behavior:"instant",block:"center"});}catch{} },
+      scrollIntoView:()=>{ try{box.scrollIntoView({behavior:"instant",block:"center"});}catch (e) { console.debug("[Auto vjp][feed] bỏ qua lỗi:", e); } },
       onCounted:async (hit)=>{
         const confirmScope=(hit&&hit.isConnected)?hit:(currentArticle?.isConnected?currentArticle:null);
         const confirmDeadline=Date.now()+8000;
@@ -4435,7 +4435,7 @@ let aiBasePrompt="";
             if(post) post.style.outline="2px solid #00897b";
             if(aiCommentEnabled&&post&&post.isConnected){
               const postKey=postIdentity(post);
-              try{await expandArticleSeeMore(post);}catch(_){}
+              try{await expandArticleSeeMore(post);}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
               const postText=extractPostText(post);
               const contentKey=postContentKey(postText);
               const alreadySeen=(postKey&&seenCommentKeys.has(postKey))||(contentKey&&Object.values(commentHistory).some(e=>e?.contentKey===contentKey));
@@ -4555,7 +4555,7 @@ let aiBasePrompt="";
       if(st.groupCommentActive)return false;
       if(!await groupInteractRunActive(activeRunId))return false;
       let ownerTabId=0;
-      try{ownerTabId=(await chrome.runtime.sendMessage({action:"getSenderTabId"}))?.tabId||0;}catch(_){}
+      try{ownerTabId=(await chrome.runtime.sendMessage({action:"getSenderTabId"}))?.tabId||0;}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       await startGroupCommentRun({...snap,ownerTabId});
       await chrome.storage.local.set({groupInteractActive:false,groupInteractStatus:t("gi2.bothPhaseComment",{n:snap.groups.length})});
       return true;
@@ -4645,7 +4645,7 @@ let aiBasePrompt="";
         for(const post of posts){
           if(groupDone>=cfg.perGroup||!await groupCommentRunActive(activeRunId))break;
           if(!post||!post.isConnected)continue;
-          try{await expandArticleSeeMore(post);}catch(_){}
+          try{await expandArticleSeeMore(post);}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
           const postText=groupCommentSourceText(post);
           const postKey=postIdentity(post)||postContentKey(postText);
           if(postKey&&processedKeys.has(postKey))continue;
@@ -4890,7 +4890,7 @@ let aiBasePrompt="";
         const h=parseGroupPostHoursAgo(c.innerText||c.textContent||"");
         if(h!==null&&h!==undefined)return h;
       }
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     return null;
   }
   function readGroupPostFeedRows(){
@@ -4905,7 +4905,7 @@ let aiBasePrompt="";
         seen.add(key);
         out.push({text:text.slice(0,900),hoursAgo:groupPostCardHoursAgo(node)});
         if(out.length>=40)break;
-      }catch(_){}
+      }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     }
     return out;
   }
@@ -4979,14 +4979,14 @@ let aiBasePrompt="";
       const ordered=Object.keys(c).sort((a,b)=>(Number(c[b]?.at)||0)-(Number(c[a]?.at)||0));
       ordered.slice(20).forEach(k=>{delete c[k];});
       await chrome.storage.local.set({groupPostContextCache:c});
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
   }
   function groupPostCtxKey(group){
     try{
       const u=new URL(String(group?.url||""),location.origin);
       const m=u.pathname.match(/^\/groups\/([^/?#]+)/i);
       if(m)return `/groups/${String(m[1]).toLowerCase()}`;
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     return String(group?.key||group?.id||group?.name||"").trim().toLowerCase();
   }
   async function groupPostCtxRawGet(key){
@@ -5014,7 +5014,7 @@ let aiBasePrompt="";
       const ordered=Object.keys(c).sort((a,b)=>(Number(c[b]?.at)||0)-(Number(c[a]?.at)||0));
       ordered.slice(20).forEach(k=>{delete c[k];});
       await chrome.storage.local.set({groupPostContextCache:c});
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
   }
   // Vòng treo đêm 20 nhóm: lời gọi AI có thể không bao giờ trả về (SW kẹt/
   // mất response mà promise không reject) khiến cả run treo active=true mãi,
@@ -5050,7 +5050,7 @@ let aiBasePrompt="";
       while(Date.now()<deadline&&rows.length<20&&noProgress<6&&rounds<36){
         if(!await groupPostRunActive(runId))return null;
         await chrome.storage.local.set({groupPostStatus:t("gp2.learning",{name:group?.name||"",n:Math.min(20,rows.length)})});
-        try{window.scrollBy(0,innerHeight*.9);}catch(_){}
+        try{window.scrollBy(0,innerHeight*.9);}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
         if(!await groupPostSleep(2500,runId))return null;
         rows=readGroupPostFeedRows();
         rounds++;
@@ -5094,9 +5094,9 @@ let aiBasePrompt="";
   function waitGroupPostDomChange(timeoutMs){
     return new Promise((resolve)=>{
       let done=false,obs=null;
-      const timer=setTimeout(()=>{if(!done){done=true;try{obs&&obs.disconnect();}catch(_){}resolve(false);}},Math.max(50,timeoutMs));
+      const timer=setTimeout(()=>{if(!done){done=true;try{obs&&obs.disconnect();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }resolve(false);}},Math.max(50,timeoutMs));
       try{
-        obs=new MutationObserver(()=>{if(!done){done=true;clearTimeout(timer);try{obs.disconnect();}catch(_){}resolve(true);}});
+        obs=new MutationObserver(()=>{if(!done){done=true;clearTimeout(timer);try{obs.disconnect();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }resolve(true);}});
         obs.observe(document.documentElement||document.body,{childList:true,subtree:true,characterData:true});
       }catch(_){/* fallback: timer decides */}
     });
@@ -5105,7 +5105,7 @@ let aiBasePrompt="";
     const end=Date.now()+timeoutMs;
     while(Date.now()<end){
       if(groupPostStopRequested)return false;
-      try{if(await predicate())return true;}catch(_){ }
+      try{if(await predicate())return true;}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       await waitGroupPostDomChange(Math.min(1000,Math.max(50,end-Date.now())));
     }
     return false;
@@ -5113,7 +5113,7 @@ let aiBasePrompt="";
   async function clickGroupPostControl(el,predicate,timeoutMs=3000,fallbackDelayMs=900){
     if(!el?.isConnected)return false;
     el.scrollIntoView({block:"center",inline:"center"});await sleep(220);
-    try{el.click();}catch(_){ }
+    try{el.click();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     const firstWait=Math.min(timeoutMs,Math.max(300,fallbackDelayMs));
     if(await waitGroupPostCondition(predicate,firstWait))return true;
     if(!el.isConnected)return false;
@@ -5262,7 +5262,7 @@ let aiBasePrompt="";
     if(more){
       more.scrollIntoView({block:"center",inline:"center"});
       await sleep(250);
-      try{more.click();}catch(_){}
+      try{more.click();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       await sleep(1800); // đợi full palette render
       console.log('[GroupPost] expanded full palette');
     }
@@ -5495,7 +5495,7 @@ let aiBasePrompt="";
       try{
         if(findGroupPostOpener())return "discussion";
         if(findGroupSellOpener())seenSell=true;
-      }catch(_){ }
+      }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       await sleep(500);
     }
     return seenSell?"sell":"unknown";
@@ -5519,18 +5519,18 @@ let aiBasePrompt="";
     if(!box?.isConnected)return false;
     const read=()=>normalizedGroupPostText(box.innerText||box.textContent||box.value||"");
     if(!read())return true;
-    try{box.focus();box.click();}catch(_){ }
+    try{box.focus();box.click();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     if(document.activeElement!==box&&!box.contains(document.activeElement)){
-      try{await trustedMouse(box,"click");}catch(_){ }
+      try{await trustedMouse(box,"click");}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     }
     if(document.activeElement!==box&&!box.contains(document.activeElement))return false;
     const selectModifier=/Mac|iPhone|iPad/i.test(navigator.platform||"")?4:2;
     // Meta+A phải gửi key hoa thật trên Chrome for Testing/macOS; một số bản
     // Lexical bỏ qua biến thể key thường dù vẫn nhận Backspace. Gửi lại cùng
     // tổ hợp theo chuẩn CDP sau lần đầu để chọn toàn bộ draft chắc chắn hơn.
-    try{await chrome.runtime.sendMessage({action:"trustedKey",key:"a",code:"KeyA",windowsVirtualKeyCode:65,modifiers:selectModifier,abortStorageKey:"groupPostActive",abortRunId:runId});}catch(_){ }
-    try{await chrome.runtime.sendMessage({action:"trustedKey",key:"A",code:"KeyA",windowsVirtualKeyCode:65,modifiers:selectModifier,abortStorageKey:"groupPostActive",abortRunId:runId});}catch(_){ }
-    try{await chrome.runtime.sendMessage({action:"trustedKey",key:"Backspace",code:"Backspace",windowsVirtualKeyCode:8,abortStorageKey:"groupPostActive",abortRunId:runId});}catch(_){ }
+    try{await chrome.runtime.sendMessage({action:"trustedKey",key:"a",code:"KeyA",windowsVirtualKeyCode:65,modifiers:selectModifier,abortStorageKey:"groupPostActive",abortRunId:runId});}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
+    try{await chrome.runtime.sendMessage({action:"trustedKey",key:"A",code:"KeyA",windowsVirtualKeyCode:65,modifiers:selectModifier,abortStorageKey:"groupPostActive",abortRunId:runId});}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
+    try{await chrome.runtime.sendMessage({action:"trustedKey",key:"Backspace",code:"Backspace",windowsVirtualKeyCode:8,abortStorageKey:"groupPostActive",abortRunId:runId});}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     await sleep(250);
     let liveDialog=findGroupPostDialog(),liveBox=liveDialog&&findGroupPostEditor(liveDialog)||box;
     let remaining=normalizedGroupPostText(liveBox?.innerText||liveBox?.textContent||liveBox?.value||"");
@@ -5540,7 +5540,7 @@ let aiBasePrompt="";
         range.selectNodeContents(liveBox);selection.removeAllRanges();selection.addRange(range);
         document.execCommand("delete",false,null);
         liveBox.dispatchEvent(new InputEvent("input",{bubbles:true,inputType:"deleteContentBackward",data:null}));
-      }catch(_){ }
+      }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       await sleep(250);
       liveDialog=findGroupPostDialog();liveBox=liveDialog&&findGroupPostEditor(liveDialog)||liveBox;
       remaining=normalizedGroupPostText(liveBox?.innerText||liveBox?.textContent||liveBox?.value||"");
@@ -5553,9 +5553,9 @@ let aiBasePrompt="";
       : normalizeAiTypingConfig({mode:"custom",minDelayMs:60,maxDelayMs:130,chunkSize:1,humanLike:false,punctuationPauseMinMs:0,punctuationPauseMaxMs:0,spacePauseMinMs:0,spacePauseMaxMs:0});
     const expected=normalizedGroupPostText(content);
     const expectedBreaks=(String(content||"").match(/\n/g)||[]).length;
-    try{box.focus();box.click();}catch(_){ }
+    try{box.focus();box.click();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     if(document.activeElement!==box&&!box.contains(document.activeElement)){
-      try{await trustedMouse(box,"click");}catch(_){ }
+      try{await trustedMouse(box,"click");}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     }
     if(document.activeElement!==box&&!box.contains(document.activeElement))return {ok:false,error:t("gp2.noCursor")};
     // Facebook can restore a draft from an earlier failed/aborted attempt.
@@ -5584,7 +5584,7 @@ let aiBasePrompt="";
           // draft có chung >=85% prefix của bài đang chờ vẫn là draft của run
           // hiện tại; draft khác hoàn toàn vẫn được bảo toàn.
           owned=String(ps.groupPostRunId||"")===String(runId||"")&&pending.length>current.length&&current.length>=120&&common>=Math.floor(current.length*0.85);
-        }catch(_){ }
+        }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       }
       if(owned){
         for(let attempt=0;attempt<3&&!cleared;attempt++){
@@ -5595,13 +5595,13 @@ let aiBasePrompt="";
           // nhưng chỉ trong trường hợp draft đã được chứng minh là của run này.
           cleared=await clearGroupPostDraft(draftBox,runId);
           if(cleared)break;
-          try{draftBox.focus();draftBox.click();}catch(_){ }
+          try{draftBox.focus();draftBox.click();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
           try{
             const sel=window.getSelection(),range=document.createRange();
             range.selectNodeContents(draftBox);sel.removeAllRanges();sel.addRange(range);
             document.execCommand("delete",false,null);
             draftBox.dispatchEvent(new InputEvent("input",{bubbles:true,inputType:"deleteContentBackward",data:null}));
-          }catch(_){ }
+          }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
           await sleep(350);
           const afterDialog=findGroupPostDialog(),afterBox=afterDialog&&findGroupPostEditor(afterDialog);
           if(afterBox?.isConnected)draftBox=afterBox;
@@ -5623,7 +5623,7 @@ let aiBasePrompt="";
       if(!box.isConnected)break;
       let inserted=false;
       const chunk=chars.slice(index,index+typing.chunkSize).join("");
-      try{inserted=!!document.execCommand("insertText",false,chunk);}catch(_){ }
+      try{inserted=!!document.execCommand("insertText",false,chunk);}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       if(!inserted)break;
       if(!await groupPostSleep(aiTypingPauseForChunk(typing,chunk),runId))return {ok:false,error:t("bg.stoppedTyping")};
       index+=chunk.length;
@@ -5641,7 +5641,7 @@ let aiBasePrompt="";
     // content was published. Whitespace is already normalized above.
     if(expected&&actual===expected&&groupPostBreaksOk(liveBox,expectedBreaks))return {ok:true,composer,actual};
     liveBox=liveBox||box;
-    try{liveBox.focus();liveBox.click();}catch(_){ }
+    try{liveBox.focus();liveBox.click();}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     // Xóa nội dung một phần (nếu có) để tránh lặp khi gõ lại bằng trustedInput.
     if(actual)await clearGroupPostDraft(liveBox,runId);
     if(actual)await sleep(350);
@@ -5841,7 +5841,7 @@ let aiBasePrompt="";
           dialogCount:document.querySelectorAll('[role="dialog"]').length,
           url:String(location.href).slice(0,120)}});
         await logActivity("groupPost",`[chẩn đoán mở khung soạn] nút="${String(buttonLabel(opener)||"").slice(0,60)}" dialog=${document.querySelectorAll('[role="dialog"]').length} url=${location.href}`);
-      }catch(_){ }
+      }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
       throw new Error(t("gp2.openFail"));
     }
     let composer=await waitForGroupPostComposer(GROUP_POST_AUTO.composerReadyWait);
@@ -5915,7 +5915,7 @@ let aiBasePrompt="";
     try{
       const raw=new URL(String(group?.url||""),location.href).pathname.match(/^\/groups\/([^/?#]+)/i)?.[1];
       if(raw)ids.push(String(raw).toLowerCase());
-    }catch(_){ }
+    }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     const legacy=String(group?.id||"").trim().toLowerCase();
     if(legacy&&!ids.includes(legacy))ids.push(legacy);
     return ids;
@@ -5923,7 +5923,7 @@ let aiBasePrompt="";
   function groupPostCanonicalUrl(group){
     const ids=groupPostRouteIds(group);
     if(ids.length){
-      try{return new URL("/groups/"+ids[0],location.origin).href;}catch(_){}
+      try{return new URL("/groups/"+ids[0],location.origin).href;}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     }
     return String(group?.url||"");
   }
@@ -5986,7 +5986,7 @@ let aiBasePrompt="";
     try{
       const list=await groupPostReadUsedUrls();
       if(!list.includes(url)){list.push(url);await chrome.storage.local.set({newsUsedUrls:list.slice(-500)});}
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
   }
   function groupPostTrimXItem(it){
     return {link:String(it?.link||""),title:String(it?.title||"").slice(0,200),desc:String(it?.desc||"").slice(0,900),author:String(it?.author||"").slice(0,30),pubDate:String(it?.pubDate||"").slice(0,80),site:String(it?.site||"x.com").slice(0,30),topic:String(it?.topic||it?.author||"").slice(0,60)};
@@ -6001,14 +6001,14 @@ let aiBasePrompt="";
       if(s.groupPostXPool&&s.groupPostXPool.key===key&&Array.isArray(s.groupPostXPool.items)){
         pool=s.groupPostXPool.items.filter(it=>it?.link&&!used.includes(it.link));
       }
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     if(!pool.length&&users.length){
       await chrome.storage.local.set({groupPostStatus:t("gp2.xFetching")});
       const hours=Math.min(100000,Math.max(0,parseInt(cfg.xHours)||0));
       const res=await new Promise(resolve=>{try{chrome.runtime.sendMessage({action:"newsFetch",source:{type:"xread",users,hours}},r=>resolve(chrome.runtime.lastError?null:r));}catch(_){resolve(null);}});
       if(res&&!res.ok)fetchError=String(res.error||"").trim();
       pool=((res&&res.ok?res.items:[])||[]).filter(it=>it?.link&&!used.includes(it.link)).map(groupPostTrimXItem);
-      try{await chrome.storage.local.set({groupPostXPool:{key,items:pool.slice(0,60)}});}catch(_){}
+      try{await chrome.storage.local.set({groupPostXPool:{key,items:pool.slice(0,60)}});}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     }
     groupPostXPool=pool;
     groupPostXPoolKey=key;
@@ -6062,13 +6062,13 @@ let aiBasePrompt="";
       if(s.groupPostWebPool&&s.groupPostWebPool.key===key&&Array.isArray(s.groupPostWebPool.items)){
         pool=s.groupPostWebPool.items.filter(it=>it?.link&&!used.includes(it.link));
       }
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     if(!pool.length&&urls.length){
       await chrome.storage.local.set({groupPostStatus:t("gp2.webFetching")});
       const res=await new Promise(resolve=>{try{chrome.runtime.sendMessage({action:"newsFetch",source:{type:"sites",urls,q,hours},count:30},r=>resolve(chrome.runtime.lastError?null:r));}catch(_){resolve(null);}});
       const fetched=((res&&res.ok?res.items:[])||[]).filter(it=>it?.link&&!used.includes(it.link)).map(groupPostTrimWebItem);
       pool=groupPostDedupeWebItems(fetched).filter(it=>it?.link&&!used.includes(it.link));
-      try{await chrome.storage.local.set({groupPostWebPool:{key,items:pool.slice(0,60)}});}catch(_){}
+      try{await chrome.storage.local.set({groupPostWebPool:{key,items:pool.slice(0,60)}});}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     }
     groupPostWebPool=pool;
     groupPostWebPoolKey=key;
@@ -6116,12 +6116,12 @@ let aiBasePrompt="";
       if(s.groupPostFbPool&&s.groupPostFbPool.key===key&&Array.isArray(s.groupPostFbPool.items)){
         pool=s.groupPostFbPool.items.filter(it=>it?.link&&!used.includes(it.link));
       }
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     if(!pool.length&&urls.length){
       await chrome.storage.local.set({groupPostStatus:t("gp2.fbFetching")||t("gp2.webFetching")});
       const res=await new Promise(resolve=>{try{chrome.runtime.sendMessage({action:"newsFetch",source:{type:"fb",urls,hours,mode,backgroundOnly,includeComment},count:30},r=>resolve(chrome.runtime.lastError?null:r));}catch(_){resolve(null);}});
       pool=((res&&res.ok?res.items:[])||[]).filter(it=>it?.link&&!used.includes(it.link)).map(groupPostTrimFbItem);
-      try{await chrome.storage.local.set({groupPostFbPool:{key,items:pool.slice(0,60)}});}catch(_){}
+      try{await chrome.storage.local.set({groupPostFbPool:{key,items:pool.slice(0,60)}});}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     }
     groupPostFbPool=pool;
     groupPostFbPoolKey=key;
@@ -6142,7 +6142,7 @@ let aiBasePrompt="";
   }
   async function groupPostPrepareFbImage(cfg,group,fbItem,runId){
     const mode=cfg.source?.mode||"rewrite";
-    try{await chrome.storage.local.set({groupPostStatus:t(mode==="opinion_screenshot"?"gp2.fbShooting":"gp2.fbImage")});}catch(_){}
+    try{await chrome.storage.local.set({groupPostStatus:t(mode==="opinion_screenshot"?"gp2.fbShooting":"gp2.fbImage")});}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     if(mode==="opinion_screenshot"){
       if(!(fbItem?.hasBackground===true||fbItem?.contentClass==="textBg"))return "";
       const shot=await new Promise(resolve=>{try{chrome.runtime.sendMessage({action:"fbShotPost",url:fbItem.link,includeComment:cfg.source?.includeComment!==false},r=>resolve(chrome.runtime.lastError?null:r));}catch(_){resolve(null);}});
@@ -6221,7 +6221,7 @@ let aiBasePrompt="";
       if(credit){
         const stamped=await new Promise(resolve=>{
           let objUrl="";
-          const done=v=>{if(objUrl)try{URL.revokeObjectURL(objUrl);}catch(_){}resolve(v);};
+          const done=v=>{if(objUrl)try{URL.revokeObjectURL(objUrl);}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }resolve(v);};
           try{
             objUrl=URL.createObjectURL(blob);
             const img=new Image();
@@ -6266,7 +6266,7 @@ let aiBasePrompt="";
       if(runId&&!await groupPostRunActive(runId))return {ok:false,error:"stopped"};
       const scope=dialog?.isConnected?dialog:document;
       const shots=[...scope.querySelectorAll("img")].filter(el=>{
-        try{if(typeof isRenderedElement==="function"&&!isRenderedElement(el))return false;}catch(_){}
+        try{if(typeof isRenderedElement==="function"&&!isRenderedElement(el))return false;}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
         const src=String(el.currentSrc||el.src||"");
         if(!(/^blob:|^data:/i.test(src)))return false;
         try{if(!el.complete)return false;}catch(_){return false;}
@@ -6288,7 +6288,7 @@ let aiBasePrompt="";
     const imageUrl=String(webItem?.image||"").trim();
     const articleUrl=String(webItem?.link||"").trim();
     if(!imageUrl&&!articleUrl)return "";
-    try{await chrome.storage.local.set({groupPostStatus:t("gp2.webImage")});}catch(_){}
+    try{await chrome.storage.local.set({groupPostStatus:t("gp2.webImage")});}catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     if(articleUrl){
       const cap=await new Promise(resolve=>{try{chrome.runtime.sendMessage({action:"webCaptureImage",articleUrl,imageUrl},r=>resolve(chrome.runtime.lastError?null:r));}catch(_){resolve(null);}});
       if(runId&&!await groupPostRunActive(runId))return "";
@@ -6379,7 +6379,7 @@ let aiBasePrompt="";
       // news.js/readywall.js bị nhốt trong IIFE riêng) nên typeof luôn false —
       // các nhánh đó chưa bao giờ chạy thật. Hành vi giữ nguyên như cũ.
       await sleep(300);
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
   }
   async function clearOwnedGroupPostDraftFromPreviousIndex(pendingContent,pendingIndex,currentIndex,runId){
     if(Number(pendingIndex)<0||Number(pendingIndex)===Number(currentIndex)||!String(pendingContent||"").trim())return true;
@@ -6750,7 +6750,7 @@ let aiBasePrompt="";
             const ds=await chrome.storage.local.get("metaFreeDiag");
             const diag=ds.metaFreeDiag;
             if(diag&&Date.now()-(diag.at||0)<10*60*1000)diagSuffix=` [meta-free: ${diag.code}${diag.detail?` ${diag.detail}`:""}]`;
-          }catch(_){ }
+          }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
         }
         const skipTag=(ai?.code==="AI_TIMEOUT"||/không trả lời/i.test(String(ai?.error||"")))?(metaFreeRetried?"[bỏ qua: AI vẫn treo sau khi thử lại]":"[bỏ qua: AI treo quá 150s]"):(ai?.code==="AI_EMPTY"||/nội dung rỗng|empty content|không trả về nội dung/i.test(String(ai?.error||""))?"[bỏ qua: AI trả về rỗng]":"[bỏ qua: bài nền quá dài không nén vừa]");
         skipped++;
@@ -7086,7 +7086,7 @@ let aiBasePrompt="";
           return;
         }
       }
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
     // Phiên nhóm đang chạy nhưng tab không ở route nhóm (vd: reload rớt ra
     // ngoài, người dùng chuyển trang): tự về đúng nhóm rồi tiếp tục.
     const groupTaskUrl=(cfgKey,indexKey)=>{
@@ -7181,5 +7181,5 @@ let aiBasePrompt="";
     // Lõi gửi/proof/nán dùng chung mọi luồng comment (page.js,
     // friendWarm/Reengage gọi qua đây để cùng một cơ chế với Bản tin & AI).
     globalThis.UnifiedComment = { sendProofDwell: unifiedSendProofDwell, proofSig: commentProofSig, proofExists: commentProofExists };
-  } catch (_) {}
+  } catch (_) { console.debug("[Auto vjp][feed] bỏ qua lỗi:", _); }
 })();

@@ -1,5 +1,5 @@
 // background.js - xu ly goi da API AI de tao comment
-try { importScripts("store.js", "i18n.js", "aiTyping.js", "pageStore.js", "scrapeStore.js"); } catch (_) { }
+try { importScripts("store.js", "i18n.js", "aiTyping.js", "pageStore.js", "scrapeStore.js"); } catch (_) { console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
 // Nhật ký hoạt động bền vững dùng chung với feed.js/popup.js (cùng key
 // storage "activityLog") — xem chú thích đầy đủ ở bản trong feed.js. Ghi ở
 // đây các mốc điều phối chuỗi (chain) mà content script không thấy được:
@@ -26,7 +26,7 @@ async function logActivity(feature,msg,level){
       log.push({t:Date.now(),feature,msg:String(msg||"").slice(0,600),level:lvl});
       if(log.length>ACTIVITY_LOG_LIMIT)log.splice(0,log.length-ACTIVITY_LOG_LIMIT);
       await chrome.storage.local.set({activityLog:log});
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
   }).catch(()=>{});
   return activityLogQueue;
 }
@@ -151,7 +151,7 @@ async function listProviderModels(provider,key){
   else if(normalizedProvider==="claude"){headers["x-api-key"]=key;headers["anthropic-version"]="2023-06-01";}
   else headers.Authorization=`Bearer ${key}`;
   const res=await fetch(url,{method:"GET",headers});
-  let data={};try{data=await res.json();}catch{}
+  let data={};try{data=await res.json();}catch (e) { console.debug("[Auto vjp][background] bỏ qua lỗi:", e); }
   if(!res.ok)throw new Error(data.error?.message||data.message||JSON.stringify(data).slice(0,300)||`HTTP ${res.status}`);
   const items=Array.isArray(data.models)?data.models:(Array.isArray(data.data)?data.data:[]);
   const models=[];
@@ -318,7 +318,7 @@ async function nextGroupPostAngleLine(){  try{
     // BÀI NÀY" từng bị Meta echo nguyên văn thành lời tường thuật "Tôi đang
     // viết bài mở bằng góc nhìn..." rồi đăng lên — bắt live Page đăng nhóm).
     if(angle)return `Viết bài này đúng giọng sau (khác hẳn các bài trước; chỉ thể hiện qua cách viết, tuyệt đối không tường thuật hay nhắc tới yêu cầu này): ${angle}.`;
-  }catch(_){}
+  }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
   return "";
 }
 // Khối chống lặp góc: nhét 2-3 bài vừa đăng gần nhất vào prompt, ép AI đổi
@@ -457,7 +457,7 @@ function guardAiPostText(raw){
     const error=new Error(t("bg.aiContentGuard"));
     error.aiEmpty=true;
     error.code="AI_EMPTY";
-    try{ error.rawSample=String(raw||"").slice(0,220); }catch(_){}
+    try{ error.rawSample=String(raw||"").slice(0,220); }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
     throw error;
   }
   return value;
@@ -822,26 +822,26 @@ async function metaFreeRestoreFocus(tabId){
   try{
     const id=metaFreePrevActiveTab;
     metaFreePrevActiveTab=null;
-    try{await chrome.alarms.clear("metaFreeRestoreFocus");}catch(_){}
+    try{await chrome.alarms.clear("metaFreeRestoreFocus");}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
     if(id&&Number(id)!==Number(tabId)){
       const tab=await chrome.tabs.get(Number(id)).catch(()=>null);
       if(tab)await chrome.tabs.update(Number(id),{active:true});
     }
-  }catch(_){}
+  }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
 }
 async function ensureMetaFreeTab(){
   try{
     const sess=await chrome.storage.session.get("metaFreeTabId").catch(()=>({}));
     const alive=await metaFreeTabAlive(sess.metaFreeTabId);
     if(alive)return alive;
-  }catch(_){}
+  }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
   // Không chiếm tab meta.ai của user (nếu có): chỉ dùng lại tab worker của mình,
   // còn lại luôn mở tab nền mới.
   const tab=await chrome.tabs.create({url:"https://www.meta.ai/",active:false}).catch(()=>null);
   if(!tab||tab.id===undefined)throw new Error(t("bg.metaNoTab"));
-  try{await chrome.storage.session.set({metaFreeTabId:tab.id});}catch(_){}
+  try{await chrome.storage.session.set({metaFreeTabId:tab.id});}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
   // Chống Chrome Memory Saver dọn tab worker đang chạy nền giữa chừng.
-  try{await chrome.tabs.update(tab.id,{autoDiscardable:false});}catch(_){}
+  try{await chrome.tabs.update(tab.id,{autoDiscardable:false});}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
   // Đợi trang tải xong để content script kịp gắn listener.
   await new Promise(resolve=>{
     const timer=setTimeout(()=>{chrome.tabs.onUpdated.removeListener(fn);resolve();},20000);
@@ -873,7 +873,7 @@ async function metaFreeAskOnce(prompt,feature){
   // hết giờ 150s trước — trước đây lỗi chi tiết của SW luôn bị race che mất.
   const askStartedAt=Date.now();
   const writeDiag=async(code,detail)=>{
-    try{await chrome.storage.local.set({metaFreeDiag:{feature,code:String(code||"").slice(0,60),detail:String(detail||"").slice(0,180),at:Date.now(),durationMs:Date.now()-askStartedAt}});}catch(_){}
+    try{await chrome.storage.local.set({metaFreeDiag:{feature,code:String(code||"").slice(0,60),detail:String(detail||"").slice(0,180),at:Date.now(),durationMs:Date.now()-askStartedAt}});}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
   };
   // Deadline nội bộ NHỎ HƠN race 150s phía feed: SW luôn trả verdict chi tiết
   // trước khi feed bỏ cuộc mù. Không có nó, một lượt chậm kẹt cả hàng đợi FIFO
@@ -889,7 +889,7 @@ async function metaFreeAskOnce(prompt,feature){
     throw e;
   };
   let cfg={};
-  try{cfg=await chrome.storage.sync.get(["metaFreeSessionMax","metaFreeChatMode"]).catch(()=>({}));}catch(_){}
+  try{cfg=await chrome.storage.sync.get(["metaFreeSessionMax","metaFreeChatMode"]).catch(()=>({}));}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
   const maxSession=Math.max(2,Math.min(200,parseInt(cfg.metaFreeSessionMax)||30));
   // Chế độ "fresh": mỗi câu chat mới (bỏ session). Dùng khi nick bị bóp ở chat
   // cũ nối dài mà chat mới vẫn chạy mượt.
@@ -898,13 +898,13 @@ async function metaFreeAskOnce(prompt,feature){
   try{
     const s=await chrome.storage.local.get("metaFreeSessions").catch(()=>({}));
     if(s.metaFreeSessions&&typeof s.metaFreeSessions==="object")sessions=s.metaFreeSessions;
-  }catch(_){}
-  const saveSessions=async next=>{try{await chrome.storage.local.set({metaFreeSessions:next});}catch(_){}};
+  }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
+  const saveSessions=async next=>{try{await chrome.storage.local.set({metaFreeSessions:next});}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }};
   // 1 session/tính năng: tái dùng chat cũ, đủ N lượt (gần đầy) thì xóa mở mới.
   // Chế độ fresh: luôn chat mới, không ghi session.
   const target=freshMode?{chatId:"",fresh:true,rotateId:""}:metaFreeSessionTarget(sessions,feature,maxSession);
   if(target.rotateId){
-    try{await metaFreeCleanIds([target.rotateId]);}catch(_){}
+    try{await metaFreeCleanIds([target.rotateId]);}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
     delete sessions[feature];
     await saveSessions(sessions);
   }
@@ -967,9 +967,9 @@ async function metaFreeAskOnce(prompt,feature){
           const oldId=prev&&prev.chatId?prev.chatId:"";
           delete sessions[feature];
           await saveSessions(sessions);
-          if(oldId){try{await metaFreeCleanIds([oldId]);}catch(_){}}
+          if(oldId){try{await metaFreeCleanIds([oldId]);}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }}
         }
-      }catch(_){}
+      }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
     }
     await writeDiag(code,detail);
     if(code==="META_TIMEOUT")throw new Error(withDetail(t("bg.metaTimeout")));
@@ -995,7 +995,7 @@ async function metaFreeAskOnce(prompt,feature){
       }
       await metaFreeTrackChat(chatId);
     }
-  }catch(_){}
+  }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
   // Tự dọn chat cũ vượt ngưỡng giữ lại: bắn-fire-and-forget để lượt dọn
   // (navigate home + xóa sidebar, có thể tốn hàng chục giây) không chặn verdict
   // của lượt hỏi này — trước đây await ở đây làm SW trả muộn hơn race feed.
@@ -1026,7 +1026,7 @@ async function metaFreeTrackChat(chatId){
       list.push({id:chatId,at:Date.now()});
       await chrome.storage.local.set({metaFreeWorkerChats:list.slice(-500)});
     }
-  }catch(_){}
+  }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
 }
 // Chat nào cần dọn: CHỈ khi tổng vượt trần (gần đầy) mới xóa bớt, giữ lại N
 // mới nhất cho user dùng lại ngữ cảnh/đối chiếu. Chưa tới trần thì giữ hết.
@@ -1071,19 +1071,19 @@ async function metaFreeCleanIds(ids){
     const gone=new Set(res.deleted||[]);
     const list=(Array.isArray(s.metaFreeWorkerChats)?s.metaFreeWorkerChats:[]).filter(e=>e&&!gone.has(e.id));
     await chrome.storage.local.set({metaFreeWorkerChats:list.slice(-200)});
-  }catch(_){}
+  }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
   return res;
 }
 // Dọn tự động sau mỗi câu hỏi: chỉ dọn khi số chat worker vượt trần.
 async function metaFreeCleanOld(){
   let cfg={};
-  try{cfg=await chrome.storage.sync.get(["metaFreeAutoClean","metaFreeKeepN","metaFreeMaxChats"]).catch(()=>({}));}catch(_){}
+  try{cfg=await chrome.storage.sync.get(["metaFreeAutoClean","metaFreeKeepN","metaFreeMaxChats"]).catch(()=>({}));}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
   if(cfg.metaFreeAutoClean===false)return {ok:true,deleted:[],failed:[],skipped:true};
   let tracked=[];
   try{
     const s=await chrome.storage.local.get("metaFreeWorkerChats").catch(()=>({}));
     tracked=Array.isArray(s.metaFreeWorkerChats)?s.metaFreeWorkerChats:[];
-  }catch(_){}
+  }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
   const targets=metaFreeCleanTargets(tracked,cfg.metaFreeKeepN===undefined?20:cfg.metaFreeKeepN,cfg.metaFreeMaxChats===undefined?200:cfg.metaFreeMaxChats);
   if(!targets.length)return {ok:true,deleted:[],failed:[]};
   return metaFreeCleanIds(targets);
@@ -1200,7 +1200,7 @@ async function repairBackgroundPost(content,background,requestText,cleaner,fresh
     try{
       const fresh=usable(await freshText());
       if(fresh)return fresh;
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
   }
   }
   // 4) Fallback cục bộ: câu tròn dài nhất vừa trần. Không bao giờ cắt giữa
@@ -1327,7 +1327,7 @@ async function digestCachePut(key,digest){
     const keys=Object.keys(c).sort((a,b)=>(Number(c[b]?.at)||0)-(Number(c[a]?.at)||0));
     keys.slice(5).forEach(k=>{ if(k!==key) delete c[k]; });
     await chrome.storage.local.set({styleDigestCache:c});
-  }catch(_){}
+  }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
 }
 function profilePromptV2(name,digest){
   return t("bg.profilePromptV2",{name:String(name||t("bg.profileShort")).slice(0,80)})+"\n"+JSON.stringify(digest);
@@ -1380,7 +1380,7 @@ async function readMediaBodyWithCap(res,maxBytes){
       const {done,value}=await reader.read();
       if(done)break;
       total+=value.byteLength;
-      if(total>maxBytes){try{await reader.cancel();}catch(_){} throw tooBig();}
+      if(total>maxBytes){try{await reader.cancel();}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); } throw tooBig();}
       chunks.push(value);
     }
     const buf=new Uint8Array(total);
@@ -1502,7 +1502,7 @@ async function getPageAiConfig(own={}){
     try{
       const rp=await resolveAiProfile(own.profileId);
       if(rp&&(rp.key||rp.provider==="meta-free"))return rp;
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
   }
   const cfg=await chrome.storage.sync.get(["aiProvider","aiApiKey","aiModel","aiCustomUrl","aiKeys"]);
   const provider=own.provider||cfg.aiProvider||"gemini",saved=cfg.aiKeys?.[provider]||{};
@@ -1637,10 +1637,10 @@ function normalizeScheduleGroups(value,required=true){
   const groups=[];
   for(const raw of Array.isArray(value)?value:[]){
     if(raw&&typeof raw.auto==="object"){
-      try{const marker=normalizeScheduleAutoGroup(raw);if(!groups.some(item=>item.auto&&item.auto.source===marker.auto.source&&item.auto.pageKey===marker.auto.pageKey&&item.auto.keyword===marker.auto.keyword))groups.push(marker);}catch{}
+      try{const marker=normalizeScheduleAutoGroup(raw);if(!groups.some(item=>item.auto&&item.auto.source===marker.auto.source&&item.auto.pageKey===marker.auto.pageKey&&item.auto.keyword===marker.auto.keyword))groups.push(marker);}catch (e) { console.debug("[Auto vjp][background] bỏ qua lỗi:", e); }
       continue;
     }
-    try{const group=normalizeScheduleGroup(raw);if(!groups.some(item=>item.id===group.id))groups.push(group);}catch{}
+    try{const group=normalizeScheduleGroup(raw);if(!groups.some(item=>item.id===group.id))groups.push(group);}catch (e) { console.debug("[Auto vjp][background] bỏ qua lỗi:", e); }
   }
   if(required&&!groups.length)throw new Error("Cần chọn ít nhất một nhóm trước khi hẹn lịch");
   return groups.slice(0,100000);
@@ -1693,7 +1693,7 @@ async function resolveScheduledAutoGroups(feature,config={}){
           if(resolved.length>=limit)break;
         }
       }
-    }catch{}
+    }catch (e) { console.debug("[Auto vjp][background] bỏ qua lỗi:", e); }
   }
   const merged=[...concrete];
   for(const r of resolved){if(!merged.some(m=>m.id===r.id))merged.push(r);}
@@ -1708,7 +1708,7 @@ function normalizeSchedulePage(raw={}){
 function normalizeSchedulePages(value){
   const pages=[];
   for(const raw of Array.isArray(value)?value:[]){
-    try{const page=normalizeSchedulePage(raw);if(!pages.some(item=>scheduleUrlKey(item.url)===scheduleUrlKey(page.url)))pages.push(page);}catch{}
+    try{const page=normalizeSchedulePage(raw);if(!pages.some(item=>scheduleUrlKey(item.url)===scheduleUrlKey(page.url)))pages.push(page);}catch (e) { console.debug("[Auto vjp][background] bỏ qua lỗi:", e); }
   }
   return pages.slice(0,1000);
 }
@@ -1986,14 +1986,14 @@ async function resolveAiProfile(profileId){
     const profiles=Array.isArray(saved.aiProfiles)?saved.aiProfiles:[];
     let found=profiles.find(p=>p&&p.id===profileId)||profiles.find(p=>p&&p.id===saved.aiDefaultProfileId)||profiles[0];
     if(found&&(found.key||found.model||found.provider==="meta-free"))return {provider:found.provider||"gemini",key:found.key||"",model:found.model||"",url:found.url||""};
-  }catch(_){}
+  }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
   return getPageAiConfig({});
 }
 async function scheduleFacebookTab(preferredTabId=0){
   if(Number(preferredTabId)>0){
     const preferred=await chrome.tabs.get(Number(preferredTabId)).catch(()=>null);
     let host="";
-    try{host=new URL(String(preferred?.url||"")).hostname.toLowerCase().replace(/\.$/,"");}catch{}
+    try{host=new URL(String(preferred?.url||"")).hostname.toLowerCase().replace(/\.$/,"");}catch (e) { console.debug("[Auto vjp][background] bỏ qua lỗi:", e); }
     if(preferred?.id!==undefined&&(host==="facebook.com"||host.endsWith(".facebook.com")||host==="fb.watch"))return {id:preferred.id};
     throw scheduledError("SCHEDULE_OWNER_TAB_UNAVAILABLE","Tab Facebook cố định của chuỗi không còn khả dụng");
   }
@@ -2026,7 +2026,7 @@ async function triggerTabContentLoad(tabId){
     const sizeRes=await new Promise(res=>chrome.debugger.sendCommand({tabId},"Runtime.evaluate",
       {expression:'JSON.stringify({w:window.innerWidth,h:window.innerHeight})',returnByValue:true},res));
     let w=1280,h=900;
-    try{const sz=JSON.parse(sizeRes?.result?.value||"{}");if(sz.w)w=sz.w;if(sz.h)h=sz.h;}catch{}
+    try{const sz=JSON.parse(sizeRes?.result?.value||"{}");if(sz.w)w=sz.w;if(sz.h)h=sz.h;}catch (e) { console.debug("[Auto vjp][background] bỏ qua lỗi:", e); }
     const cx=Math.round(w*0.65);
     for(let y=120;y<Math.min(h-30,850);y+=80){
       await new Promise(res=>chrome.debugger.sendCommand({tabId},"Input.dispatchMouseEvent",
@@ -2035,7 +2035,7 @@ async function triggerTabContentLoad(tabId){
     await new Promise(res=>chrome.debugger.detach({tabId},()=>res()));
     return true;
   }catch(e){
-    if(attached)try{await new Promise(res=>chrome.debugger.detach({tabId},()=>res()));}catch{}
+    if(attached)try{await new Promise(res=>chrome.debugger.detach({tabId},()=>res()));}catch (e) { console.debug("[Auto vjp][background] bỏ qua lỗi:", e); }
     return false;
   }
 }
@@ -2064,10 +2064,10 @@ async function scheduledEnsurePersonalActor(tabId){
     const s=await chrome.storage.local.get("personalActorSwitching");
     const fl=s.personalActorSwitching;
     if(fl&&Date.now()-(fl.at||0)<45000){
-      try{await chrome.storage.local.remove("personalActorSwitching");}catch{}
+      try{await chrome.storage.local.remove("personalActorSwitching");}catch (e) { console.debug("[Auto vjp][background] bỏ qua lỗi:", e); }
       return {ok:true,switched:true};
     }
-  }catch{}
+  }catch (e) { console.debug("[Auto vjp][background] bỏ qua lỗi:", e); }
   if(res&&res.verified===true)return res;
   return {ok:false,code:"ACTOR_UNVERIFIED"};
 }
@@ -2207,7 +2207,7 @@ async function runJoinedGroupsScan(tabId,pageActorUrl,pageKey,pageData){
             try {
               const m = new URL(String(g.url || ""), "https://www.facebook.com").pathname.match(/^\/groups\/([^/?#]+)/i);
               if (m) return `/groups/${String(m[1]).toLowerCase()}`;
-            } catch (_) {}
+            } catch (_) { console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
             const id = String(g.id || "").trim().toLowerCase();
             if (id) return `/groups/${id}`;
             return "";
@@ -2219,7 +2219,7 @@ async function runJoinedGroupsScan(tabId,pageActorUrl,pageKey,pageData){
           }
           all[pk] = rows.slice(-500);
           await chrome.storage.local.set({ pageSavedGroups: all });
-        } catch (_) {}
+        } catch (_) { console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
       }
       await logActivity("scanGroups",scanMsg,"done");
       return {ok:true,groups:payload,storageKey,totalShown};
@@ -2469,7 +2469,7 @@ async function launchScheduledTask(task,preferredTabId=0){
     const actor=await scheduledEnsurePersonalActor(tab.id);
     if(actor&&actor.ok===false)throw scheduledError("SCHEDULE_WRONG_ACTOR",t("gj.actingAsPage",{name:actor.page||"?"}));
     if(actor&&actor.switched){
-      try{await logActivity(task.feature,t("gj.switchedToPersonal"));}catch{}
+      try{await logActivity(task.feature,t("gj.switchedToPersonal"));}catch (e) { console.debug("[Auto vjp][background] bỏ qua lỗi:", e); }
       await waitForTabReady(tab.id,20000);
       await wait(4500);
     }
@@ -2528,7 +2528,7 @@ async function syncChainKeepAwake(){
     if(want)chrome.power.requestKeepAwake("system");
     else chrome.power.releaseKeepAwake();
     chainKeepAwakeOn=want;
-  }catch(_){ }
+  }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
 }
 async function chainTaskById(id){return (await scheduledTasks()).find(item=>item.id===id&&item.kind==="chain")||null;}
 async function scheduleChainStateForStep(step){
@@ -2553,7 +2553,7 @@ async function transitionScheduledChainAfterFailure(chain,error){
       }
       const activeKey=scheduledActiveKey(stepTask);
       if(activeKey)await chrome.storage.local.set({[activeKey]:false});
-    }catch(_){ }
+    }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
   };
   const failedSteps=chain.steps.map((item,index)=>index===chain.currentIndex?{...item,status:"failed",error:message,finishedAt:Date.now()}:item);
   const nextIndex=chain.currentIndex+1;
@@ -2638,20 +2638,20 @@ async function recoverScheduledChainTab(chain,step){
     return false;
   };
   // Cấp 1: reload tab hiện tại (nhẹ, giữ nguyên ownerTabId).
-  try{await chrome.tabs.reload(tab.id);}catch(_){}
+  try{await chrome.tabs.reload(tab.id);}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
   await updateScheduledChain(chain.id,{status:"running",ownerTabId:tab.id,recoveryCount:recoveryCount+1,lastRecoveryAt:Date.now(),heartbeatAt:Date.now(),error:"Đã reload tab để khôi phục phiên chạy"});
   if(await settled(90000))return true;
   // Cấp 2: tab cũ đã chết hẳn (renderer treo/crash, reload không cứu được) —
   // đóng nó, mở tab mới và chạy tiếp ở đó (resume theo ownerTabId mới).
   // Bắt live 18/10: reload mãi không có heartbeat mới, chuỗi gãy oan.
-  try{await chrome.tabs.remove(tab.id);}catch(_){}
+  try{await chrome.tabs.remove(tab.id);}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
   try{
     const task=scheduleChainStepTask(chain,step);
     const url=scheduledTargetUrl(task,task.config||{})||"https://www.facebook.com/";
     const fresh=await chrome.tabs.create({url,active:false});
     await updateScheduledChain(chain.id,{status:"running",ownerTabId:fresh.id,recoveryCount:recoveryCount+1,lastRecoveryAt:Date.now(),heartbeatAt:Date.now(),error:"Đã mở tab mới để khôi phục phiên chạy"});
     if(await settled(90000))return true;
-  }catch(_){}
+  }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
   throw new Error("Tab Facebook không phản hồi sau nhiều lần khôi phục (đã thử tab mới)");
 }
 async function superviseScheduledChain(id){
@@ -2840,10 +2840,10 @@ chrome.tabs.onRemoved.addListener(async(tabId)=>{
     if(stored.feedGroupsActive&&stored.feedGroupsConfig?.ownerTabId===tabId)patch.feedGroupsActive=false;
     if(stored.feedPagesActive&&stored.feedPagesConfig?.ownerTabId===tabId)patch.feedPagesActive=false;
     if(Object.keys(patch).length)await chrome.storage.local.set(patch);
-  }catch(_){}
+  }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
 });
 
-// (Slice 1: da go relay test CDP va kenh onMessageExternal — xem FORK-CHANGES.md)
+// (Slice 1: da go relay test CDP va kenh onMessageExternal)
 
 // The content-script bridge supplies liveness without owning any feature
 // state. Persist only a throttled heartbeat so a popup is not redrawn every
@@ -2895,7 +2895,7 @@ chrome.storage.onChanged.addListener((changes,area)=>{
 // quay lại, giữ nhấn ngẫu nhiên. Vị trí chuột cuối của từng tab được nhớ
 // để mỗi cú di chuyển bắt đầu từ nơi cú trước kết thúc.
 const humanMousePos=new Map(); // tabId -> {x, y}
-try{chrome.tabs.onRemoved.addListener(tabId=>humanMousePos.delete(tabId));}catch(_){}
+try{chrome.tabs.onRemoved.addListener(tabId=>humanMousePos.delete(tabId));}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
 const hmSleep=ms=>new Promise(r=>setTimeout(r,ms));
 const hmRand=(a,b)=>a+Math.random()*(b-a);
 function hmSend(tabId,method,params){
@@ -2991,7 +2991,7 @@ async function runHumanMouse(tabId,msg){
     }
     return {ok:true};
   }finally{
-    if(attachedByUs){try{await new Promise(res=>chrome.debugger.detach({tabId},()=>res()));}catch(_){}}
+    if(attachedByUs){try{await new Promise(res=>chrome.debugger.detach({tabId},()=>res()));}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }}
   }
 }
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
@@ -3155,7 +3155,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
           try{
             const rp=await resolveAiProfile(own0.profileId);
             if(rp&&(rp.key||rp.model||rp.provider==="meta-free"))Object.assign(own0,{provider:rp.provider||own0.provider,key:rp.key,model:own0.model||rp.model,url:own0.url||rp.url});
-          }catch(_){}
+          }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
         }
         const ai=await getPageAiConfig(own0);
         const isMetaFree=ai.provider==="meta-free";
@@ -3216,7 +3216,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
               chrome.storage.local.set({pageGroupPostBlocked:arr.slice(-5)}).catch(()=>{});
             }).catch(()=>{});
           }
-        }catch(_){}
+        }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
         sendResponse({ok:false,error:friendlyAiError(error,msg.aiConfig?.provider||"AI")});
       }
     })();
@@ -3236,7 +3236,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
         if(postText.length<10)throw new Error(t("bg.postTooShort"));
         const template=String(msg.prompt||t("pgc.promptDefault")).replaceAll("{postText}",postText).replaceAll("{pageName}",pageName).replaceAll("{source}",String(msg.source||"Bản tin"));
         let prompt=[template,pageProfilePromptContext(msg.pageProfile)].filter(Boolean).join("\n\n");
-        if(Number(msg.maxLines)===2){try{const pl=await nextTagPositionLine();if(pl)prompt+="\n\n"+pl;}catch(_){}}
+        if(Number(msg.maxLines)===2){try{const pl=await nextTagPositionLine();if(pl)prompt+="\n\n"+pl;}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }}
         let raw="";
         if(ai.provider==="meta-free")raw=await callMetaFreeText(prompt,"page-comment");
         else if(ai.provider==="gemini")raw=await callGemini(ai.key,ai.model,postText,prompt,true);
@@ -3277,7 +3277,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
         const profileContext=await getActiveStyleContext(msg.styleProfileId||"");
         let prompt=[template,profileContext,t("bg.commentRules")]
           .filter(Boolean).join("\n\n");
-        if(Number(msg.maxLines)===2){try{const pl=await nextTagPositionLine();if(pl)prompt+="\n\n"+pl;}catch(_){}}
+        if(Number(msg.maxLines)===2){try{const pl=await nextTagPositionLine();if(pl)prompt+="\n\n"+pl;}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }}
         const raw=await callConfiguredText(ai.provider,ai.key,ai.model,ai.url,postText,prompt,null,msg.metaFeature||"feed-comment");
         const comment=cleanGeneratedComment(raw,msg.maxLines);
         if(!comment)throw new Error(t("bg.aiEmpty"));
@@ -3380,7 +3380,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
                   if(path!==targetPath)continue;
                   const name=candidateName(a.innerText||a.textContent);
                   if(name)return name;
-                }catch{}
+                }catch (e) { console.debug("[Auto vjp][background] bỏ qua lỗi:", e); }
               }
             }
             // Khi Facebook đổi vanity URL sau redirect, dùng tên trong câu
@@ -3556,7 +3556,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
       if(!answers&&provider==="meta-free"){
         // Meta có thể render mảng JSON qua tree-viewer (gộp node, kèm nhãn UI).
         const cleaned=metaFreeCleanJsonViewer(raw,true);
-        if(cleaned){try{const v=JSON.parse(cleaned);if(Array.isArray(v))answers=v;}catch{}}
+        if(cleaned){try{const v=JSON.parse(cleaned);if(Array.isArray(v))answers=v;}catch (e) { console.debug("[Auto vjp][background] bỏ qua lỗi:", e); }}
       }
       if(!answers){try{answers=JSON.parse(String(raw).replace(/```json|```/gi,"").trim());}catch{answers=String(raw).split(/\r?\n/).map(s=>s.replace(/^\s*(?:[-*•]|\d{1,3}[.)])\s+/,"").trim()).filter(Boolean);}}
       if(!answers)answers=[];
@@ -3611,7 +3611,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
           try{
             const s=await chrome.storage.local.get("metaFreeWorkerChats").catch(()=>({}));
             tracked=Array.isArray(s.metaFreeWorkerChats)?s.metaFreeWorkerChats:[];
-          }catch(_){}
+          }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
           const ids=tracked.map(e=>e&&e.id).filter(Boolean);
           if(!ids.length)return {ok:true,deleted:[],failed:[],remaining:0};
           const r=await metaFreeCleanIds(ids);
@@ -3619,7 +3619,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
           try{
             const s2=await chrome.storage.local.get("metaFreeWorkerChats").catch(()=>({}));
             remaining=Array.isArray(s2.metaFreeWorkerChats)?s2.metaFreeWorkerChats.length:0;
-          }catch(_){}
+          }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
           return {ok:!(r.failed||[]).length,deleted:r.deleted||[],failed:r.failed||[],remaining};
         });
         sendResponse({ok:res.ok,deleted:res.deleted||[],failed:res.failed||[],remaining:res.remaining||0});
@@ -3641,7 +3641,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
         if(prev)metaFreePrevActiveTab=prev.id;
         await chrome.tabs.update(Number(tabId),{active:true});
         // Lưới an toàn: content script chết giữa chừng thì 8s sau vẫn trả focus.
-        try{await chrome.alarms.create("metaFreeRestoreFocus",{delayInMinutes:3});}catch(_){}
+        try{await chrome.alarms.create("metaFreeRestoreFocus",{delayInMinutes:3});}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
         sendResponse({ok:true});
       }catch(e){sendResponse({ok:false,error:String(e?.message||e)});}
     })();
@@ -3732,7 +3732,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
             const rp=await resolveAiProfile(own.profileId);
             // Hồ sơ meta-free không có key nhưng vẫn merge provider/model/url.
             if(rp&&(rp.key||rp.provider==="meta-free"))own={...own,provider:rp.provider||own.provider,key:rp.key,model:own.model||rp.model,url:own.url||rp.url};
-          }catch(_){}
+          }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
         }
         const provider=own.provider||cfg.aiProvider||"gemini",saved=cfg.aiKeys?.[provider]||{};
         const key=normalizeApiKey(own.key||saved.key||cfg.aiApiKey||""),model=own.model||saved.model||cfg.aiModel||AI_DEFAULTS[provider]?.model||"",customUrl=own.url||saved.url||cfg.aiCustomUrl||"";
@@ -3772,7 +3772,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
           try{
             const rp=await resolveAiProfile(own.profileId);
             if(rp&&(rp.key||rp.provider==="meta-free"))own={...own,provider:rp.provider||own.provider,key:rp.key,model:own.model||rp.model,url:own.url||rp.url};
-          }catch(_){}
+          }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
         }
         const provider=own.provider||cfg.aiProvider||"gemini",saved=cfg.aiKeys?.[provider]||{};
         const key=normalizeApiKey(own.key||saved.key||cfg.aiApiKey||""),model=own.model||saved.model||cfg.aiModel||AI_DEFAULTS[provider]?.model||"",customUrl=own.url||saved.url||cfg.aiCustomUrl||"";
@@ -3826,7 +3826,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
         try{
           const rs=await chrome.storage.local.get("groupPostRecentContents").catch(()=>({}));
           recentBlock=groupPostAvoidBlock(rs.groupPostRecentContents);
-        }catch(_){}
+        }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
         // Xoay góc cưỡng bức theo bộ đếm để mỗi nhóm 1 kiểu mở khác nhau.
         const angleLine=await nextGroupPostAngleLine();
         const minLenLine=msg.minLen>0&&!background.enabled?`Độ dài tối thiểu: viết ít nhất ${msg.minLen} ký tự (bao gồm khoảng trắng). Đây là yêu cầu bắt buộc — không được viết ngắn hơn.`:"";
@@ -3872,7 +3872,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
           const arr=Array.isArray(rs.groupPostRecentContents)?rs.groupPostRecentContents:[];
           arr.unshift(String(content).slice(0,300));
           await chrome.storage.local.set({groupPostRecentContents:arr.slice(0,3)});
-        }catch(_){}
+        }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
         sendResponse({ok:true,content,length:backgroundTextLength(content),backgroundEligible:!!background.enabled&&backgroundTextLength(content)<=normalizeBackgroundMaxChars(background.maxChars),searchApplied,contextApplied:!!contextBlock});
       }catch(e){const rawMsg=String(e&&e.message||e||"");const code=e&&e.backgroundTooLong?"BACKGROUND_TOO_LONG":(e&&e.code==="AI_TIMEOUT"?"AI_TIMEOUT":(firstEmpty||(e&&e.aiEmpty)||/nội dung rỗng|empty content|không trả về nội dung/i.test(rawMsg)?"AI_EMPTY":undefined));sendResponse({ok:false,error:friendlyAiError(e,msg.aiConfig?.provider||"Gemini"),...(code?{code}:{})});}
     })();
@@ -3981,7 +3981,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
       let v=newsDecodeEntities(String(u||"").trim()).replace(/&amp;/g,"&");
       if(!v)return "";
       if(v.startsWith("//"))v=`https:${v}`;
-      if(baseUrl){try{v=new URL(v,baseUrl).href;}catch(_){}}
+      if(baseUrl){try{v=new URL(v,baseUrl).href;}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }}
       return /^https?:\/\//i.test(v)?v.slice(0,500):"";
     };
     for(const b of blocks){
@@ -4110,7 +4110,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
     const wantFile=(()=>{try{return new URL(want).pathname.split("/").pop().toLowerCase();}catch(_){return "";}})();
     const usable=el=>{try{return el.complete&&(el.naturalWidth||0)>=240&&(el.naturalHeight||0)>=140;}catch(_){return false;}};
     // Kích hoạt lazy-load: cuộn nhanh xuống rồi về đầu trang.
-    try{window.scrollTo(0,Math.min(document.body.scrollHeight*0.4,3000));await sleep(350);window.scrollTo(0,0);}catch(_){}
+    try{window.scrollTo(0,Math.min(document.body.scrollHeight*0.4,3000));await sleep(350);window.scrollTo(0,0);}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
     let chosen=null,chosenSrc="";
     const end=Date.now()+12000;
     while(Date.now()<end){
@@ -4138,13 +4138,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
     img.style.cssText="position:absolute;left:0;top:0;background:#fff;border:0";
     host.appendChild(img);
     try{document.documentElement.appendChild(host);}catch(_){return {ok:false,error:"no-overlay"};}
-    try{window.scrollTo(0,0);}catch(_){}
+    try{window.scrollTo(0,0);}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
     const loaded=await new Promise(resolve=>{
       let done=false;
       const fin=ok=>{if(done)return;done=true;resolve(ok);};
       img.onload=()=>fin(true);
       img.onerror=()=>fin(false);
-      try{if(img.complete&&img.naturalWidth)fin(true);}catch(_){}
+      try{if(img.complete&&img.naturalWidth)fin(true);}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
       setTimeout(()=>fin(!!img.naturalWidth),8000);
     });
     if(!loaded)return {ok:false,error:"img-load-fail"};
@@ -4156,12 +4156,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
       const cx=cv.getContext("2d");cx.drawImage(img,0,0,w,h);
       const dataUrl=cv.toDataURL("image/jpeg",0.92);
       if(dataUrl&&dataUrl.length>200)return {ok:true,dataUrl};
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
     const maxSide=4096;
     const scale=Math.min(1,maxSide/w,maxSide/h);
     const dw=Math.max(1,Math.round(w*scale)),dh=Math.max(1,Math.round(h*scale));
     img.style.width=`${dw}px`;img.style.height=`${dh}px`;
-    try{for(const el of [...document.body.children]){if(el!==host)el.style.visibility="hidden";}}catch(_){}
+    try{for(const el of [...document.body.children]){if(el!==host)el.style.visibility="hidden";}}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
     // KHÔNG dùng requestAnimationFrame: tab tạo bằng active:false (và headless)
     // bị coi là hidden nên rAF bị treo → handler không bao giờ trả về (bắt live
     // 20/10: tab bài báo kẹt lại, không attach debugger). Timer vẫn chạy.
@@ -4280,7 +4280,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
           seen.add(it.link);pool.push(it);
           if(pool.length>=count)break;
         }
-      }catch(_){}
+      }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
       if(pool.length>=count)break;
     }
     if(!pool.length)throw new Error(t("bg.newsXEmpty"));
@@ -4329,8 +4329,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
             seen.add(p.link);out.push(p);
           }
         }
-      }catch(_){}
-      finally{if(tab?.id)try{await chrome.tabs.remove(tab.id);}catch(_){}}
+      }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
+      finally{if(tab?.id)try{await chrome.tabs.remove(tab.id);}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }}
     }
     if(!out.length)throw new Error(t("bg.newsNoFbPosts"));
     const cutoff=hours?Date.now()-hours*3600000:0;
@@ -4423,13 +4423,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
               try{
                 const fr=await fetchWithTimeout(feedUrl,{headers:{"Accept":"application/rss+xml, application/atom+xml, application/xml, text/xml"}},20000);
                 if(fr.ok){const parsed=parseRssItems(await fr.text(),feedUrl);if(parsed.length){rss=parsed;break;}}
-              }catch(_){ }
+              }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
             }
           }
           const items=rss.length?rss:parseWebPageItems(s.value.xml,s.value.url);
           const enriched=await Promise.all(items.slice(0,60).map(enrichWebPageItem));
           for(const it of enriched)pool.push({...it,site:newsSiteName(s.value.url)});
-        }catch(_){}
+        }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
       }
       // Giữ tin khớp ≥1 từ khóa, gắn topic = từ khóa khớp nhất (exact nhiều
       // nhất) để bundle gom cùng topic.
@@ -4522,7 +4522,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
           try{
             const rp=await resolveAiProfile(own.profileId);
             if(rp&&(rp.key||rp.provider==="meta-free"))own={...own,provider:rp.provider||own.provider,key:rp.key,model:own.model||rp.model,url:own.url||rp.url};
-          }catch(_){}
+          }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
         }
         const provider=own.provider||cfg.aiProvider||"gemini",saved=cfg.aiKeys?.[provider]||{};
         const key=normalizeApiKey(own.key||saved.key||cfg.aiApiKey||""),model=own.model||saved.model||cfg.aiModel||AI_DEFAULTS[provider]?.model||"",customUrl=own.url||saved.url||cfg.aiCustomUrl||"";
@@ -4644,7 +4644,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
         const buf=new Uint8Array(await res.arrayBuffer());
         if(!buf.length||buf.length>8*1024*1024)throw new Error(t("bg.newsImgTooBig"));
         let mime="image/jpeg";
-        try{const ct=String(res.headers.get("content-type")||"").split(";")[0].trim();if(/^image\//i.test(ct))mime=ct;}catch(_){}
+        try{const ct=String(res.headers.get("content-type")||"").split(";")[0].trim();if(/^image\//i.test(ct))mime=ct;}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
         let bin="";
         for(let i=0;i<buf.length;i++)bin+=String.fromCharCode(buf[i]);
         sendResponse({ok:true,dataUrl:`data:${mime};base64,${btoa(bin)}`,bytes:buf.length});
@@ -4684,7 +4684,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
         try{
           const ct=String(res.headers.get("content-type")||"").split(";")[0].trim();
           if(ct)mime=ct;
-        }catch(_){}
+        }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
         if(mime==="application/octet-stream"){
           if(/\.(jpe?g|jpg)$/i.test(rawUrl))mime="image/jpeg";
           else if(/\.png$/i.test(rawUrl))mime="image/png";
@@ -4713,7 +4713,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse)=>{
           try{
             const rp=await resolveAiProfile(own.profileId);
             if(rp&&(rp.key||rp.provider==="meta-free"))own={...own,provider:rp.provider||own.provider,key:rp.key,model:own.model||rp.model,url:own.url||rp.url};
-          }catch(_){}
+          }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
         }
         const provider=own.provider||cfg.aiProvider||"gemini",saved=cfg.aiKeys?.[provider]||{};
         const key=normalizeApiKey(own.key||saved.key||cfg.aiApiKey||""),model=own.model||saved.model||cfg.aiModel||AI_DEFAULTS[provider]?.model||"",customUrl=own.url||saved.url||cfg.aiCustomUrl||"";
@@ -4741,7 +4741,7 @@ ${userPrompt?`Chủ đề/Yêu cầu: ${userPrompt}\n`:""}${baseContext?`Chất 
           try{
             const rp=await resolveAiProfile(own.profileId);
             if(rp&&(rp.key||rp.provider==="meta-free"))own={...own,provider:rp.provider||own.provider,key:rp.key,model:own.model||rp.model,url:own.url||rp.url};
-          }catch(_){}
+          }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
         }
         const provider=own.provider||cfg.aiProvider||"gemini",saved=cfg.aiKeys?.[provider]||{};
         const key=normalizeApiKey(own.key||saved.key||cfg.aiApiKey||""),model=own.model||saved.model||cfg.aiModel||AI_DEFAULTS[provider]?.model||"",customUrl=own.url||saved.url||cfg.aiCustomUrl||"";
@@ -4783,8 +4783,8 @@ ${userPrompt?`Yêu cầu: ${userPrompt}\n`:""}${content?`Chất liệu video: ${
         sendResponse({ok:true,dataUrl:`data:image/jpeg;base64,${shot.data}`,via:"screenshot"});
       }catch(error){sendResponse({ok:false,error:String(error?.message||error).slice(0,200)});}
       finally{
-        if(attached){try{await chrome.debugger.detach(target);}catch(_){}}
-        if(target.tabId)try{await chrome.tabs.remove(target.tabId);}catch(_){}
+        if(attached){try{await chrome.debugger.detach(target);}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }}
+        if(target.tabId)try{await chrome.tabs.remove(target.tabId);}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
       }
     })();
     return true;
@@ -4825,8 +4825,8 @@ ${userPrompt?`Yêu cầu: ${userPrompt}\n`:""}${content?`Chất liệu video: ${
         sendResponse({ok:true,dataUrl:`data:image/jpeg;base64,${shot.data}`,withComment:!!found.withComment,width:clip.width,height:clip.height});
       }catch(error){sendResponse({ok:false,error:String(error?.message||error).slice(0,200)});}
       finally{
-        if(attached){try{await chrome.debugger.detach(target);}catch(_){}}
-        if(target.tabId)try{await chrome.tabs.remove(target.tabId);}catch(_){}
+        if(attached){try{await chrome.debugger.detach(target);}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }}
+        if(target.tabId)try{await chrome.tabs.remove(target.tabId);}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
       }
     })();
     return true;
@@ -4864,7 +4864,7 @@ ${userPrompt?`Yêu cầu: ${userPrompt}\n`:""}${content?`Chất liệu video: ${
         if(!shot?.data)throw new Error("no-shot-data");
         sendResponse({ok:true,dataUrl:`data:image/jpeg;base64,${shot.data}`});
       }catch(error){sendResponse({ok:false,error:String(error?.message||error).slice(0,200)});}
-      finally{if(attached){try{await chrome.debugger.detach(target);}catch(_){}}}
+      finally{if(attached){try{await chrome.debugger.detach(target);}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }}}
     })();
     return true;
   }
@@ -5015,7 +5015,7 @@ ${userPrompt?`Yêu cầu: ${userPrompt}\n`:""}${content?`Chất liệu video: ${
         }
         sendResponse({ok:true});
       }catch(e){ sendResponse({ok:false,error:e.message,code:e.code||""}); }
-      finally{ if(attached){try{await chrome.debugger.detach(target);}catch(_){}} }
+      finally{ if(attached){try{await chrome.debugger.detach(target);}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }} }
     })().catch(e=>sendResponse({ok:false,error:e.message}));
     return true;
   }
@@ -5029,7 +5029,7 @@ ${userPrompt?`Yêu cầu: ${userPrompt}\n`:""}${content?`Chất liệu video: ${
         await chrome.debugger.sendCommand(target,"Input.insertText",{text:String(msg.text||"")});
         sendResponse({ok:true});
       }catch(e){sendResponse({ok:false,error:e.message});}
-      finally{if(attached){try{await chrome.debugger.detach(target);}catch(_){}}}
+      finally{if(attached){try{await chrome.debugger.detach(target);}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }}}
     })();
     return true;
   }
@@ -5050,7 +5050,7 @@ ${userPrompt?`Yêu cầu: ${userPrompt}\n`:""}${content?`Chất liệu video: ${
         await chrome.debugger.sendCommand(target,"Input.dispatchKeyEvent",{type:"keyUp",key,code,windowsVirtualKeyCode:vk,nativeVirtualKeyCode:vk,modifiers});
         sendResponse({ok:true});
       }catch(error){sendResponse({ok:false,error:error.message});}
-      finally{if(attached){try{await chrome.debugger.detach(target);}catch(_){}}}
+      finally{if(attached){try{await chrome.debugger.detach(target);}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }}}
     })();
     return true;
   }
@@ -5085,7 +5085,7 @@ ${userPrompt?`Yêu cầu: ${userPrompt}\n`:""}${content?`Chất liệu video: ${
         console.error("[Mouse]",e);
         sendResponse({ok:false,error:e.message});
       }finally{
-        if(attached){ try{ await chrome.debugger.detach(target); }catch(_){} }
+        if(attached){ try{ await chrome.debugger.detach(target); }catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); } }
       }
     })().catch(e=>sendResponse({ok:false,error:e.message}));
     return true;
@@ -5105,7 +5105,7 @@ ${userPrompt?`Yêu cầu: ${userPrompt}\n`:""}${content?`Chất liệu video: ${
         let promptTemplate = msg.prompt || cfg.aiPrompt || "";
         const profileContext=await getActiveStyleContext();
         if(profileContext)promptTemplate=[promptTemplate,profileContext].filter(Boolean).join("\n\n");
-        if(Number(msg.maxLines)===2){try{const pl=await nextTagPositionLine();if(pl)promptTemplate+="\n\n"+pl;}catch(_){}}
+        if(Number(msg.maxLines)===2){try{const pl=await nextTagPositionLine();if(pl)promptTemplate+="\n\n"+pl;}catch(_){ console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }}
         let customUrl = ownCfg.url||cfg.aiCustomUrl || "";
         // neu co aiKeys multi (bỏ qua khi đã có hồ sơ riêng kèm theo)
         if(!ownCfg.key&&cfg.aiKeys && cfg.aiKeys[provider]){
@@ -5168,7 +5168,7 @@ async function getLicenseState() {
 }
 
 async function activateLicense(licenseKey, gmail) {
-  return { ok: true }; // Auto vjp (fork noi bo): license da go — khong kich hoat qua server
+  return { ok: true }; // Auto vjp: khong kich hoat qua server
 }
 
 // Gieo trạng thái license mặc định một lần khi cài/cập nhật (chỉ khi
@@ -5180,7 +5180,7 @@ chrome.runtime.onInstalled.addListener(async () => {
     if (s.licenseValid === undefined) {
       await chrome.storage.local.set({ licenseValid: true, licenseReason: "", licenseToken: "preview-local", licenseLastVerified: Date.now(), licensePlan: "lifetime" });
     }
-  } catch (_) {}
+  } catch (_) { console.debug("[Auto vjp][background] bỏ qua lỗi:", _); }
 });
 
 // Alarm listener nay chỉ còn nhánh metaFree (đã bỏ nhánh licenseVerify).

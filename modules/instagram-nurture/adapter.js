@@ -158,7 +158,7 @@
           action: 'nurtureProgress', taskId, platform: PLATFORM,
           counters: { today, session: { ...session } }
         }).catch(() => {});
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][adapter] bỏ qua lỗi:", _); }
     }
     async function sendDone(status, failureCode, message) {
       if (doneSent) return;
@@ -301,7 +301,7 @@
       ta.focus();
       await sleep(300);
       let ok = false;
-      try { ok = document.execCommand('insertText', false, text); } catch (_) {}
+      try { ok = document.execCommand('insertText', false, text); } catch (_) { console.debug("[Auto vjp][adapter] bỏ qua lỗi:", _); }
       if (!ok || !ta.value.includes(text.slice(0, 20))) {
         const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
         if (setter) setter.call(ta, text); else ta.value = text;
@@ -459,6 +459,6 @@
         status: 'failed', failure_code: 'execution_error',
         resultMessage: 'instagram-nurture lỗi: ' + (err?.message || String(err)), items: []
       });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][adapter] bỏ qua lỗi:", _); }
   });
 })();

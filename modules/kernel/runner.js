@@ -257,9 +257,9 @@
     const state = known || emulatedTabs.get(tabId);
     emulatedTabs.delete(tabId);
     if (!state) return;
-    try { await dbgSend(tabId, 'Emulation.clearDeviceMetricsOverride', {}); } catch (_) {}
-    try { await dbgSend(tabId, 'Emulation.setTouchEmulationEnabled', { enabled: false }); } catch (_) {}
-    try { await dbgSend(tabId, 'Emulation.setUserAgentOverride', { userAgent: '' }); } catch (_) {}
+    try { await dbgSend(tabId, 'Emulation.clearDeviceMetricsOverride', {}); } catch (_) { console.debug("[Auto vjp][runner] bỏ qua lỗi:", _); }
+    try { await dbgSend(tabId, 'Emulation.setTouchEmulationEnabled', { enabled: false }); } catch (_) { console.debug("[Auto vjp][runner] bỏ qua lỗi:", _); }
+    try { await dbgSend(tabId, 'Emulation.setUserAgentOverride', { userAgent: '' }); } catch (_) { console.debug("[Auto vjp][runner] bỏ qua lỗi:", _); }
     if (state.attachedByUs) await dbgDetach(tabId);
   }
 
@@ -488,7 +488,7 @@
       const flags = (await S.get(S.KEYS.CANCEL_FLAGS)) || {};
       flags[String(run.task_id)] = Date.now();
       await S.set({ [S.KEYS.CANCEL_FLAGS]: flags });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][runner] bỏ qua lỗi:", _); }
     await globalThis.AVJP.outbox.deliver({
       type: run.type, taskId: run.task_id, platform: run.platform, tabId: run.tabId || null,
       status: 'failed', failure_code: 'user_cancelled', forceCleanup: true,
@@ -646,7 +646,7 @@
   // retry để nó ở ngoài cùng: mọi deliver (kể cả bản trung gian
   // 'retrying' do lớp retry sinh) đều qua tay gỡ giả lập trước.
   wrapDeliverWithEmulationCleanup();
-  try { chrome.alarms.create(RETRY_ALARM, { periodInMinutes: 1 }); } catch (_) {}
+  try { chrome.alarms.create(RETRY_ALARM, { periodInMinutes: 1 }); } catch (_) { console.debug("[Auto vjp][runner] bỏ qua lỗi:", _); }
   chrome.alarms.onAlarm.addListener(alarm => {
     if (alarm && (alarm.name === RETRY_ALARM || alarm.name === 'autovjp.tick')) promoteDueRetries().catch(() => {});
   });

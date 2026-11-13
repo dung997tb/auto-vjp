@@ -69,7 +69,7 @@
     let n=0;
     trendFeedRoot().querySelectorAll('div[role="button"]').forEach(b=>{
       const t=trendText(b);
-      if(t==="Xem thêm"||t==="See more"){try{b.click();n++;}catch{}}
+      if(t==="Xem thêm"||t==="See more"){try{b.click();n++;}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }}
     });
     return n;
   }
@@ -141,7 +141,7 @@
     try{
       const a=el.querySelector('a[href*="/posts/"],a[href*="/permalink/"],a[href*="/videos/"],a[href*="/photos/"]');
       if(a)link=String(a.href||"").split("?")[0];
-    }catch{}
+    }catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
     const id=link||text.slice(0,120);
     return {
       id:String(id).slice(0,300),
@@ -164,11 +164,11 @@
         const text=clean(el.innerText||el.textContent||"");
         if(text)candidates.push(text);
       });
-    }catch{}
+    }catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
     try{
       const title=clean(document.title||"").replace(/\s*[|·-]\s*(?:Facebook|Meta).*$/i,"").trim();
       if(title)candidates.push(title);
-    }catch{}
+    }catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
     const reject=/^(?:facebook|home|groups?|nhóm|đăng nhập|log in|sign in)$/i;
     return candidates.find(text=>text.length>=2&&text.length<=150&&!reject.test(text))||String(fallback||"").trim();
   }
@@ -182,7 +182,7 @@
     try{
       const id=new URL(String(group?.url||""),location.href).pathname.match(/^\/groups\/([^/?#]+)/i)?.[1];
       if(id&&String(id).toLowerCase()===cur)return true;
-    }catch{}
+    }catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
     return String(group?.id||"").toLowerCase()===cur;
   }
   function trendNormalizeGroupText(value){
@@ -248,7 +248,7 @@
         await learnStatus(`Trang sắp xếp không hiện bài, thử lại bằng link nhóm gốc: ${group.name}...`);
         location.assign(plain);
       }
-    }catch{}
+    }catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
     const end=Date.now()+12000;
     while(Date.now()<end){
       if(!await learnActive())return false;
@@ -262,11 +262,11 @@
   // resume sau reload. Nếu reload thật xảy ra, context chết và khối resume
   // cuối file sẽ tiếp tục từ trendLearnIndex đã persist.
   async function gotoGroupAndWait(group,check){
-    try{location.assign(newestGroupUrl(group));}catch{}
+    try{location.assign(newestGroupUrl(group));}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
     const end=Date.now()+25000;
     while(Date.now()<end){
       if(!await check())return false;
-      try{if(groupMatches(group))return true;}catch{}
+      try{if(groupMatches(group))return true;}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
       await sleep(700);
     }
     try{return groupMatches(group);}catch{return false;}
@@ -306,7 +306,7 @@
         got.push(d);
       }
       const roundGot=got.length-beforeGot;
-      try{if(onRound)await onRound({round,unlimited,got:got.length,scanned,totalInMain,items:got.slice()});}catch{}
+      try{if(onRound)await onRound({round,unlimited,got:got.length,scanned,totalInMain,items:got.slice()});}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
       if(!unlimited&&got.length>=perGroup)break;
       window.scrollTo(0,document.body.scrollHeight);
       if(!await waitWhileActive(1800,learnActive))return {got,scanned,totalInMain};
@@ -324,7 +324,7 @@
       const s=await chrome.storage.local.get(["trendLearnActive","trendLearnRunId","trendLearnConfig","trendLearnIndex","trendLearnPosts"]);
       learnRunId=String(s.trendLearnRunId||"");
     const cfg=s.trendLearnConfig;
-    if(!s.trendLearnActive||!cfg?.groups?.length){learnLoopActive=false;try{await chrome.storage.local.set({trendLearnActive:false,trendLearnStatus:"Cấu hình học bài thiếu nhóm nguồn — đã dừng"});}catch(_){}return;}
+    if(!s.trendLearnActive||!cfg?.groups?.length){learnLoopActive=false;try{await chrome.storage.local.set({trendLearnActive:false,trendLearnStatus:"Cấu hình học bài thiếu nhóm nguồn — đã dừng"});}catch(_){ console.debug("[Auto vjp][trend] bỏ qua lỗi:", _); }return;}
       let index=Number(s.trendLearnIndex)||0;
       let all=Array.isArray(s.trendLearnPosts)?s.trendLearnPosts:[];
       const seen=new Set(all.map(p=>String(p?.id||"")));
@@ -411,14 +411,14 @@
       const quota=/quota|storage|MAX_WRITE_OPERATIONS/i.test(message)
         ?"Kho lưu trữ bài học đã đầy; đã dừng để bảo toàn các bài đã cào. Hãy xóa bài không cần rồi cào lại."
         :`Lỗi học bài: ${message}`;
-      try{await learnStatus(quota,{trendLearnActive:false});}catch{}
+      try{await learnStatus(quota,{trendLearnActive:false});}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
     }finally{
       learnLoopActive=false;
       // Phiên mới tới trong lúc vòng cũ còn sống: vòng cũ thoát vì lệch
       // runId, nên phải chạy lại phiên mới ở đây, không thì kẹt "không chạy".
       if(learnRestart){
         learnRestart=false;
-        try{if(await learnActive())setTimeout(learnRun,300);}catch{}
+        try{if(await learnActive())setTimeout(learnRun,300);}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
       }
     }
   }
@@ -505,7 +505,7 @@
     const end=Date.now()+timeout;
     while(Date.now()<end){
       if(!await postActive())return null;
-      try{const v=fn();if(v)return v;}catch{}
+      try{const v=fn();if(v)return v;}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
       await sleep(220);
     }
     return null;
@@ -525,7 +525,7 @@
   }
   async function trendClick(el){
     if(!visible(el))return false;
-    try{el.scrollIntoView({block:"center"});}catch{}
+    try{el.scrollIntoView({block:"center"});}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
     await sleep(250);
     try{
       const r=el.getBoundingClientRect();
@@ -537,7 +537,7 @@
         const res=await chrome.runtime.sendMessage({action:"trustedMouse",kind:"click",x,y});
         if(res?.ok)return true;
       }
-    }catch{}
+    }catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
     try{el.click();return true;}catch{return false;}
   }
   const TREND_BACKGROUND_COLOR_NAMES={pink:"hồng",green:"xanh lá",red:"đỏ",orange:"cam",yellow:"vàng",blue:"xanh dương",purple:"tím",burgundy:"đỏ thẫm",beige:"be",brown:"nâu",gray:"xám",black:"đen"};
@@ -564,20 +564,20 @@
     const end=Date.now()+timeout;
     while(Date.now()<end){
       if(!await postActive())return false;
-      try{if(await fn())return true;}catch{}
+      try{if(await fn())return true;}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
       await sleep(180);
     }
     return false;
   }
   async function trendClickAndWait(el,predicate,timeout=3000,fallbackDelay=900){
     if(!el?.isConnected||!visible(el))return false;
-    try{el.scrollIntoView({block:"center",inline:"center"});}catch{}
+    try{el.scrollIntoView({block:"center",inline:"center"});}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
     await sleep(220);
     // Facebook's palette items are React controls. A native click dispatch
     // updates the selected state more reliably than a coordinate click when
     // the palette has just animated into place. Keep the trusted mouse path
     // as the fallback for controls that do not respond to native click.
-    try{el.click();}catch{}
+    try{el.click();}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
     if(await trendWaitCondition(predicate,Math.min(timeout,Math.max(300,fallbackDelay))))return true;
     if(!el.isConnected)return false;
     if(!await trendClick(el))return false;
@@ -795,7 +795,7 @@
     // trước khi đổi nhóm để không bật cảnh báo native và không làm kẹt vòng
     // B2 sau một nhóm bị bỏ qua.
     if(!await trendCloseComposerForNavigation())return false;
-    try{location.assign(newestGroupUrl(group));}catch{}
+    try{location.assign(newestGroupUrl(group));}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
     const deadline=Date.now()+TREND_POST_AUTO.groupReadyWait+15000;
     while(Date.now()<deadline){
       if(!await postActive())return false;
@@ -1056,7 +1056,7 @@
     }
     let editor=trendEditorIn(dialog);
     if(!editor)throw new Error("Facebook chưa có ô nội dung");
-    try{editor.focus();}catch{}
+    try{editor.focus();}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
     await sleep(300);
     let ok=false;
     let typingAborted=false;
@@ -1067,7 +1067,7 @@
       const res=await chrome.runtime.sendMessage({action:"trustedInput",text:postContent,typingConfig:typing,abortStorageKey:"trendPostActive",abortRunId:postRunId,abortRunIdKey:"trendPostRunId"});
       ok=!!res?.ok;
       typingAborted=res?.code==="ABORT_TYPING";
-    }catch{}
+    }catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
     if(typingAborted)throw new Error(t("bg.stoppedTyping"));
     await sleep(600);
     dialog.querySelectorAll('[contenteditable="true"]').forEach(()=>{});
@@ -1080,7 +1080,7 @@
         document.execCommand("selectAll",false,null);
         document.execCommand("insertText",false,postContent);
       }catch{
-        try{editor.textContent=postContent;editor.dispatchEvent(new InputEvent("input",{bubbles:true}));}catch{}
+        try{editor.textContent=postContent;editor.dispatchEvent(new InputEvent("input",{bubbles:true}));}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
       }
       await sleep(600);
     }
@@ -1192,7 +1192,7 @@
         // ở đầu phiên rồi resume từ state đã lưu, tránh gõ/đăng nhầm nhóm.
         if(index===0&&groupMatches(group)&&String(s.trendPostFreshRunId||"")!==postRunId){
           await postStatus(`Đang đồng bộ lại giao diện nhóm đích ${group.name} trước khi đăng...`,{trendPostFreshRunId:postRunId,trendPostFreshIndex:index});
-          try{location.reload();}catch{}
+          try{location.reload();}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
           postLoopActive=false;return;
         }
         if(!trendPageReadyForGroup(group)){
@@ -1237,7 +1237,7 @@
           }catch(e){
             const msg=String(e?.message||e);
             let stageState={};
-            try{stageState=await chrome.storage.local.get(["trendPostStage","trendPostSubmitIndex"]);}catch{}
+            try{stageState=await chrome.storage.local.get(["trendPostStage","trendPostSubmitIndex"]);}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
             const submitDispatched=(Number(stageState.trendPostSubmitIndex)===index)
               &&["submit-armed","submitted","waiting-visible","waiting-pending","post-proof-seen","post-visible","post-pending"].includes(String(stageState.trendPostStage||""));
             if(e?.rateLimited||e?.postDisplayUnconfirmed||submitDispatched||/chưa xác nhận đăng bài/i.test(msg)){
@@ -1281,12 +1281,12 @@
         postLoopActive=false;return;
       }
     }catch(e){
-      try{await postStatus(`Lỗi đăng bài viết lại: ${String(e?.message||e||"")}`,{trendPostActive:false});}catch{}
+      try{await postStatus(`Lỗi đăng bài viết lại: ${String(e?.message||e||"")}`,{trendPostActive:false});}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
     }finally{
       postLoopActive=false;
       if(postRestart){
         postRestart=false;
-        try{if(await postActive())setTimeout(postRun,300);}catch{}
+        try{if(await postActive())setTimeout(postRun,300);}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
       }
     }
   }
@@ -1325,7 +1325,7 @@
         stage.notSponsored++;
         const was=el.dataset.trendLearned;
         let d=null;
-        try{d=trendParseArticle(el,{name:"",id:"",url:location.href});}catch{}
+        try{d=trendParseArticle(el,{name:"",id:"",url:location.href});}catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
         if(was===undefined)delete el.dataset.trendLearned;
         else el.dataset.trendLearned=was;
         if(d){stage.parsed++;if(samples.length<3)samples.push({text:raw.slice(0,180),link:d.link||""});}
@@ -1392,6 +1392,6 @@
       const me=(await chrome.runtime.sendMessage({action:"getSenderTabId"}))?.tabId||0;
       if(s.trendLearnActive&&(!s.trendLearnOwnerTabId||Number(s.trendLearnOwnerTabId)===Number(me))){learnRunId=String(s.trendLearnRunId||"");ownerTabId=Number(me)||0;setTimeout(learnRun,800);}
       if(s.trendPostActive&&(!s.trendPostOwnerTabId||Number(s.trendPostOwnerTabId)===Number(me))){postRunId=String(s.trendPostRunId||"");ownerTabId=Number(me)||0;setTimeout(postRun,1200);}
-    }catch{}
+    }catch (e) { console.debug("[Auto vjp][trend] bỏ qua lỗi:", e); }
   }).catch(()=>{});
 })();

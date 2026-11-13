@@ -49,7 +49,7 @@
 
   async function getSyncCfg() {
     let s = {};
-    try { s = await SYNC.get(null); } catch (_) {}
+    try { s = await SYNC.get(null); } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
     const num = (key, fb, lo) => {
       const v = Number(s[key]);
       if (!Number.isFinite(v)) return fb;
@@ -82,13 +82,13 @@
       const arr = Array.isArray(stored.friendWarmTrace) ? stored.friendWarmTrace : [];
       arr.push(now() + " [" + location.pathname.slice(0, 40) + "] " + msg);
       await LS.set({ friendWarmTrace: arr.slice(-30) });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
   }
   async function getState() {
     try { return await LS.get(WARM_STATE_KEYS); } catch (_) { return {}; }
   }
   async function setStatus(text) {
-    try { await LS.set({ friendWarmStatus: String(text || "") }); } catch (_) {}
+    try { await LS.set({ friendWarmStatus: String(text || "") }); } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
   }
   async function alive(runId) {
     const s = await getState();
@@ -111,19 +111,19 @@
         if (chk && chk.stopped) return "stopped";
         if (chk && chk.ok && chk.r && chk.r.ok) return "owner";
         if (chk && chk.ok && chk.r && chk.r.ok === false) return "not-owner";
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
       await sleep(2000);
     }
     return "unknown";
   }
   async function ownerUnreachable(runId) {
     let fails = 0;
-    try { fails = Number((await LS.get("friendWarmOwnerFails")).friendWarmOwnerFails) || 0; } catch (_) {}
+    try { fails = Number((await LS.get("friendWarmOwnerFails")).friendWarmOwnerFails) || 0; } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
     fails++;
-    try { await LS.set({ friendWarmOwnerFails: fails }); } catch (_) {}
+    try { await LS.set({ friendWarmOwnerFails: fails }); } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
     await trace("owner-unreachable x" + fails);
     if (fails >= 5) {
-      try { await LS.set({ friendWarmOwnerFails: 0 }); } catch (_) {}
+      try { await LS.set({ friendWarmOwnerFails: 0 }); } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
       await finishRun(runId, "Không liên lạc được tiến trình nền sau nhiều lần thử — đã dừng an toàn, hãy Start lại.");
       return;
     }
@@ -249,7 +249,7 @@
       try {
         const m = cleanText(card?.innerText || card?.textContent || "").match(/(\d{1,4})\s+(?:bạn chung|mutual friends?)/i);
         if (m) mutualCount = parseInt(m[1]);
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
       map.set(key, { key, name: warmNameFromLink(link, card), url, mutualCount, card });
       if (map.size >= 2000) break;
     }
@@ -529,11 +529,11 @@
         try {
           const storyMsg = cont.querySelector('[data-ad-rendering-role="story_message"]');
           if (storyMsg) bodyText = (storyMsg.innerText || "").trim();
-        } catch (_) {}
+        } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
         if (!bodyText) {
           try {
             const clone = cont.cloneNode(true);
-            clone.querySelectorAll('[role="article"], [role="dialog"], [contenteditable="true"], [role="textbox"]').forEach((n) => { try { n.remove(); } catch (_) {} });
+            clone.querySelectorAll('[role="article"], [role="dialog"], [contenteditable="true"], [role="textbox"]').forEach((n) => { try { n.remove(); } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); } });
             const NOISE_LINE = /^(?:[\d\s.,▪·•|×x+]+|xem thêm bình luận|see more comments?|xem .* câu trả lời|view .* repl(?:y|ies)|trả lời|reply|thích|like|chia sẻ|share|gửi nội dung này.*|bình luận( dưới tên.*)?|comments?( as.*)?|viết bình luận|write (a )?comment|phù hợp nhất|mới nhất|mới|relevant|newest|all comments?|tất cả bình luận)$/i;
             const raw = String(clone.innerText || "");
             bodyText = raw.split(/\r?\n/).map((s) => s.trim()).filter((s) => s && !NOISE_LINE.test(s)).join("\n").replace(/\s+/g, " ").trim();
@@ -544,7 +544,7 @@
         if (text.length < 2 && !cont.querySelector("img,video")) continue;
         const alreadyLiked = Array.from(found.bar.querySelectorAll('[role="button"]')).some((b) => isUnlikeSignal(actionLabel(b)));
         out.push({ art: cont, text, href, likeBtn: found.like, commentBtn: found.cmt, alreadyLiked });
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
     }
     return out;
   }
@@ -581,7 +581,7 @@
             if (isUnlikeSignal(actionLabel(b))) return true;
           }
         }
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
       return likeBtn.getAttribute("aria-pressed") === "true";
     } catch (_) { return false; }
   }
@@ -614,7 +614,7 @@
         tagEntity: null, tagConfig: null,
         alive: () => alive(runId),
         onEvent: () => {},
-        clearDraft: () => { try { box.blur(); } catch (_) {} },
+        clearDraft: () => { try { box.blur(); } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); } },
         findSend: () => Array.from(scope.querySelectorAll("[aria-label]"))
           .find((b) => /^(Đăng|Gửi|Post)$/i.test((b.getAttribute("aria-label") || "").trim()) && b.isConnected) || null,
         sendEnter: () => { box.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true })); return true; },
@@ -624,7 +624,7 @@
           return hay.includes(needle);
         },
         proofRoots: () => [art.isConnected ? art : document, document],
-        scrollIntoView: () => { try { art.scrollIntoView({ block: "center" }); } catch (_) {} },
+        scrollIntoView: () => { try { art.scrollIntoView({ block: "center" }); } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); } },
         onCounted: () => true,
       });
       if (wRes === true) return "ok";
@@ -787,7 +787,7 @@
     try {
       const stored = await LS.get("friendFoFHistory");
       fofHistory = stored.friendFoFHistory && typeof stored.friendFoFHistory === "object" ? stored.friendFoFHistory : {};
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
     const p = {
       phase: s.friendWarmPhase || "source-profile", listUrl: s.friendWarmListUrl || "",
       queue: Array.isArray(s.friendWarmQueue) ? s.friendWarmQueue : [],
@@ -955,14 +955,14 @@
         if (!s2.friendWarmRunId || s2.friendWarmRunId === runId) {
           await LS.set({ friendWarmActive: false, friendWarmStatus: "Lỗi không mong đợi, đã dừng an toàn: " + String((e && e.message) || e).slice(0, 160) });
         }
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
     }
   }
 
   // Phần tường: chạy khi resume thấy friendWarmPendingWall (sau điều hướng tới wall).
   async function runWallPart(runId) {
     let pending = null;
-    try { pending = (await LS.get("friendWarmPendingWall")).friendWarmPendingWall; } catch (_) {}
+    try { pending = (await LS.get("friendWarmPendingWall")).friendWarmPendingWall; } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
     if (!pending || !pending.key || !pending.url) return false;
     // Lạc route (không ở đúng wall) → xóa pending, về DS.
     if (new URL(location.href).href !== new URL(pending.url).href) return false;
@@ -998,7 +998,7 @@
         if (!(await alive(runId))) return true;
         posts = collectWallPosts(10);
         if (posts.length) break;
-        try { window.scrollBy(0, 600); } catch (_) {}
+        try { window.scrollBy(0, 600); } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
         if (!(await waitCancellable(3000, runId))) return true;
       }
       if (!posts.length) {
@@ -1095,7 +1095,7 @@
       await persist();
       await setStatus(`Đã làm ấm ${pending.name}: Like ${doneLike} • Comment ${doneComment} • Bỏ qua ${skipped}`);
     } catch (e) {
-      try { await LS.set({ friendWarmPendingWall: null }); } catch (_) {}
+      try { await LS.set({ friendWarmPendingWall: null }); } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
     }
     return true;
   }
@@ -1187,11 +1187,11 @@
       await trace("entry-owner:" + verdict);
       if (verdict === "stopped" || verdict === "not-owner") return;
       if (verdict !== "owner") { await ownerUnreachable(s.friendWarmRunId); return; }
-      try { await LS.set({ friendWarmOwnerFails: 0 }); } catch (_) {}
+      try { await LS.set({ friendWarmOwnerFails: 0 }); } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
       if (activeLoopKey) return;
       // Đang ở wall của pending → xử lý tường rồi quay về DS.
       let pending = null;
-      try { pending = (await LS.get("friendWarmPendingWall")).friendWarmPendingWall; } catch (_) {}
+      try { pending = (await LS.get("friendWarmPendingWall")).friendWarmPendingWall; } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
       if (pending && pending.url) {
         try {
           if (new URL(location.href).href === new URL(pending.url).href) {
@@ -1210,7 +1210,7 @@
             runLoop(s.friendWarmRunId);
             return;
           }
-        } catch (_) {}
+        } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
         // Pending mà không ở đúng wall (redirect/lạc route) → bỏ pending, qua người kế.
         try {
           const s3 = await readRunState(s.friendWarmRunId);
@@ -1218,9 +1218,9 @@
             friendWarmPendingWall: null,
             friendWarmQIndex: (s3 ? Number(s3.friendWarmQIndex) || 0 : 0) + 1,
           });
-        } catch (_) {}
+        } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
       }
       runLoop(s.friendWarmRunId);
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][friendWarm] bỏ qua lỗi:", _); }
   }, 1500);
 })();

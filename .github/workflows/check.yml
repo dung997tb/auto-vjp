@@ -1,0 +1,23 @@
+name: check
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Cú pháp + manifest
+        run: npm run check:syntax
+      - name: Từ điển i18n
+        run: npm run check:i18n
+      - name: Test
+        run: npm test

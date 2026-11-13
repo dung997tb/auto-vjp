@@ -153,14 +153,14 @@ window.TF = window.TF || {};
       wfId: fields.wfId || '', path: fields.path || '', kind: fields.kind || '', moduleId: fields.moduleId || '',
       status: 'attempted', note: '', sideEffectState: fields.sideEffect ? 'attempted' : 'na' };
     this.journal.push(entry);
-    if (this.hooks.sendJournal) { try { this.hooks.sendJournal(JSON.parse(JSON.stringify(entry))); } catch (e) {} }
+    if (this.hooks.sendJournal) { try { this.hooks.sendJournal(JSON.parse(JSON.stringify(entry))); } catch (e) { console.debug("[Auto vjp][engine] bỏ qua lỗi:", e); } }
     return entry;
   };
   Engine.prototype.journalEnd = function (entry, status, note) {
     if (!entry) return;
     entry.status = status; entry.note = note || ''; entry.endedAt = Date.now();
     if (entry.sideEffectState === 'attempted') entry.sideEffectState = status === 'success' ? 'confirmed' : (status === 'unknown' ? 'unknown' : 'failed');
-    if (this.hooks.sendJournal) { try { this.hooks.sendJournal(JSON.parse(JSON.stringify(entry))); } catch (e) {} }
+    if (this.hooks.sendJournal) { try { this.hooks.sendJournal(JSON.parse(JSON.stringify(entry))); } catch (e) { console.debug("[Auto vjp][engine] bỏ qua lỗi:", e); } }
   };
   // P1 lát 2 — Bọc một đoạn thực thi con trong một frame của frameStack (loop/
   // branch) để checkpoint điều hướng chụp được vị trí lồng nhau hiện tại.
@@ -254,7 +254,7 @@ window.TF = window.TF || {};
         // P1 lát 2 — Chụp toàn bộ frameStack (+ frame module ở trong cùng) để
         // trang đích chạy tiếp đúng vị trí lồng nhau, không chỉ bước gốc.
         var stackSnap = [];
-        try { stackSnap = JSON.parse(JSON.stringify(self.frameStack || [])); } catch (e) {}
+        try { stackSnap = JSON.parse(JSON.stringify(self.frameStack || [])); } catch (e) { console.debug("[Auto vjp][engine] bỏ qua lỗi:", e); }
         stackSnap.push({ t: 'module', repeat: !!(opts && opts.repeat) });
         var info = {
           wfId: self.rootWfId, stepIndex: resumeIdx, runId: self.runId || null,
@@ -264,11 +264,11 @@ window.TF = window.TF || {};
         self.log('info', 'Điều hướng sang ' + url + ' — sẽ chạy tiếp từ bước ' + resumeIdx, '');
         var ack = Promise.resolve();
         if (self.hooks && typeof self.hooks.sendNavResume === 'function') {
-          try { ack = Promise.resolve(self.hooks.sendNavResume(info)); } catch (e) {}
+          try { ack = Promise.resolve(self.hooks.sendNavResume(info)); } catch (e) { console.debug("[Auto vjp][engine] bỏ qua lỗi:", e); }
         }
         var waited = Promise.race([ack, self.sleep(900)]);
         return waited.then(function () {
-          try { location.href = url; } catch (e) {}
+          try { location.href = url; } catch (e) { console.debug("[Auto vjp][engine] bỏ qua lỗi:", e); }
           return new Promise(function () {}); // trang cũ chết tại đây — bình thường
         });
       },

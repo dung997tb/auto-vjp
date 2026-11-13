@@ -1,5 +1,5 @@
 /* Auto vjp — module layer bridge.
- * Được background.js của lõi FB nạp bằng importScripts ở CUỐI file (1 điểm chạm duy nhất, xem FORK-CHANGES).
+ * Được background.js của lõi FB nạp bằng importScripts ở CUỐI file (1 điểm chạm duy nhất).
  * Nạp kernel theo thứ tự phụ thuộc; mọi file kernel đều là classic script bọc IIFE,
  * chỉ phơi global `AVJP` — không đụng global của lõi FB.
  */

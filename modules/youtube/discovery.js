@@ -55,7 +55,7 @@
   // Open the account menu once so the header renderer (with #channel-handle)
   // exists in the DOM for read() to pick up; skip if it is already rendered.
   if (!document.querySelector('ytd-active-account-header-renderer #channel-handle')) {
-    try { document.querySelector('#avatar-btn, button#avatar-btn')?.click(); } catch (_) {}
+    try { document.querySelector('#avatar-btn, button#avatar-btn')?.click(); } catch (_) { console.debug("[Auto vjp][discovery] bỏ qua lỗi:", _); }
   }
   function read() {
     const accounts = new Map();
@@ -83,7 +83,7 @@
     }
     for (const script of document.scripts) {
       const match = script.textContent.match(/(?:var\s+ytInitialData|window\["ytInitialData"\])\s*=\s*(\{[\s\S]*\})\s*;?\s*$/);
-      if (match) { try { visit(JSON.parse(match[1])); } catch (_) {} }
+      if (match) { try { visit(JSON.parse(match[1])); } catch (_) { console.debug("[Auto vjp][discovery] bỏ qua lỗi:", _); } }
     }
     // Current identity (2.6.1): the account-menu header is authoritative for
     // the signed-in account — name from #account-name, owned channel handle

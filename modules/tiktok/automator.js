@@ -99,7 +99,7 @@ window.moigioi_injected_tiktok = true;
       const commentIcon = document.querySelector('div[data-e2e="comment-icon"], button[aria-label*="comment"], svg[class*="IconComment"]');
       if (commentIcon) {
         addLog('Đang mở phần bình luận...');
-        try { commentIcon.click(); } catch(e) {}
+        try { commentIcon.click(); } catch(e) { console.debug("[Auto vjp][automator] bỏ qua lỗi:", e); }
         await sleep(2500);
         for (const sel of commentSelectors) {
           const el = document.querySelector(sel);
@@ -157,7 +157,7 @@ window.moigioi_injected_tiktok = true;
     }
 
     if (submitBtn) {
-      try { submitBtn.click(); } catch(_) {}
+      try { submitBtn.click(); } catch(_) { console.debug("[Auto vjp][automator] bỏ qua lỗi:", _); }
       submitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
     } else {
       commentInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
@@ -277,7 +277,7 @@ window.moigioi_injected_tiktok = true;
         try {
           finalDataUrl = await convertToJpeg(finalDataUrl);
           filename = filename.split('.')[0] + '.jpg';
-        } catch(e) {}
+        } catch(e) { console.debug("[Auto vjp][automator] bỏ qua lỗi:", e); }
       }
       
       let file = dataURLtoFile(finalDataUrl, filename);
@@ -387,7 +387,7 @@ window.moigioi_injected_tiktok = true;
     postBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
     await sleep(500);
     
-    try { postBtn.click(); } catch(e) {}
+    try { postBtn.click(); } catch(e) { console.debug("[Auto vjp][automator] bỏ qua lỗi:", e); }
     
     // Click dự phòng qua Event nếu React chặn click thường
     const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
@@ -408,7 +408,7 @@ window.moigioi_injected_tiktok = true;
       });
       if (postNowBtn && postNowBtn.offsetParent !== null) {
         addLog('Phát hiện bảng xác nhận phụ, đang bấm Đăng ngay...');
-        try { postNowBtn.click(); } catch(e) {}
+        try { postNowBtn.click(); } catch(e) { console.debug("[Auto vjp][automator] bỏ qua lỗi:", e); }
         postNowBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
         await sleep(1000);
       }

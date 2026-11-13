@@ -64,8 +64,8 @@ function mergeStoreKeyNames() {
     const INDEX_KEY = "__appStoreKeyIndex";
     const withCb = (promise, cb) => {
       if (typeof cb === "function") promise.then(
-        (v) => { try { cb(v); } catch (_) {} },
-        () => { try { cb(); } catch (_) {} }
+        (v) => { try { cb(v); } catch (_) { console.debug("[Auto vjp][store] bỏ qua lỗi:", _); } },
+        () => { try { cb(); } catch (_) { console.debug("[Auto vjp][store] bỏ qua lỗi:", _); } }
       );
       return promise;
     };
@@ -86,7 +86,7 @@ function mergeStoreKeyNames() {
         const cur = await readIndex();
         const next = mergeStoreKeyNames(cur, add);
         if (next.length !== cur.length) await L.set({ [INDEX_KEY]: next });
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][store] bỏ qua lỗi:", _); }
     }
     async function removeFromIndex(keys) {
       const drop = new Set(mergeStoreKeyNames(keys));
@@ -95,7 +95,7 @@ function mergeStoreKeyNames() {
         const cur = await readIndex();
         const next = cur.filter((k) => !drop.has(k));
         if (next.length !== cur.length) await L.set({ [INDEX_KEY]: next });
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][store] bỏ qua lỗi:", _); }
     }
     S.get = function (keys, cb) {
       const p = (async () => {
@@ -115,7 +115,7 @@ function mergeStoreKeyNames() {
           const out = mergeStoreValues(names, l, s, null);
           const missing = {};
           for (const k of names) { if (l[k] === undefined && s[k] !== undefined) missing[k] = s[k]; }
-          if (Object.keys(missing).length) { try { await L.set(missing); } catch (_) {} }
+          if (Object.keys(missing).length) { try { await L.set(missing); } catch (_) { console.debug("[Auto vjp][store] bỏ qua lỗi:", _); } }
           // Dọn chỉ mục: key trong chỉ mục mà cả local lẫn sync đều không
           // còn giá trị thì loại khỏi chỉ mục để chỉ mục không phình mãi.
           const dead = idx.filter((k) => l[k] === undefined && s[k] === undefined);
@@ -133,7 +133,7 @@ function mergeStoreKeyNames() {
         const out = mergeStoreValues(names, l, s, defaults);
         const missing = {};
         for (const k of needSync) { if (s[k] !== undefined) missing[k] = s[k]; }
-        if (Object.keys(missing).length) { try { await L.set(missing); } catch (_) {} }
+        if (Object.keys(missing).length) { try { await L.set(missing); } catch (_) { console.debug("[Auto vjp][store] bỏ qua lỗi:", _); } }
         return out;
       })();
       return withCb(p, cb);
@@ -157,12 +157,12 @@ function mergeStoreKeyNames() {
           // (2.11.10) Xoá cả bản sao ở sync thật: chỉ xoá local thì lần get
           // sau key cũ lại được migrate "hồi sinh" từ sync. Lỗi phía sync
           // thật thì nuốt — luồng chính (xoá local + gỡ chỉ mục) vẫn xong.
-          try { await rawRemove(keys); } catch (_) {}
+          try { await rawRemove(keys); } catch (_) { console.debug("[Auto vjp][store] bỏ qua lỗi:", _); }
           await removeFromIndex(names);
         })();
       } catch (e) { p = Promise.reject(e); }
       return withCb(p, cb);
     };
     g.__appStorePatched = true;
-  } catch (_) {}
+  } catch (_) { console.debug("[Auto vjp][store] bỏ qua lỗi:", _); }
 })();

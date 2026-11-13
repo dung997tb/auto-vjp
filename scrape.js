@@ -40,8 +40,8 @@
       const y = Math.round((window.innerHeight || 900) * 0.6);
       const r = await chrome.runtime.sendMessage({ action:"trustedMouse", kind:"wheel", x, y, deltaX:0, deltaY:Math.round(deltaY) });
       if (r && r.ok) return true;
-    }catch(_){}
-    try{ window.scrollBy(0, Math.round(deltaY)); }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][scrape] bỏ qua lỗi:", _); }
+    try{ window.scrollBy(0, Math.round(deltaY)); }catch(_){ console.debug("[Auto vjp][scrape] bỏ qua lỗi:", _); }
     return false;
   }
 
@@ -73,7 +73,7 @@
     document.querySelectorAll('div[role="button"]').forEach(btn => {
       const t = (btn.innerText || "").trim();
       if (t === "Xem thêm" || t === "See more" || t === "Xem Thêm" || t === "See More") {
-        try { btn.click(); clicked++; } catch {}
+        try { btn.click(); clicked++; } catch (e) { console.debug("[Auto vjp][scrape] bỏ qua lỗi:", e); }
       }
     });
     // mot so truong hop la span
@@ -81,8 +81,8 @@
       const t = (s.innerText || "").trim();
       if (t === "Xem thêm" || t === "See more") {
         const btn = s.closest('div[role="button"]');
-        if (btn) { try { btn.click(); clicked++; } catch {} }
-        else if (s.parentElement && s.parentElement.getAttribute("role")==="button") { try { s.parentElement.click(); clicked++; } catch {} }
+        if (btn) { try { btn.click(); clicked++; } catch (e) { console.debug("[Auto vjp][scrape] bỏ qua lỗi:", e); } }
+        else if (s.parentElement && s.parentElement.getAttribute("role")==="button") { try { s.parentElement.click(); clicked++; } catch (e) { console.debug("[Auto vjp][scrape] bỏ qua lỗi:", e); } }
       }
     });
     return clicked;
@@ -274,7 +274,7 @@
         // lay link o day se nham sang bai khac).
         try {
           if (anc.querySelectorAll('[data-ad-rendering-role="story_message"], [data-ad-comet-preview="message"]').length > 1) break;
-        } catch {}
+        } catch (e) { console.debug("[Auto vjp][scrape] bỏ qua lỗi:", e); }
         if (!found.link) {
           const aLink = anc.querySelector('a[href*="/posts/"], a[href*="/permalink/"], a[href*="/videos/"], a[href*="/photos/"]');
           if (aLink && POST_LINK_RE.test(aLink.href || "")) found.link = aLink.href.split("?")[0];
@@ -518,7 +518,7 @@
         let longest = "";
         cands.forEach(c => { const t = (c.innerText || "").trim(); if (t.length > longest.length) longest = t; });
         text = longest.replace(/\s{2,}/g, " ").trim();
-      } catch {}
+      } catch (e) { console.debug("[Auto vjp][scrape] bỏ qua lỗi:", e); }
       if (!text || text.length < 2) continue;
       if (/^(Thích|Like|Trả lời|Reply|Xem thêm|See more)$/i.test(text)) continue;
       let author = "";
@@ -594,7 +594,7 @@
         if (scope && scope.querySelector('div[role="article"]')) scoped.push(b);
       }
       if (!scoped.length) break;
-      try { scoped[0].click(); } catch {}
+      try { scoped[0].click(); } catch (e) { console.debug("[Auto vjp][scrape] bỏ qua lỗi:", e); }
       if (!await scrapeSleep(900, runId)) break;
       if (sourceKey(location.href) !== expectedRoute) break;
     }
@@ -614,7 +614,7 @@
 
   async function extractPosts(runId) {
     let diagOn = false;
-    try { const _d = await chrome.storage.local.get("scrapeDiag"); diagOn = !!(_d && _d.scrapeDiag); } catch {}
+    try { const _d = await chrome.storage.local.get("scrapeDiag"); diagOn = !!(_d && _d.scrapeDiag); } catch (e) { console.debug("[Auto vjp][scrape] bỏ qua lỗi:", e); }
     const diag = [];
     // Thu thap tu nhieu loai container cua FB (profile, page, group)
     let candidates = [];
@@ -691,7 +691,7 @@
       // Khi cào comment: dua bai vao giua viewport + cho FB hydrate action bar/
       // thread truoc khi boc (feed thuong render luoi cac phan nay).
       if (scrapeWithComments && scrapeMaxComments > 0) {
-        try { el.scrollIntoView({ block: "center", inline: "nearest" }); } catch {}
+        try { el.scrollIntoView({ block: "center", inline: "nearest" }); } catch (e) { console.debug("[Auto vjp][scrape] bỏ qua lỗi:", e); }
         if (!await scrapeSleep(700, runId)) { await scrapeExitUnclean(runId); return added; }
         if (!await scrapeRunActive(runId)) { await scrapeExitUnclean(runId); return added; }
       }
@@ -705,7 +705,7 @@
             hasMsg: !!el.querySelector('[data-ad-rendering-role="story_message"],[data-ad-comet-preview="message"]'),
             dataFt: (()=>{const n=el.querySelector('[data-ft]');return n?String(n.getAttribute('data-ft')).slice(0,160):null;})()
           });
-        } catch {}
+        } catch (e) { console.debug("[Auto vjp][scrape] bỏ qua lỗi:", e); }
       }
       let data = null;
       try {
@@ -733,7 +733,7 @@
     }
     if (rawCount > 0) console.log(`[Scrape] raw candidates=${rawCount}, added=${added}, total=${collected.length}`);
     if (diagOn && diag.length) {
-      try { await chrome.storage.local.set({ scrapeDiagResult: diag }); } catch {}
+      try { await chrome.storage.local.set({ scrapeDiagResult: diag }); } catch (e) { console.debug("[Auto vjp][scrape] bỏ qua lỗi:", e); }
     }
     return added;
   }
@@ -1008,7 +1008,7 @@
         await chrome.storage.local.set({isScraping:false,scrapeStatus:t("sc.leftSource")});
         await chrome.storage.local.remove(["scrapeTarget"]);
       }
-    }catch{}
+    }catch (e) { console.debug("[Auto vjp][scrape] bỏ qua lỗi:", e); }
   }
 
   async function scrapeLoop(resume=false) {
@@ -1143,7 +1143,7 @@
         const r=await chrome.runtime.sendMessage({action:"getSenderTabId"});
         const myId=r&&r.tabId;
         if(myId&&myId!==s.scrapeOwnerTabId)return;
-      }catch{}
+      }catch (e) { console.debug("[Auto vjp][scrape] bỏ qua lỗi:", e); }
     }
     if(Array.isArray(s.scrapePosts)&&s.scrapePosts.length){lastCollected=s.scrapePosts.slice(-500);}
     scrapeCaptureMedia = s.scrapeSaveMedia !== false;
@@ -1205,7 +1205,7 @@
           if(target.getAttribute("data-ad-preview"))target=target.closest('div[role="article"]')||target;
           if(isCommentCandidate(target))continue;
           if(!seenEl.has(target)&&(target.innerText||"").trim().length>0){seenEl.add(target);out.push(target);}
-        }catch(_){}
+        }catch(_){ console.debug("[Auto vjp][scrape] bỏ qua lỗi:", _); }
       }
     }
     const msgSels=['[data-ad-rendering-role="story_message"]','[data-ad-preview="message"]','[data-ad-comet-preview="message"]'];
@@ -1215,7 +1215,7 @@
           const target=postRootFor(el,sel);
           if(isCommentCandidate(target))continue;
           if(!seenEl.has(target)&&(target.innerText||"").trim().length>0){seenEl.add(target);out.push(target);}
-        }catch(_){}
+        }catch(_){ console.debug("[Auto vjp][scrape] bỏ qua lỗi:", _); }
       }
     }
     return out;
@@ -1241,7 +1241,7 @@
         const u=n.getAttribute("data-utime");if(u)return parseInt(u)*1000;
         const dt=n.getAttribute("datetime");if(dt)return Date.parse(dt)||0;
       }
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][scrape] bỏ qua lỗi:", _); }
     return 0;
   }
   function fbSourceParse(el){
@@ -1249,7 +1249,7 @@
     try{
       delete el.dataset.scraped;
       data=parseArticle(el);
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][scrape] bỏ qua lỗi:", _); }
     if(!data){el.dataset.scraped="1";return null;}
     el.dataset.scraped="1";
     const nested=[...el.querySelectorAll('div[role="article"]')].filter(a=>a!==el);
@@ -1260,7 +1260,7 @@
     data.postImages=[...new Set(imgEls.filter(i=>!inNested(i)).map(i=>String(i.currentSrc||i.src||"")).filter(Boolean))].slice(0,20);
     data.quotedImages=[...new Set(imgEls.filter(i=>inNested(i)).map(i=>String(i.currentSrc||i.src||"")).filter(Boolean))].slice(0,20);
     const comments=[];
-    try{collectVisibleComments(el,comments,3);}catch(_){}
+    try{collectVisibleComments(el,comments,3);}catch(_){ console.debug("[Auto vjp][scrape] bỏ qua lỗi:", _); }
     data.comments=comments;
     data.timeMs=fbSourceTimeMs(data.time,el);
     data.fbSource=true;
@@ -1268,7 +1268,7 @@
   }
   async function fbSourceReadPosts(count){
     const want=Math.max(1,parseInt(count)||30);
-    try{document.querySelectorAll('[data-scraped="1"]').forEach(el=>{delete el.dataset.scraped;});}catch(_){}
+    try{document.querySelectorAll('[data-scraped="1"]').forEach(el=>{delete el.dataset.scraped;});}catch(_){ console.debug("[Auto vjp][scrape] bỏ qua lỗi:", _); }
     const out=[],keys=new Set();
     const push=data=>{
       if(!data)return;
@@ -1276,17 +1276,17 @@
       if(!key||keys.has(key))return;
       keys.add(key);out.push(data);
     };
-    try{window.scrollTo(0,0);}catch(_){}
+    try{window.scrollTo(0,0);}catch(_){ console.debug("[Auto vjp][scrape] bỏ qua lỗi:", _); }
     await new Promise(r=>setTimeout(r,600));
     let idle=0,lastLen=0;
     for(let round=0;round<10&&out.length<want;round++){
-      try{expandSeeMore();}catch(_){}
+      try{expandSeeMore();}catch(_){ console.debug("[Auto vjp][scrape] bỏ qua lỗi:", _); }
       for(const el of fbSourceCandidates()){
         if(out.length>=want)break;
         push(fbSourceParse(el));
       }
       if(out.length>=want)break;
-      try{window.scrollBy(0,Math.max(700,Math.floor(window.innerHeight*0.9)));}catch(_){}
+      try{window.scrollBy(0,Math.max(700,Math.floor(window.innerHeight*0.9)));}catch(_){ console.debug("[Auto vjp][scrape] bỏ qua lỗi:", _); }
       await new Promise(r=>setTimeout(r,1400));
       if(out.length===lastLen)idle++;else{idle=0;lastLen=out.length;}
       if(idle>=3)break;
@@ -1308,7 +1308,7 @@
       for(const a of nested){if(looksLikeComment(a,root))return a;}
       const arts=[...document.querySelectorAll('div[role="article"]')];
       for(const a of arts){if(a!==root&&looksLikeComment(a,root))return a;}
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][scrape] bỏ qua lỗi:", _); }
     return null;
   }
   function fbSourcePageRect(el){
@@ -1319,7 +1319,7 @@
     return {x:Math.max(0,r.left+sx),y:Math.max(0,r.top+sy),width:Math.max(1,Math.round(r.width)),height:Math.max(1,Math.round(r.height))};
   }
   async function fbSourceShotRect(includeComment){
-    try{expandSeeMore();}catch(_){}
+    try{expandSeeMore();}catch(_){ console.debug("[Auto vjp][scrape] bỏ qua lỗi:", _); }
     const root=fbSourceFindRoot();
     if(!root)return {ok:false,error:"no-post"};
     let comment=null;
@@ -1328,14 +1328,14 @@
       try{
         for(const b of document.querySelectorAll('[role="button"]')){
           const t=(b.innerText||"").trim();
-          if(/^(bình luận|comment|xem thêm bình luận|view more comments)$/i.test(t)&&!b.getAttribute("aria-expanded")){try{b.click();}catch(_){}}
+          if(/^(bình luận|comment|xem thêm bình luận|view more comments)$/i.test(t)&&!b.getAttribute("aria-expanded")){try{b.click();}catch(_){ console.debug("[Auto vjp][scrape] bỏ qua lỗi:", _); }}
         }
-      }catch(_){}
+      }catch(_){ console.debug("[Auto vjp][scrape] bỏ qua lỗi:", _); }
       await new Promise(r=>setTimeout(r,800));
       comment=fbSourceFindComment(root);
-      if(comment){try{comment.scrollIntoView({block:"center"});}catch(_){}await new Promise(r=>setTimeout(r,1200));}
+      if(comment){try{comment.scrollIntoView({block:"center"});}catch(_){ console.debug("[Auto vjp][scrape] bỏ qua lỗi:", _); }await new Promise(r=>setTimeout(r,1200));}
     }
-    try{root.scrollIntoView({block:"start"});}catch(_){}
+    try{root.scrollIntoView({block:"start"});}catch(_){ console.debug("[Auto vjp][scrape] bỏ qua lỗi:", _); }
     await new Promise(r=>setTimeout(r,700));
     const mainRect=fbSourcePageRect(root);
     let rect=mainRect;

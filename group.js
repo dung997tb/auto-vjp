@@ -21,7 +21,7 @@
         log.push(entry);
         chrome.storage.local.set({joinedGroupsLog:log}).catch(()=>{});
       }).catch(()=>{});
-    }catch{}
+    }catch (e) { console.debug("[Auto vjp][group] bỏ qua lỗi:", e); }
   }
   // Lưu tạm câu hỏi + câu trả lời của lần autoAnswer gần nhất để logGroupJoined ghi lại
   let _lastJoinQA = null;
@@ -35,7 +35,7 @@
         log.push({at:Date.now(),submitted:false,...entry});
         chrome.storage.local.set({groupJoinQaLog:log.slice(-50)}).catch(()=>{});
       }).catch(()=>{});
-    }catch{}
+    }catch (e) { console.debug("[Auto vjp][group] bỏ qua lỗi:", e); }
   }
   function markJoinQASubmitted(){
     try{
@@ -43,7 +43,7 @@
         const log=Array.isArray(r.groupJoinQaLog)?r.groupJoinQaLog:[];
         if(log.length){log[log.length-1].submitted=true;chrome.storage.local.set({groupJoinQaLog:log}).catch(()=>{});}
       }).catch(()=>{});
-    }catch{}
+    }catch (e) { console.debug("[Auto vjp][group] bỏ qua lỗi:", e); }
   }
   let isJoining = false;
   let joinedCount = 0;
@@ -92,7 +92,7 @@
       const s=await chrome.storage.local.get(["groupJoinRunConfig"]);
       const base=s.groupJoinRunConfig||{};
       await chrome.storage.local.set({groupJoinRunConfig:{...base,keywords:kwQueue,keywordIndex:kwIndex,keywordDone:[...kwDone]}});
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][group] bỏ qua lỗi:", _); }
   }
   // Sang từ khóa kế: lưu queue, hẹn resume qua pendingSearch*, điều hướng.
   // Hết danh sách thì false để caller dừng run.
@@ -142,7 +142,7 @@
       const s=await chrome.storage.local.get(["groupJoinLoopClaim","isGroupJoining"]);
       if(!s.isGroupJoining)return null;
       if(s.groupJoinLoopClaim&&s.groupJoinLoopClaim.key!==key)return null;
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][group] bỏ qua lỗi:", _); }
     return key;
   }
   // Quy tắc DỪNG BẰNG MỌI GIÁ + chống chạy trùng: phiên resume sau reload chỉ
@@ -175,7 +175,7 @@
     const end=Date.now()+timeout;
     while(Date.now()<end){
       if(!isJoinActive())return false;
-      try{if(await predicate())return true;}catch{}
+      try{if(await predicate())return true;}catch (e) { console.debug("[Auto vjp][group] bỏ qua lỗi:", e); }
       await sleep(180);
     }
     return false;
@@ -185,7 +185,7 @@
     // inline:"center" là bắt buộc — trang Khám phá xếp thẻ nhóm trong băng
     // chuyền NGANG, nút Tham gia nằm ngoài viewport theo chiều ngang nên chỉ
     // cuộn dọc thì elementFromPoint không bao giờ khớp và cú click bị bỏ.
-    try{el.scrollIntoView({behavior:"instant",block:"center",inline:"center"});}catch{try{el.scrollIntoView({block:"center",inline:"center"});}catch{}}
+    try{el.scrollIntoView({behavior:"instant",block:"center",inline:"center"});}catch{try{el.scrollIntoView({block:"center",inline:"center"});}catch (e) { console.debug("[Auto vjp][group] bỏ qua lỗi:", e); }}
     await sleep(220);
     // The popup writes the stop flag directly because a content-script
     // message can be lost during navigation. Re-read it immediately before
@@ -200,7 +200,7 @@
       const r=el.getBoundingClientRect(),x=Math.round(r.left+r.width/2),y=Math.round(r.top+r.height/2);
       const hit=document.elementFromPoint(x,y);
       if(hit&&(hit===el||el.contains(hit)||hit.contains(el))){
-        try{const trusted=await chrome.runtime.sendMessage({action:"trustedMouse",kind:"click",x,y});if(trusted?.ok)return true;}catch{}
+        try{const trusted=await chrome.runtime.sendMessage({action:"trustedMouse",kind:"click",x,y});if(trusted?.ok)return true;}catch (e) { console.debug("[Auto vjp][group] bỏ qua lỗi:", e); }
       }
       try{el.click();return true;}catch{return false;}
     };
@@ -578,7 +578,7 @@
         const target=membershipCheckboxTarget(box);
         let clicked=false;
         if(target&&isVisible(target))clicked=await clickGroupControl(target);
-        if(!clicked){try{(target||box).click();clicked=true;}catch{}}
+        if(!clicked){try{(target||box).click();clicked=true;}catch (e) { console.debug("[Auto vjp][group] bỏ qua lỗi:", e); }}
         await sleep(350);
       }
       await sleep(500);

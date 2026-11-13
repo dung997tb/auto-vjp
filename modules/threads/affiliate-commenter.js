@@ -40,7 +40,7 @@ window.mutThreadsAffiliateCommenterInjected = true;
           cancelable: true,
           clipboardData: dt
         }));
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][affiliate-commenter] bỏ qua lỗi:", _); }
 
       await sleep(200);
 

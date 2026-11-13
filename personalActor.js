@@ -26,7 +26,7 @@
       const fl = s.personalActorSwitching;
       if (fl && Date.now() - (fl.at || 0) > 120000) chrome.storage.local.remove("personalActorSwitching");
     }).catch(() => { });
-  } catch (_) { }
+  } catch (_) { console.debug("[Auto vjp][personalActor] bỏ qua lỗi:", _); }
 
   // Facebook bản mới dùng nút "Account, your profile" nhưng hộp thoại vẫn
   // giữ aria-label tiếng Việt. Phải nhận cả hai để không bỏ qua actor Page.
@@ -66,7 +66,7 @@
 
   async function click(el) {
     if (!seen(el)) return false;
-    try { el.scrollIntoView({ block: "center", inline: "center" }); } catch (_) { }
+    try { el.scrollIntoView({ block: "center", inline: "center" }); } catch (_) { console.debug("[Auto vjp][personalActor] bỏ qua lỗi:", _); }
     await nap(220);
     const rect = el.getBoundingClientRect();
     const x = Math.round(rect.left + rect.width / 2), y = Math.round(rect.top + rect.height / 2);
@@ -74,7 +74,7 @@
     // giữa thật sự thuộc về chính element, tránh bấm nhầm mục khác trong menu.
     const hit = document.elementFromPoint(x, y);
     if (hit && (hit === el || el.contains(hit) || hit.contains(el))) {
-      try { const res = await chrome.runtime.sendMessage({ action: "trustedMouse", kind: "click", x, y }); if (res?.ok) return true; } catch (_) { }
+      try { const res = await chrome.runtime.sendMessage({ action: "trustedMouse", kind: "click", x, y }); if (res?.ok) return true; } catch (_) { console.debug("[Auto vjp][personalActor] bỏ qua lỗi:", _); }
     }
     try { el.click(); return true; } catch (_) { return false; }
   }
@@ -92,10 +92,10 @@
   async function closePicker() {
     for (let i = 0; i < 5; i++) {
       if (!pickerDialog()) return;
-      try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) { }
+      try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) { console.debug("[Auto vjp][personalActor] bỏ qua lỗi:", _); }
       await nap(250);
       if (!pickerDialog()) return;
-      try { pickerOpener()?.click(); } catch (_) { }
+      try { pickerOpener()?.click(); } catch (_) { console.debug("[Auto vjp][personalActor] bỏ qua lỗi:", _); }
       await nap(300);
     }
   }
@@ -123,7 +123,7 @@
     // hành vi cũ nhưng báo rõ đã xác minh theo phạm vi hiện có.
     if (!pages.length) return { ok: true, verified: true, actorName: "" };
     let remembered = "";
-    try { remembered = clean((await chrome.storage.local.get("personalActorName")).personalActorName || ""); } catch (_) { }
+    try { remembered = clean((await chrome.storage.local.get("personalActorName")).personalActorName || ""); } catch (_) { console.debug("[Auto vjp][personalActor] bỏ qua lỗi:", _); }
 
     for (let attempt = 0; attempt < 3; attempt++) {
       const dialog = await openPicker();
@@ -137,7 +137,7 @@
         try {
           const saved = clean((await chrome.storage.local.get("personalActorName")).personalActorName || "");
           if (saved && !isPageName(saved, pages)) return { ok: true, verified: false, actorName: saved };
-        } catch (_) { }
+        } catch (_) { console.debug("[Auto vjp][personalActor] bỏ qua lỗi:", _); }
         return { ok: false, code: "ACTOR_UNVERIFIED", page: "" };
       }
       const active = clean(activeName(dialog));
@@ -154,7 +154,7 @@
       // Ghi cờ TRƯỚC khi bấm: Facebook reload trang ngay khi đổi danh tính
       // thật, giết content script cùng kênh trả lời — popup đọc cờ này để
       // vẫn biết đã chuyển và chờ trang ổn định thay vì thao tác mù.
-      try { await chrome.storage.local.set({ personalActorSwitching: { to: clean(target.name), at: Date.now() } }); } catch (_) { }
+      try { await chrome.storage.local.set({ personalActorSwitching: { to: clean(target.name), at: Date.now() } }); } catch (_) { console.debug("[Auto vjp][personalActor] bỏ qua lỗi:", _); }
       if (!(await click(target.el))) { await closePicker(); continue; }
       chrome.storage.local.set({ personalActorName: clean(target.name) });
       for (let i = 0; i < 20; i++) { await nap(500); if (!pickerDialog()) break; }
@@ -180,7 +180,7 @@
         chrome.storage.local.set({ personalActorDebug: {
           at: Date.now(), code: "ACTOR_PROBE_ERROR", detail
         } });
-      } catch (_) { }
+      } catch (_) { console.debug("[Auto vjp][personalActor] bỏ qua lỗi:", _); }
       sendResponse({ ok: false, code: "ACTOR_PROBE_ERROR", detail });
     });
     return true;

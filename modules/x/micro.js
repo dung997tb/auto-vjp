@@ -101,7 +101,7 @@ if (window.top !== window.self) {
     try {
       report('failed', { action, cancelled: true, ...extra }, 'user_cancelled',
         'Đã dừng theo yêu cầu người dùng (user_cancelled)');
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     throw avjpCancelledError();
   }
 
@@ -114,7 +114,7 @@ if (window.top !== window.self) {
     const prev = (await getPhase()) || {};
     await chrome.storage.local.set({ [PHASE_KEY]: { ...prev, ...extra, taskId, action } });
   };
-  const clearPhase = async () => { try { await chrome.storage.local.remove(PHASE_KEY); } catch (_) {} };
+  const clearPhase = async () => { try { await chrome.storage.local.remove(PHASE_KEY); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); } };
 
   let reported = false;
   function report(status, details, failureCode, resultMessage) {
@@ -166,7 +166,7 @@ if (window.top !== window.self) {
     const end = Date.now() + timeoutMs;
     for (;;) {
       let v = null;
-      try { v = fn(); } catch (_) {}
+      try { v = fn(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
       if (v) return v;
       if (Date.now() >= end) return null;
       if (!(await avjpSleepCancellable(stepMs))) avjpAbortCancelled({ phase: 'waitFor' });
@@ -175,10 +175,10 @@ if (window.top !== window.self) {
   function plainClick(el) {
     if (!el) return false;
     const target = el.closest?.('a, button, [role="button"]') || el;
-    try { target.scrollIntoView({ block: 'center' }); } catch (_) {}
-    try { target.focus(); } catch (_) {}
+    try { target.scrollIntoView({ block: 'center' }); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
+    try { target.focus(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     for (const type of ['mouseover', 'mousedown', 'mouseup']) {
-      try { target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window })); } catch (_) {}
+      try { target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window })); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     }
     if (typeof target.click === 'function') target.click();
     else target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
@@ -189,7 +189,7 @@ if (window.top !== window.self) {
   async function humanClick(el) {
     if (!el) return false;
     let human = null;
-    try { human = globalThis.AVJP?.human; } catch (_) {}
+    try { human = globalThis.AVJP?.human; } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     if (human && typeof human.clickEl === 'function') {
       try { return Boolean(await human.clickEl(el)); } catch (_) { return false; }
     }
@@ -199,7 +199,7 @@ if (window.top !== window.self) {
     try {
       const human = globalThis.AVJP?.human;
       if (human && typeof human.scrollBy === 'function') { await human.scrollBy(dy); return true; }
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     window.scrollBy(0, dy);
     return false;
   }
@@ -255,14 +255,14 @@ if (window.top !== window.self) {
   // Gõ kiểu automator.js: focus + selectAll + ClipboardEvent 'paste' +
   // execCommand('insertText') dự phòng.
   function typeViaAutomator(box, text) {
-    try { box.focus(); } catch (_) {}
-    try { document.execCommand('selectAll', false, null); } catch (_) {}
+    try { box.focus(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
+    try { document.execCommand('selectAll', false, null); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     try {
       const dt = new DataTransfer();
       dt.setData('text/plain', text);
       box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
-    } catch (_) {}
-    try { document.execCommand('insertText', false, text); } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
+    try { document.execCommand('insertText', false, text); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
   }
   // Gõ kiểu interaction.js/affiliate-commenter.js setEditor(): focus,
   // selectNodeContents, selectAll, insertText, InputEvent 'input'.
@@ -274,10 +274,10 @@ if (window.top !== window.self) {
       range.selectNodeContents(editor);
       selection?.removeAllRanges();
       selection?.addRange(range);
-    } catch (_) {}
-    try { document.execCommand('selectAll', false); } catch (_) {}
-    try { document.execCommand('insertText', false, value); } catch (_) {}
-    try { editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value })); } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
+    try { document.execCommand('selectAll', false); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
+    try { document.execCommand('insertText', false, value); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
+    try { editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value })); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
   }
   // x-nurture/adapter.js signatureInFeed(): tìm chữ ký trong tweetText.
   function signatureInFeed(text, excludeBox) {
@@ -396,7 +396,7 @@ if (window.top !== window.self) {
       throw selFail('post_article');
     }
     await ctx.savePhase(stepKey);
-    try { location.assign(parsed.href); } catch (_) {}
+    try { location.assign(parsed.href); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     const a = await waitFor(() => location.pathname === parsed.pathname ? firstArticle() : null, 10000);
     if (!a) throw selFail('post_article');
     return { opened: true, url: location.href };
@@ -409,7 +409,7 @@ if (window.top !== window.self) {
       throw selFail('home_timeline');
     }
     await ctx.savePhase(stepKey);
-    try { location.assign('https://x.com/home'); } catch (_) {}
+    try { location.assign('https://x.com/home'); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     const a = await waitFor(() => location.pathname === '/home' ? firstArticle() : null, 10000);
     if (!a) throw selFail('home_timeline');
     return { opened: true, url: location.href };
@@ -447,7 +447,7 @@ if (window.top !== window.self) {
         if (got) return { composer: true, clicked: true };
       }
       await ctx.savePhase('open_composer');
-      try { location.assign('https://x.com/compose/post'); } catch (_) {}
+      try { location.assign('https://x.com/compose/post'); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
       const got2 = await waitFor(findAnyEditor, 10000);
       if (!got2) throw selFail('composer_textarea');
       return { composer: true, navigated: true };
@@ -457,7 +457,7 @@ if (window.top !== window.self) {
       // automator.js: composer.focus() trước khi gõ.
       const ed = await waitFor(findAnyEditor, 10000);
       if (!ed) throw selFail('composer_editor');
-      try { ed.focus(); } catch (_) {}
+      try { ed.focus(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
       await sleep(300);
       const active = document.activeElement;
       return { focused: true, active: Boolean(active && (active === ed || ed.contains(active))) };
@@ -468,7 +468,7 @@ if (window.top !== window.self) {
       if (!content) throw F('execution_error', 'payload.content', 'Thiếu payload.content để gõ nội dung bài');
       const box = await waitFor(findComposerBox, 10000);
       if (!box) throw selFail('composer_textarea');
-      try { box.focus(); } catch (_) {}
+      try { box.focus(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
       await sleep(400);
       typeViaAutomator(box, content);
       await sleep(900);
@@ -622,7 +622,7 @@ if (window.top !== window.self) {
             location.assign(u.href);
             await waitFor(firstArticle, 10000);
           }
-        } catch (_) {}
+        } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
       }
       const limit = Math.min(50, Math.max(1, Number(payload.limit) || 10));
       const links = new Set();
@@ -853,7 +853,7 @@ if (window.top !== window.self) {
       const units = findUnits();
       if (!units.length) throw selFail('timeline_first_post');
       const u = units[0];
-      try { u.el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
+      try { u.el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
       await sleep(1200);
       const r = await likeArticle(u.el, 'timeline_first_post');
       return { nurture: true, interacted: 'like', ...r, key: u.key, url: u.url };
@@ -996,7 +996,7 @@ if (window.top !== window.self) {
       const pending = phase.pendingStep || null;
       if (pending && !completed.includes(pending)) {
         let ok = false;
-        try { ok = VERIFY[pending] ? await VERIFY[pending]() : false; } catch (_) {}
+        try { ok = VERIFY[pending] ? await VERIFY[pending]() : false; } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
         if (ok) {
           completed.push(pending);
         } else if (pending === action) {

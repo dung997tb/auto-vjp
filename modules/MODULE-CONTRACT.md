@@ -1,6 +1,6 @@
 # MODULE CONTRACT — Auto vjp module layer (S2)
 
-_Tài liệu hợp đồng giữa **lõi FB** (FB Auto Tool fork) và **tầng module đa nền tảng** (`modules/`).
+_Tài liệu hợp đồng giữa **lõi FB** và **tầng module đa nền tảng** (`modules/`).
 Chốt 2026-11-04 theo plan v2.1 §4.4 + §6-S2. Luật bao trùm: **everything is module** (plan §3-8) —
 mỗi nền tảng = 1 module độc lập trong `modules/<platform>/`, chỉ giao tiếp qua hợp đồng này;
 thêm module mới không sửa module cũ; contract chỉ thêm, không phá._
@@ -25,7 +25,6 @@ contract-data: **2.11.9** (xem §3).
 
 **Điểm chạm vào lõi FB: đúng 2 chỗ** — (1) cuối `background.js`: `importScripts('modules/bridge.js')`
 bọc try/catch (bridge lỗi thì lõi vẫn chạy); (2) `popup.html`/`popup.js`: 1 nút mở `manage.html`.
-Mọi điểm chạm ghi trong `FORK-CHANGES.md`.
 
 ## 2. Vòng đời task (nguồn việc local — thay claim-next của server MUT)
 
@@ -107,7 +106,7 @@ Script thi hành theo (type × platform) — tên file nằm trong `modules/<pla
 | probe | không mở tab — runner tự ghi receipt success (chứng minh vòng đời) | | | | |
 
 `DEFAULT_IMAGE` = `modules/shared/default-image.js` (2.11.7, ảnh mặc định của riêng Auto vjp —
-xem §3/FORK-CHANGES #98); `HEALER` = `modules/shared/healer.js` (2.9.0).
+xem §3); `HEALER` = `modules/shared/healer.js` (2.9.0).
 
 Mọi lần inject đều nạp `modules/shared/canonical-task-storage.js` TRƯỚC script nền tảng
 (trừ scan: nạp `account-scan-utils.js` + đặt `globalThis.__accountScanContext = {scanId, stepId, platform}` trước).
@@ -163,10 +162,11 @@ Tổng 2.11.17: **216 hàng** (instagram 34, threads 23, tiktok 78, x 32, youtub
 - **`autovjp.testState`** (store key `autovjp.testState`): rollup trạng thái test lẻ theo hàng, khóa `<platform>:<type>:<actionKey|''>`, giá trị đúng 4 trường `{status, at, message, task_id}`. Task từ bảng test mang `meta.testKey`; kernel ghi `running` ngay trong `autovjp.createTask`, và ghi trạng thái cuối tại điểm chốt receipt trong `outbox.deliver` (bỏ qua receipt trung gian `retrying`). `listState` trả kèm `testState`. Manage backfill 1 lần khi mở trang qua `autovjp.backfillTestState {entries}` (chỉ ghi khóa chưa có) từ các receipt cũ chưa có testKey. Chip trên hàng: `success→PASS`, `failed→FAIL`, `uncertain→Treo`, `cancelled→Đã dừng`, `running` mà task không còn trong run/queue → **Gián đoạn** (trình duyệt/máy tắt giữa chừng).
 - **Panel "Log test"** (manage.html, ngay dưới các bảng test): render theo nhịp poll `listState` sẵn có từ `receipts` — 40 biên lai gần nhất, mỗi dòng giờ + tên hành động + trạng thái + message rút gọn; nút "Xoá khung xem" chỉ ẩn dòng cũ phía hiển thị (biến cục bộ theo mốc thời gian), không xoá dữ liệu. Mục "Nhật ký hoạt động" + nút sao chép toàn bộ log giữ nguyên.
 
-#### Tự cập nhật từ trang quản lý — `manage-updater.js` (2.11.19)
+#### Tự cập nhật từ trang quản lý — `manage-updater.js` (2.11.19, siết an toàn 2.11.20)
 
 - **Vị trí**: khu "Cập nhật extension" ở đầu trang quản lý (`manage.html` section `#updateSection`, class `update-wrap` — cố ý KHÔNG dùng class `view`/`data-view` để cơ chế chuyển view của manage.js không ẩn nó). Logic nằm trọn ở file gốc `manage-updater.js`, expose `AVJP.updater = { runUpdate, unzipZip, cmpVersion }`; manage.js không tham gia.
 - **Lõi `runUpdate({dirHandle, expectedName, onStatus})`** — thuần, chỉ dùng FSA subset (`getFileHandle`, `getDirectoryHandle(name,{create})`, `createWritable` write/close, `getFile().text()`, `values()`, `removeEntry(name,{recursive})`) để test được bằng handle giả. Luồng: đọc `manifest.json` trong thư mục được cấp → lệch `name` với manifest đang chạy thì `error:'wrong-directory'`, không ghi gì; fetch `manifest.json` trên nhánh `main` của repo GitHub → so version với version TRONG THƯ MỤC (thư mục chính là nơi extension đang nạp nên trùng version đang chạy ở môi trường thật): thấp hơn → `error:'remote-older'`, bằng → `{status:'up-to-date'}` no-op; cao hơn → tải zip `archive/refs/heads/main.zip`, giải nén bằng bộ đọc ZIP tự viết (central directory; stored + deflate qua `DecompressionStream('deflate-raw')`; bóc tiền tố `auto-vjp-main/`), KIỂM CHỨNG trước khi ghi (manifest mới parse được, name khớp, version khớp bản đã fetch, >50 file) rồi ghi mirror: ghi đè/tạo mọi file (**`manifest.json` ghi cuối cùng**), lỗi ghi dừng ngay tại file đó (`error:'write-failed'` + `failedFile`, không chạy bước xoá); sau đó xoá file/thư mục local không có trong bộ mới — **bỏ qua hoàn toàn `.git/` ở mọi độ sâu**. Kết quả: `{ok, status:'updated'|'up-to-date'|'error', fromVersion, toVersion, filesWritten, filesDeleted}`; tiến trình qua `onStatus(stage, data)`.
+- **Siết an toàn (2.11.20)**: (1) ghim commit — hỏi `api.github.com/repos/.../commits/main` lấy SHA rồi tải `manifest.json` + zip theo đúng SHA (không lấy được thì lùi về tải theo nhánh, bản tóm tắt ghi "CHƯA GHIM"); (2) zip — kiểm CRC32 + kích thước từng file, từ chối đường dẫn `..`/tuyệt đối/`\`/`:`; (3) so nội dung với thư mục hiện tại, **chỉ ghi file mới/đổi** (manifest vẫn ghi cuối); (4) tham số `confirm(summary)` — `summary = {fromVersion, toVersion, commit, pinned, added, changed, deleted, newGrants}`; trả false → `error:'cancelled'`, chưa ghi gì. Không truyền `confirm` mà bản mới xin thêm quyền (`newGrants` khác rỗng) → `error:'permissions-changed'`. UI dùng `window.confirm` hiện bản tóm tắt. Đây không phải chữ ký số: không chống được việc repo bị chiếm. Test: `tests/updater.test.js`.
 - **UI/handle**: toàn bộ luồng quyền nằm trong handler click nút "Cập nhật" — handle thư mục lưu IndexedDB (`autovjp-updater`/`handles`/`'extDir'`); có sẵn thì `queryPermission` → chưa granted thì `requestPermission` ngay trong click; chưa có thì `showDirectoryPicker()`. Sai thư mục → xoá handle đã lưu để lần sau chọn lại; nút "Chọn lại thư mục" xoá handle thủ công. Xong cập nhật → hướng dẫn mở chrome://extensions bấm ⟳ (nút mở trang qua `chrome.tabs.create`, degrade thành hướng dẫn chữ nếu bị chặn). Cập nhật KHÔNG tự nạp lại extension — người dùng bấm ⟳ là bước cuối có chủ đích.
 
 `humanMouse {kind: click|scroll|move, x, y, dy?}` (content → background.js, KHÔNG qua results.js) → `{ok}` — chuột thật qua chrome.debugger cho `AVJP.human` (modules/shared/humanmouse.js, 2.11.16); lỗi/tắt công tắc → `{ok:false}`, content tự fallback click DOM.

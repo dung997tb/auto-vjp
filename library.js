@@ -19,14 +19,14 @@
   let selectedIds = new Set();
 
   function revokeObjectUrls() {
-    objectUrls.forEach(u => { try { URL.revokeObjectURL(u); } catch (_) {} });
+    objectUrls.forEach(u => { try { URL.revokeObjectURL(u); } catch (_) { console.debug("[Auto vjp][library] bỏ qua lỗi:", _); } });
     objectUrls = [];
   }
   function blobUrl(blob) {
     if (!blob) return "";
     if (objectUrls.length > 400) {
       const old = objectUrls.shift();
-      try { URL.revokeObjectURL(old); } catch (_) {}
+      try { URL.revokeObjectURL(old); } catch (_) { console.debug("[Auto vjp][library] bỏ qua lỗi:", _); }
     }
     const url = URL.createObjectURL(blob);
     objectUrls.push(url);
@@ -178,7 +178,7 @@
     node.innerHTML = html;
     node.querySelector(".copy").addEventListener("click", ev => {
       ev.stopPropagation();
-      try { navigator.clipboard.writeText(String(p.text || "")); } catch (_) {}
+      try { navigator.clipboard.writeText(String(p.text || "")); } catch (_) { console.debug("[Auto vjp][library] bỏ qua lỗi:", _); }
     });
     node.querySelector(".collapse").addEventListener("click", ev => {
       ev.stopPropagation();
@@ -389,9 +389,9 @@
   };
   $("libBuildProfileBtn").onclick = buildProfileFromFilter;
   $("libExportBtn").onclick = () => exportFiltered($("libFormat").value);
-  try { $("libFormat").value = localStorage.getItem("libDlFormat") || "md"; } catch (_) {}
+  try { $("libFormat").value = localStorage.getItem("libDlFormat") || "md"; } catch (_) { console.debug("[Auto vjp][library] bỏ qua lỗi:", _); }
   $("libFormat").addEventListener("change", () => {
-    try { localStorage.setItem("libDlFormat", $("libFormat").value); } catch (_) {}
+    try { localStorage.setItem("libDlFormat", $("libFormat").value); } catch (_) { console.debug("[Auto vjp][library] bỏ qua lỗi:", _); }
   });
   $("libDeleteMediaBtn").onclick = async () => {
     if (!currentDatasetId) return;

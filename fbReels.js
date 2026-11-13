@@ -26,7 +26,7 @@
     try {
       const st = getComputedStyle(el);
       if (st.display === "none" || st.visibility === "hidden" || st.visibility === "collapse") return false;
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0;
   };
@@ -41,7 +41,7 @@
   }
 
   async function setStatus(text, extra = {}) {
-    try { await chrome.storage.local.set({ [STATUS_KEY]: String(text || ""), ...extra }); } catch (_) {}
+    try { await chrome.storage.local.set({ [STATUS_KEY]: String(text || ""), ...extra }); } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
   }
 
   function sendMsg(msg) {
@@ -54,8 +54,8 @@
 
   async function trustedClick(el) {
     if (!el || !visible(el)) return false;
-    try { el.scrollIntoView({ block: "nearest" }); } catch (_) {}
-    try { el.scrollIntoView({ block: "center" }); } catch (_) {}
+    try { el.scrollIntoView({ block: "nearest" }); } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
+    try { el.scrollIntoView({ block: "center" }); } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
     await sleep(300);
     if (!visible(el)) return false;
     const r = el.getBoundingClientRect();
@@ -100,7 +100,7 @@
       try {
         const blob = await (await fetch(res.dataUrl)).blob();
         return new File([blob], `reel-${Date.now()}.mp4`, { type: res.mime || blob.type || "video/mp4", lastModified: Date.now() });
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
     }
     // Fallback fetch trực tiếp
     try {
@@ -109,7 +109,7 @@
         const blob2 = await res2.blob();
         return new File([blob2], defaultName, { type: blob2.type || "video/mp4", lastModified: Date.now() });
       }
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
     return null;
   }
 
@@ -212,7 +212,7 @@
         [DOORS_KEY]: [...new Set([...cur.tried, door])],
         [DOOR_ACTIVE_KEY]: ""
       });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
   }
 
   // Input nạp video chỉ được tin khi có ngữ cảnh Reel thật: đang đứng ở
@@ -287,7 +287,7 @@
   }
 
   async function stageCreateMenu(id) {
-    try { await chrome.storage.local.set({ [DOOR_ACTIVE_KEY]: "create_menu" }); } catch (_) {}
+    try { await chrome.storage.local.set({ [DOOR_ACTIVE_KEY]: "create_menu" }); } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
     await setStatus("Đang mở menu Tạo để tìm mục Thước phim...");
     const opener = findNavCreateButton();
     if (!opener) return {};
@@ -296,7 +296,7 @@
     if (!(await live(id))) return { stopped: true };
     const item = findMenuReelItem();
     if (!item) {
-      try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true })); } catch (_) {}
+      try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true })); } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
       return {};
     }
     if (isDeadReelHref(item)) return {}; // mục trỏ thẳng /reel/create (đã chết) — không bấm
@@ -325,7 +325,7 @@
   }
 
   async function stageComposer(id) {
-    try { await chrome.storage.local.set({ [DOOR_ACTIVE_KEY]: "composer" }); } catch (_) {}
+    try { await chrome.storage.local.set({ [DOOR_ACTIVE_KEY]: "composer" }); } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
     await setStatus("Đang mở hộp thoại đăng bài để tìm tuỳ chọn Thước phim...");
     const opener = findComposerOpener();
     if (!opener) return {};
@@ -366,7 +366,7 @@
   }
 
   async function stageProfileReels(id) {
-    try { await chrome.storage.local.set({ [DOOR_ACTIVE_KEY]: "profile_reels" }); } catch (_) {}
+    try { await chrome.storage.local.set({ [DOOR_ACTIVE_KEY]: "profile_reels" }); } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
     await setStatus("Đang tìm nút Tạo thước phim trong mục Reels của trang cá nhân...");
     const end = Date.now() + 25000;
     while (Date.now() < end) {
@@ -432,7 +432,7 @@
   }
 
   async function stageBizSuite(id) {
-    try { await chrome.storage.local.set({ [DOOR_ACTIVE_KEY]: "bizsuite" }); } catch (_) {}
+    try { await chrome.storage.local.set({ [DOOR_ACTIVE_KEY]: "bizsuite" }); } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
     await setStatus("Đang tạo Reel qua Meta Business Suite (business.facebook.com)...");
     // Chờ khung Suite nạp (headless chậm) tối đa ~40s
     const shellEnd = Date.now() + 40000;
@@ -473,7 +473,7 @@
     let st = await getDoorState();
     if (!st.since) {
       st.since = Date.now();
-      try { await chrome.storage.local.set({ [SURFACE_SINCE_KEY]: st.since }); } catch (_) {}
+      try { await chrome.storage.local.set({ [SURFACE_SINCE_KEY]: st.since }); } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
     }
     const stageDeadline = st.since + SURFACE_BUDGET_MS;
 
@@ -509,7 +509,7 @@
 
       if (door === "create_menu" || door === "composer") {
         if (!onHome()) {
-          try { await chrome.storage.local.set({ [DOOR_ACTIVE_KEY]: door }); } catch (_) {}
+          try { await chrome.storage.local.set({ [DOOR_ACTIVE_KEY]: door }); } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
           location.href = "https://www.facebook.com/";
           return { navigated: true };
         }
@@ -522,7 +522,7 @@
       if (door === "profile_reels") {
         const onProfileReels = /\/reels\/?$/i.test(location.pathname);
         if (!onProfileReels) {
-          try { await chrome.storage.local.set({ [DOOR_ACTIVE_KEY]: door }); } catch (_) {}
+          try { await chrome.storage.local.set({ [DOOR_ACTIVE_KEY]: door }); } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
           await setStatus("Đang mở mục Reels trên trang cá nhân để tìm nút Tạo thước phim...");
           location.href = "https://www.facebook.com/me/reels";
           return { navigated: true };
@@ -535,7 +535,7 @@
 
       if (door === "bizsuite") {
         if (cur.activeDoor === "bizsuite") { await markDoorTried("bizsuite"); continue; } // vừa bị Suite đẩy về www — đừng vòng lại
-        try { await chrome.storage.local.set({ [DOOR_ACTIVE_KEY]: door }); } catch (_) {}
+        try { await chrome.storage.local.set({ [DOOR_ACTIVE_KEY]: door }); } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
         await setStatus("Đang mở Meta Business Suite để tạo Reel...");
         location.href = "https://business.facebook.com/";
         return { navigated: true };
@@ -637,7 +637,7 @@
     const closer = [...document.querySelectorAll('[role="button"], button')].filter(visible)
       .find(el => /^(?:đóng|close)$/i.test(clean(el.getAttribute("aria-label") || "")) || /^(?:đóng|close)$/i.test(labelOf(el)));
     if (closer) { await trustedClick(closer); await sleep(500); return; }
-    try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true })); } catch (_) {}
+    try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true })); } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
     await sleep(400);
   }
 
@@ -773,7 +773,7 @@
           return { ok: false, code: "navigated" };
         }
       }
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
 
     if (!(await live(id))) return { ok: false, code: "stopped" };
 
@@ -840,7 +840,7 @@
         if (aiRes?.ok && aiRes.caption) {
           captionText = clean(aiRes.caption);
         }
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
     }
 
     // 9. Đi qua các bước wizard (Tải lên -> Chỉnh sửa -> Mô tả & Đăng)
@@ -871,7 +871,7 @@
           captionEd.dispatchEvent(new Event("input", { bubbles: true }));
         }
         await sleep(600);
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
     }
     if (!(await live(id))) return { ok: false, code: "stopped" };
 
@@ -906,7 +906,7 @@
     if (cfg.crossIg) {
       await setStatus("Đang tìm tuỳ chọn đăng chéo sang Instagram...");
       crossIg = await tryEnableCrossIg(id);
-      try { await chrome.storage.local.set({ [CROSS_KEY]: crossIg }); } catch (_) {}
+      try { await chrome.storage.local.set({ [CROSS_KEY]: crossIg }); } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
       if (crossIg === "enabled") {
         await setStatus("Đã bật đăng chéo sang Instagram (cross_ig: enabled)");
       } else if (crossIg === "not_available") {
@@ -930,11 +930,11 @@
     // Ghi phase sang proof trước khi trang có thể chuyển đổi
     try {
       await chrome.storage.local.set({ [PHASE_KEY]: "proving", fbReelsProvingAt: Date.now() });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
 
     // 12. PROOF thật: mở trang cá nhân tab Reels, tìm video mới nhất khớp thời gian
     const proofRes = await proofReelPublished(id, 90000);
-    try { await chrome.storage.local.remove([PHASE_KEY]); } catch (_) {}
+    try { await chrome.storage.local.remove([PHASE_KEY]); } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
     if (!proofRes.ok) {
       return { ok: false, code: proofRes.error || "fb_reels_proof_failed", message: "Không thấy Reel xuất hiện trên trang cá nhân sau 90s (fb_reels_proof_failed)" };
     }
@@ -974,7 +974,7 @@
       active = false;
       try {
         await chrome.storage.local.set({ [FLAG]: false, [STATUS_KEY]: `Lỗi Reels: ${String(e?.message || e || "").slice(0, 150)}` });
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
     } finally {
       active = false;
     }
@@ -1057,10 +1057,10 @@
           // bizsuite (đang mở dở) được nhận tab hiện tại làm owner mới.
           const doorSt = await getDoorState();
           if (isBizSuite() && doorSt.activeDoor === "bizsuite") {
-            try { await chrome.storage.local.set({ [OWNER_KEY]: r.tabId }); } catch (_) {}
+            try { await chrome.storage.local.set({ [OWNER_KEY]: r.tabId }); } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
           } else ownerOk = false;
         }
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
       if (!ownerOk) return;
 
       config = { ...s[CONFIG_KEY] };
@@ -1073,10 +1073,10 @@
       // profile / trong Business Suite) thì chạy tiếp proof, không đăng lại.
       if (s[PHASE_KEY] === "proving") {
         const proofRes = await proofReelPublished(runId, 90000);
-        try { await chrome.storage.local.remove([PHASE_KEY]); } catch (_) {}
+        try { await chrome.storage.local.remove([PHASE_KEY]); } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
         if (proofRes.ok) {
           let crossIg = "";
-          try { crossIg = String((await chrome.storage.local.get([CROSS_KEY]))[CROSS_KEY] || ""); } catch (_) {}
+          try { crossIg = String((await chrome.storage.local.get([CROSS_KEY]))[CROSS_KEY] || ""); } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
           await finalizeReelsRun({ ok: true, url: proofRes.url || "", at: proofRes.at || Date.now(), crossIg });
         } else if (proofRes.error === "stopped") {
           active = false;
@@ -1087,7 +1087,7 @@
       }
 
       fbReelsLoop(runId);
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][fbReels] bỏ qua lỗi:", _); }
   })();
 
   console.log("[fbReels] fbReels.js loaded");

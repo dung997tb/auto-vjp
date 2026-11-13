@@ -60,7 +60,7 @@
           var media = item.querySelector('video') || item.querySelector('img');
           var mSrc = media ? (media.currentSrc || media.src || (media.getAttribute && media.getAttribute('src')) || '') : '';
           if (mSrc) return 'media:' + String(mSrc).slice(0, 120);
-        } catch (e) {}
+        } catch (e) { console.debug("[Auto vjp][modules] bỏ qua lỗi:", e); }
       }
       var a = TF.q('authorLink', scope);
       var c = TF.q('captionText', scope);
@@ -180,7 +180,7 @@
       if (item && typeof WheelEvent === 'function' && typeof item.dispatchEvent === 'function') {
         item.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: ((typeof window !== 'undefined' && window.innerHeight) || 600) * 0.9, deltaMode: 0 }));
       }
-    } catch (e) {}
+    } catch (e) { console.debug("[Auto vjp][modules] bỏ qua lỗi:", e); }
     if (await tfWaitSigChange(sig0, api, 5)) return { ok: true, note: 'scrolled_next' };
     if (!sig0) {
       if (typeof window !== 'undefined' && typeof window.scrollBy === 'function') {
@@ -445,7 +445,7 @@
         var activeItem = tfActiveItem();
         var isPhotoPost = false;
         if (activeItem && typeof activeItem.querySelector === 'function') {
-          try { isPhotoPost = !activeItem.querySelector('video') && !!activeItem.querySelector('img'); } catch (e) {}
+          try { isPhotoPost = !activeItem.querySelector('video') && !!activeItem.querySelector('img'); } catch (e) { console.debug("[Auto vjp][modules] bỏ qua lỗi:", e); }
         }
         if (!isPhotoPost && typeof location !== 'undefined' && /\/photo\/\d+/.test(location.pathname || '')) isPhotoPost = true;
         if (isPhotoPost) {
@@ -587,12 +587,12 @@
       run: async function (ctx, params, api) {
         var videoEl = TF.q('videoEl');
         if (videoEl && typeof videoEl.pause === 'function') {
-          try { videoEl.pause(); } catch (e) {}
+          try { videoEl.pause(); } catch (e) { console.debug("[Auto vjp][modules] bỏ qua lỗi:", e); }
         }
         var sec = (params && params.pauseSec) ? params.pauseSec : 5;
         await api.sleep(sec * 1000);
         if (videoEl && typeof videoEl.play === 'function') {
-          try { videoEl.play().catch(function () {}); } catch (e) {}
+          try { videoEl.play().catch(function () {}); } catch (e) { console.debug("[Auto vjp][modules] bỏ qua lỗi:", e); }
         }
         return { ok: true, note: 'paused_' + sec + 's' };
       }
@@ -824,7 +824,7 @@
         if (ufItem.expiresAt && Date.now() > ufItem.expiresAt) return { ok: false, note: 'approval_expired' };
         if (ufItem.username && ufItem.username.replace(/^@/, '').toLowerCase() !== user.toLowerCase()) return { ok: false, note: 'approval_target_mismatch' };
         async function ufConsume() {
-          try { ufItem.status = 'done'; ufItem.doneAt = Date.now(); await TF.storeSet({ tf_approvals_v1: ufAll }); } catch (e) {}
+          try { ufItem.status = 'done'; ufItem.doneAt = Date.now(); await TF.storeSet({ tf_approvals_v1: ufAll }); } catch (e) { console.debug("[Auto vjp][modules] bỏ qua lỗi:", e); }
         }
 
         var curPath = (typeof location !== 'undefined') ? location.pathname : '';
@@ -968,7 +968,7 @@
         if (!commentSubmit) return { ok: false, note: 'not_found:commentSubmit' };
         if (commentSubmit.disabled === true) {
           if (typeof commentInput.dispatchEvent === 'function' && typeof InputEvent === 'function') {
-            try { commentInput.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text })); } catch (e) {}
+            try { commentInput.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text })); } catch (e) { console.debug("[Auto vjp][modules] bỏ qua lỗi:", e); }
           }
           await api.sleep(800);
           commentSubmit = TF.q('commentSubmit') || commentSubmit;
@@ -992,7 +992,7 @@
               var itx = (items[ii].innerText || items[ii].textContent || '');
               if (itx.indexOf(text) >= 0) n++;
             }
-          } catch (e) {}
+          } catch (e) { console.debug("[Auto vjp][modules] bỏ qua lỗi:", e); }
           return n;
         };
         var beforeCount = countMine();
@@ -1013,7 +1013,7 @@
         try {
           cItem.status = 'done'; cItem.doneAt = Date.now();
           await TF.storeSet({ tf_approvals_v1: apAll });
-        } catch (e) {}
+        } catch (e) { console.debug("[Auto vjp][modules] bỏ qua lỗi:", e); }
         return { ok: true, note: 'comment_posted' };
       }
     },
@@ -1093,7 +1093,7 @@
           // wrong" thay cho lưới, gặp thật trên nuc 31/10): báo đúng nguyên
           // nhân thay vì not_found chung chung để khỏi nghi oan selector.
           var pageText = '';
-          try { pageText = (typeof document !== 'undefined' && document.body && document.body.innerText) || ''; } catch (e) {}
+          try { pageText = (typeof document !== 'undefined' && document.body && document.body.innerText) || ''; } catch (e) { console.debug("[Auto vjp][modules] bỏ qua lỗi:", e); }
           if (/something went wrong/i.test(pageText)) return { ok: false, note: 'grid_load_failed' };
           return { ok: false, note: 'not_found:profilePostItem' };
         }
@@ -1216,12 +1216,12 @@
             try {
               document.execCommand('selectAll', false, null);
               document.execCommand('insertText', false, fullCaption);
-            } catch (e) {}
+            } catch (e) { console.debug("[Auto vjp][modules] bỏ qua lỗi:", e); }
             await api.sleep(500);
             if ((captionEl.textContent || '').indexOf(probe) >= 0) { capOk = true; break; }
             if (attempt === 2) {
               captionEl.textContent = fullCaption;
-              try { captionEl.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: fullCaption })); } catch (e) {}
+              try { captionEl.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: fullCaption })); } catch (e) { console.debug("[Auto vjp][modules] bỏ qua lỗi:", e); }
               await api.sleep(500);
               if ((captionEl.textContent || '').indexOf(probe) >= 0) capOk = true;
             }

@@ -3,7 +3,7 @@
 // (readyWall*), không dùng chung selector/counter/proof của news.js hay
 // group.js — chỉ mượn *pattern* đã kiểm chứng (không coupling chéo file).
 (() => {
-  try { window.__readyWallVer = "1.9.496-submit-now"; } catch (_) {}
+  try { window.__readyWallVer = "1.9.496-submit-now"; } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
   const FLAG = "readyWallActive";
   const CONFIG_KEY = "readyWallConfig";
   const RUN_KEY = "readyWallRunId";
@@ -19,7 +19,7 @@
     try {
       const st = getComputedStyle(el);
       if (st.display === "none" || st.visibility === "hidden" || st.visibility === "collapse") return false;
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0;
   };
@@ -46,7 +46,7 @@
     } catch (_) { return false; }
   }
   async function setStatus(text, extra = {}) {
-    try { await chrome.storage.local.set({ readyWallStatus: String(text || ""), ...extra }); } catch (_) {}
+    try { await chrome.storage.local.set({ readyWallStatus: String(text || ""), ...extra }); } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
   }
 
   function sendMsg(msg) {
@@ -58,8 +58,8 @@
   }
   async function trustedClick(el) {
     if (!el || !visible(el)) return false;
-    try { el.scrollIntoView({ block: "nearest" }); } catch (_) {}
-    try { el.scrollIntoView({ block: "center" }); } catch (_) {}
+    try { el.scrollIntoView({ block: "nearest" }); } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
+    try { el.scrollIntoView({ block: "center" }); } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
     await sleep(350);
     if (!visible(el)) return false;
     const r = el.getBoundingClientRect();
@@ -280,7 +280,7 @@
         if (!actor.ok) { await setStatus("Facebook đang dùng Page, không đăng tường nick"); return "skip"; }
         if (actor.switched) { location.replace("https://www.facebook.com/"); return "navigated"; }
       }
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
     if (!(await live(id))) return "stopped";
     // Nội dung: AI viết lại hoặc giữ nguyên.
     let content = String(item.text || "");
@@ -311,12 +311,12 @@
       if (norm(editorText(pair.ed))) {
         let cleared = false;
         for (let c = 0; c < 2 && !cleared; c++) {
-          try { pair.ed.focus(); document.execCommand("selectAll", false, null); document.execCommand("delete", false, null); } catch (_) {}
+          try { pair.ed.focus(); document.execCommand("selectAll", false, null); document.execCommand("delete", false, null); } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
           await sleep(400);
           cleared = !norm(editorText(pair.ed));
         }
         if (!cleared) {
-          try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) {}
+          try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
           await sleep(1200);
           const op2 = findWallOpener();
           if (!op2 || !(await trustedClick(op2))) { diag = `lan${ta + 1}-mo-lai-that-bai`; continue; }
@@ -325,7 +325,7 @@
           comp = nc; pair = { dlg: nc.dlg, ed: nc.ed };
         } else { comp.dlg = pair.dlg; comp.ed = pair.ed; }
       } else { comp.dlg = pair.dlg; comp.ed = pair.ed; }
-      try { pair.ed.focus(); } catch (_) {}
+      try { pair.ed.focus(); } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
       await sleep(250);
       const typed = await sendMsg({ action: "trustedInput", text: content, pressEnter: false, typingConfig: cfg.typingConfig || null });
       await sleep(600);
@@ -340,7 +340,7 @@
     }
     if (!ok) {
       await setStatus(`Nội dung trong ô không khớp (${diag || "?"}) — không đăng`);
-      try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) {}
+      try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
       return "skip";
     }
     if (!(await live(id))) return "stopped";
@@ -363,8 +363,8 @@
         const arr0 = Array.isArray(cur0.items) ? cur0.items : [];
         const ix0 = arr0.findIndex(x => x && x.id === item.id);
         if (ix0 >= 0) { arr0[ix0] = { ...arr0[ix0], at: myAt }; await chrome.storage.local.set({ [CONFIG_KEY]: { ...cur0, items: arr0 } }); }
-      } catch (_) {}
-      try { item.at = myAt; } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
+      try { item.at = myAt; } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
     }
     if (!myAt) { await setStatus("Thiếu giờ hẹn — bỏ bài này"); return "skip"; }
     if (norm(editorText(comp.ed)) !== want) { await setStatus("Nội dung đổi sau re-render — không hẹn lịch"); return "skip"; }
@@ -373,7 +373,7 @@
     if (!sch?.ok) {
       if (!(await live(id))) return "stopped";
       await setStatus(`Không hẹn được lịch Facebook (${sch?.stage || "?"}) — bỏ bài này`);
-      try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) {}
+      try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
       return "skip";
     }
     // FB đã nhận lịch (có proof composer đóng) — chốt done NGAY trước khi kiểm
@@ -384,8 +384,8 @@
       const arr1 = Array.isArray(cur1.items) ? cur1.items : [];
       const ix1 = arr1.findIndex(x => x && x.id === item.id);
       if (ix1 >= 0) { arr1[ix1] = { ...arr1[ix1], done: true, skipped: false }; await chrome.storage.local.set({ [CONFIG_KEY]: { ...cur1, items: arr1 } }); }
-    } catch (_) {}
-    try { await chrome.storage.local.set({ readyWallLastAt: Date.now(), readyWallLastScheduledAt: sch.actualMs || myAt }); } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
+    try { await chrome.storage.local.set({ readyWallLastAt: Date.now(), readyWallLastScheduledAt: sch.actualMs || myAt }); } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
     await setStatus(`Đã hẹn lịch Facebook ${sch.slot || ""} ngày ${new Date(sch.actualMs).toLocaleString("vi-VN")}`);
     return "done";
   }
@@ -396,7 +396,7 @@
       const list = Array.isArray(s.readyWallSkipLog) ? s.readyWallSkipLog : [];
       list.push({ at: Date.now(), reason: String(reason || "").slice(0, 160), title: String(title || "").slice(0, 80) });
       await chrome.storage.local.set({ readyWallSkipLog: list.slice(-50) });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
   }
   async function readyWallLoop(id) {
     try {
@@ -428,7 +428,7 @@
             arr[ix] = { ...arr[ix], done: res === "done", skipped: res !== "done" };
             await chrome.storage.local.set({ [CONFIG_KEY]: { ...cur, items: arr } });
           }
-        } catch (_) {}
+        } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
         if (res === "done") {
           done++;
           await chrome.storage.local.set({ readyWallDone: done, readyWallSkipped: skipped });
@@ -438,7 +438,7 @@
           try {
             const cur = await chrome.storage.local.get(["readyWallStatus"]);
             if (cur.readyWallStatus) await logReadySkip(cur.readyWallStatus, item.text);
-          } catch (_) {}
+          } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
           await chrome.storage.local.set({ readyWallDone: done, readyWallSkipped: skipped });
         }
         const more = items.indexOf(item) < items.length - 1;
@@ -453,7 +453,7 @@
     } catch (e) {
       console.warn("[ReadyWall]", e);
       active = false;
-      try { await chrome.storage.local.set({ [FLAG]: false, readyWallStatus: "Lỗi: " + String(e?.message || e || "").slice(0, 150) }); } catch (_) {}
+      try { await chrome.storage.local.set({ [FLAG]: false, readyWallStatus: "Lỗi: " + String(e?.message || e || "").slice(0, 150) }); } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
     } finally { active = false; }
   }
 
@@ -499,14 +499,14 @@
           catch (_) { res(null); }
         });
         if (r?.tabId && s.readyWallOwnerTabId && r.tabId !== s.readyWallOwnerTabId) ownerOk = false;
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
       if (!ownerOk) return;
       config = { ...s[CONFIG_KEY] };
       runId = String(s[RUN_KEY] || config.runId || `readywall-${Date.now()}`);
       active = true;
       await sleep(1500);
       if (active) readyWallLoop(runId);
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][readywall] bỏ qua lỗi:", _); }
   })();
 
   console.log("[Ready] readywall.js loaded");

@@ -86,7 +86,7 @@
         r.top >= 0 && r.left >= 0 &&
         r.bottom <= window.innerHeight && r.right <= window.innerWidth;
       if (!inView) {
-        try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch (_) {}
+        try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch (_) { console.debug("[Auto vjp][humanmouse] bỏ qua lỗi:", _); }
         await sleep(rand(150, 400));
         r = el.getBoundingClientRect();
       }
@@ -97,7 +97,7 @@
       el.click();
       return false;
     } catch (_) {
-      try { el.click(); } catch (_) {}
+      try { el.click(); } catch (_) { console.debug("[Auto vjp][humanmouse] bỏ qua lỗi:", _); }
       return false;
     }
   }
@@ -115,7 +115,7 @@
       window.scrollBy(0, total);
       return false;
     } catch (_) {
-      try { window.scrollBy(0, total); } catch (_) {}
+      try { window.scrollBy(0, total); } catch (_) { console.debug("[Auto vjp][humanmouse] bỏ qua lỗi:", _); }
       return false;
     }
   }

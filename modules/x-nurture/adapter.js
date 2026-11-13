@@ -222,7 +222,7 @@
           action: 'nurtureProgress', taskId, platform: PLATFORM,
           counters: { today, session: { ...session } }
         }).catch(() => {});
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][adapter] bỏ qua lỗi:", _); }
     }
     async function sendDone(status, failureCode, message) {
       if (doneSent) return;
@@ -404,10 +404,10 @@
     }
     async function typeReply(box, text) {
       box.focus();
-      try { box.click(); } catch (_) {}
+      try { box.click(); } catch (_) { console.debug("[Auto vjp][adapter] bỏ qua lỗi:", _); }
       await sleep(300);
       const present = () => normalizeText(box.textContent).includes(normalizeText(text).slice(0, 20));
-      try { document.execCommand('insertText', false, text); } catch (_) {}
+      try { document.execCommand('insertText', false, text); } catch (_) { console.debug("[Auto vjp][adapter] bỏ qua lỗi:", _); }
       if (!present()) {
         // Dự phòng cho editor DraftJS: dán qua ClipboardEvent, rồi gõ từng
         // ký tự bằng insertText như các adapter trước.
@@ -415,7 +415,7 @@
           const dt = new DataTransfer();
           dt.setData('text/plain', text);
           box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
-        } catch (_) {}
+        } catch (_) { console.debug("[Auto vjp][adapter] bỏ qua lỗi:", _); }
       }
       if (!present()) {
         for (const ch of text) {
@@ -612,6 +612,6 @@
         status: 'failed', failure_code: 'execution_error',
         resultMessage: 'x-nurture lỗi: ' + (err?.message || String(err)), items: []
       });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][adapter] bỏ qua lỗi:", _); }
   });
 })();

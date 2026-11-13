@@ -32,7 +32,7 @@
       for (const [name, pl] of Object.entries(globalThis.AVJP.contract.PLATFORMS)) {
         if (hostMatches(url, pl.hosts)) return name;
       }
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][results] bỏ qua lỗi:", _); }
     return fallback || 'facebook';
   }
 
@@ -49,7 +49,7 @@
       const flags = (await S.get(K.CANCEL_FLAGS)) || {};
       flags[String(taskId)] = Date.now();
       await S.set({ [K.CANCEL_FLAGS]: flags });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][results] bỏ qua lỗi:", _); }
   }
 
   // (2.11.18) Ghi 1 mục testState — withLock, đọc-ghi cả object.
@@ -276,7 +276,7 @@
           const actKey = microDetails && microDetails.action;
           const entry = reg && actKey ? (reg[platform] || []).find(e => e.key === actKey) : null;
           if (entry && microDetails && !microDetails.label) microDetails.label = entry.label;
-        } catch (_) {}
+        } catch (_) { console.debug("[Auto vjp][results] bỏ qua lỗi:", _); }
         const confirmed = await outbox().deliver({
           type: 'micro_action', taskId: message.taskId, platform, tabId,
           status: message.status || 'failed',
@@ -519,7 +519,7 @@
     if (EXEC_ACTIONS.has(message.action)) {
       handleExec(message, sender, sendResponse).catch(err => {
         console.error('[Auto vjp][results]', message.action, err);
-        try { sendResponse({ success: false, error: err?.message || String(err) }); } catch (_) {}
+        try { sendResponse({ success: false, error: err?.message || String(err) }); } catch (_) { console.debug("[Auto vjp][results] bỏ qua lỗi:", _); }
       });
       return true;
     }

@@ -1,4 +1,4 @@
-// Auto vjp — HEALTHSCAN (task type 'healthscan', 2.9.0, FORK-CHANGES #87).
+// Auto vjp — HEALTHSCAN (task type 'healthscan', 2.9.0).
 // Task nhẹ phát hiện DOM trôi TRƯỚC khi task thật fail: mở bề mặt mẫu
 // của nền tảng (contract.startUrl), chạy AVJP.heal.locate() cho các neo
 // mẫu, KHÔNG bấm/không tương tác thật — chỉ định vị + báo cáo.
@@ -124,7 +124,7 @@
         found_via: found ? found.via : 'none',
         spec: found ? found.spec : null
       });
-      try { chrome.storage.local.set({ lastStatus: `🩺 Healthscan ${platform}: ${anchor.key} -> ${found ? found.via : 'none'}` }); } catch (_) {}
+      try { chrome.storage.local.set({ lastStatus: `🩺 Healthscan ${platform}: ${anchor.key} -> ${found ? found.via : 'none'}` }); } catch (_) { console.debug("[Auto vjp][healthscan] bỏ qua lỗi:", _); }
     }
     await send('healthscanCompleted', { items });
   } catch (error) {

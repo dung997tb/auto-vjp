@@ -24,9 +24,9 @@
             try {
               const al = [...a.querySelectorAll('a[href*="/status/"]')][0];
               if (al) link = al.href;
-            } catch (_) {}
+            } catch (_) { console.debug("[Auto vjp][xread] bỏ qua lỗi:", _); }
             let time = "";
-            try { time = a.querySelector("time")?.getAttribute("datetime") || ""; } catch (_) {}
+            try { time = a.querySelector("time")?.getAttribute("datetime") || ""; } catch (_) { console.debug("[Auto vjp][xread] bỏ qua lỗi:", _); }
             out.push({ text: t.slice(0, 900), link, author: authorOf(link), time });
             if (out.length >= n) break;
           }
@@ -59,8 +59,8 @@
               sendResponse({ ok: true, live: true, poster: lv.poster, author: am ? am[1] : "" });
               return;
             }
-          } catch (_) {}
-          try { hit.scrollIntoView({ block: "center" }); } catch (_) {}
+          } catch (_) { console.debug("[Auto vjp][xread] bỏ qua lỗi:", _); }
+          try { hit.scrollIntoView({ block: "center" }); } catch (_) { console.debug("[Auto vjp][xread] bỏ qua lỗi:", _); }
           // Chờ ảnh/avatar/media trong bài tải xong mới đo khung (chụp sớm
           // là ảnh mờ — bắt live: avatar chưa hiện đã chụp; media video còn
           // spinner sau 9s). Hết budget mà media vẫn loading thì báo lỗi để
@@ -70,7 +70,7 @@
               if ([...hit.querySelectorAll("img")].some(im => !im.complete || (im.naturalWidth || 0) === 0)) return true;
               if ([...hit.querySelectorAll("video")].some(v => (v.readyState || 0) < 2 && !v.poster)) return true;
               if (hit.querySelector('[role="progressbar"],[aria-label*="Loading" i],[aria-label*="Đang tải" i]')) return true;
-            } catch (_) {}
+            } catch (_) { console.debug("[Auto vjp][xread] bỏ qua lỗi:", _); }
             return false;
           };
           try {
@@ -90,7 +90,7 @@
                 try {
                   const m = String(getComputedStyle(el).backgroundImage || "").match(/url\(["']?(https:[^"')]+)["']?\)/);
                   if (m) urls.add(m[1]);
-                } catch (_) {}
+                } catch (_) { console.debug("[Auto vjp][xread] bỏ qua lỗi:", _); }
               }
               await Promise.all([...urls].slice(0, 30).map(u => new Promise(res => {
                 const im = new Image();
@@ -99,10 +99,10 @@
                 im.onerror = () => { clearTimeout(to); res(false); };
                 im.src = u;
               })));
-            } catch (_) {}
-            try { await Promise.race([document.fonts.ready, sleep(1500)]); } catch (_) {}
+            } catch (_) { console.debug("[Auto vjp][xread] bỏ qua lỗi:", _); }
+            try { await Promise.race([document.fonts.ready, sleep(1500)]); } catch (_) { console.debug("[Auto vjp][xread] bỏ qua lỗi:", _); }
             await sleep(400);
-          } catch (_) {}
+          } catch (_) { console.debug("[Auto vjp][xread] bỏ qua lỗi:", _); }
           if (mediaBusy()) { sendResponse({ ok: false, error: "media-loading" }); return; }
           // Video X hiện spinner khi chưa phát (kể cả đã tải xong data) —
           // bấm phát (tắt tiếng để qua autoplay-policy) rồi chụp frame.
@@ -111,15 +111,15 @@
             const player = hit.querySelector('[data-testid="videoPlayer"]');
             const vid = hit.querySelector("video");
             if (player && vid && (vid.readyState || 0) >= 1) {
-              try { vid.muted = true; } catch (_) {}
+              try { vid.muted = true; } catch (_) { console.debug("[Auto vjp][xread] bỏ qua lỗi:", _); }
               const url0 = location.href;
               const pb = [...player.querySelectorAll('[role="button"],button')].find(b => /play|phát/i.test(`${b.getAttribute?.("aria-label") || ""} ${b.innerText || ""}`));
-              try { (pb || vid).click(); } catch (_) {}
+              try { (pb || vid).click(); } catch (_) { console.debug("[Auto vjp][xread] bỏ qua lỗi:", _); }
               let playing = false;
               for (let w = 0; w < 10 && !playing; w++) {
                 await sleep(600);
                 if (location.href !== url0 || !hit.isConnected) { sendResponse({ ok: false, error: "navigated" }); return; }
-                try { playing = !vid.paused && vid.currentTime > 0; } catch (_) {}
+                try { playing = !vid.paused && vid.currentTime > 0; } catch (_) { console.debug("[Auto vjp][xread] bỏ qua lỗi:", _); }
               }
               if (!playing) { sendResponse({ ok: false, error: "video-not-playing" }); return; }
               // Đợi frame hình render thật (vừa phát vẫn có thể trắng vài giây).
@@ -129,12 +129,12 @@
                 const end2 = Date.now() + 6000;
                 while (Date.now() < end2 && ticks < 2) {
                   await sleep(500);
-                  try { if (vid.currentTime > t0 + 0.2) ticks++; } catch (_) {}
+                  try { if (vid.currentTime > t0 + 0.2) ticks++; } catch (_) { console.debug("[Auto vjp][xread] bỏ qua lỗi:", _); }
                 }
                 await sleep(1200);
-              } catch (_) {}
+              } catch (_) { console.debug("[Auto vjp][xread] bỏ qua lỗi:", _); }
             }
-          } catch (_) {}
+          } catch (_) { console.debug("[Auto vjp][xread] bỏ qua lỗi:", _); }
           const r = hit.getBoundingClientRect();
           const vw = window.innerWidth || 0, vh = window.innerHeight || 0;
           const x = Math.max(0, Math.round(r.left)), y = Math.max(0, Math.round(r.top));

@@ -1,5 +1,5 @@
 // Auto vjp — ẢNH MẶC ĐỊNH của riêng Auto vjp cho bài không có ảnh
-// (2.11.7, FORK-CHANGES #98). Namespace `AVJP.defaultImage` cho content
+// (2.11.7). Namespace `AVJP.defaultImage` cho content
 // script, nạp TRƯỚC automator trong contract (scripts() type 'post' của
 // instagram/threads/x). Thay fallback cũ trỏ tới host bên thứ ba
 // (moigioi.pages.dev — asset sót từ code gốc): từ nay ảnh mặc định là

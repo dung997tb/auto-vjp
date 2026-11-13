@@ -35,11 +35,11 @@
     return new Promise((resolve) => {
       let done = false, obs = null;
       const timer = setTimeout(() => {
-        if (!done) { done = true; try { obs && obs.disconnect(); } catch (_) {} resolve(false); }
+        if (!done) { done = true; try { obs && obs.disconnect(); } catch (_) { console.debug("[Auto vjp][metaai] bỏ qua lỗi:", _); } resolve(false); }
       }, Math.max(50, timeoutMs));
       try {
         obs = new MutationObserver(() => {
-          if (!done) { done = true; clearTimeout(timer); try { obs.disconnect(); } catch (_) {} resolve(true); }
+          if (!done) { done = true; clearTimeout(timer); try { obs.disconnect(); } catch (_) { console.debug("[Auto vjp][metaai] bỏ qua lỗi:", _); } resolve(true); }
         });
         obs.observe(document.documentElement || document.body, { childList: true, subtree: true, characterData: true });
       } catch (_) { /* fallback: timer decides */ }
@@ -168,7 +168,7 @@
       // THỊ; tab worker nền chỉ còn textarea mirror 0x0 (gõ không ăn). Xin SW
       // bật tab vài giây cho React mount rồi trả lại tab user đang xem.
       if (!editorDiv()) {
-        try { await chrome.runtime.sendMessage({ action: "metaFreeNeedVisible" }); } catch (_) {}
+        try { await chrome.runtime.sendMessage({ action: "metaFreeNeedVisible" }); } catch (_) { console.debug("[Auto vjp][metaai] bỏ qua lỗi:", _); }
         const mountEnd = Date.now() + 10000;
         while (!editorDiv() && Date.now() < mountEnd) {
           if (superseded()) return { ok: false, error: "META_SUPERSEDED" };
@@ -187,7 +187,7 @@
           input.dispatchEvent(new Event("input", { bubbles: true }));
           const div = editorDiv();
           if (div) { div.focus(); document.execCommand("selectAll", false, null); document.execCommand("delete", false, null); }
-        } catch (_) {}
+        } catch (_) { console.debug("[Auto vjp][metaai] bỏ qua lỗi:", _); }
         await sleep(400);
         if (!editorText().trim()) break;
       }
@@ -209,9 +209,9 @@
           sel.addRange(range);
         } else {
           const len = String(target.el.value || "").length;
-          try { target.el.setSelectionRange(len, len); } catch (_) {}
+          try { target.el.setSelectionRange(len, len); } catch (_) { console.debug("[Auto vjp][metaai] bỏ qua lỗi:", _); }
         }
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][metaai] bỏ qua lỗi:", _); }
       let typeOk = false;
       try {
         // SW bận/treo thì sendMessage này treo theo — race 30s để không kẹt vĩnh viễn.
@@ -267,7 +267,7 @@
             div.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }));
             const b2 = sendButton();
             if (b2) b2.click();
-          } catch (_) {}
+          } catch (_) { console.debug("[Auto vjp][metaai] bỏ qua lỗi:", _); }
         }
       }
       if (!sent) return { ok: false, error: "META_SEND_FAIL" };
@@ -320,7 +320,7 @@
       // Trả focus sau khi đã nhận xong câu trả lời (hoặc lỗi). Không trả sớm
       // khi Meta còn stream: tab nền bị ẩn làm câu trả lời không render kịp
       // (bắt live 21/10: prompt gửi xong, answer chỉ hiện khi bật lại tab).
-      try { await chrome.runtime.sendMessage({ action: "metaFreeRestoreFocus" }); } catch (_) {}
+      try { await chrome.runtime.sendMessage({ action: "metaFreeRestoreFocus" }); } catch (_) { console.debug("[Auto vjp][metaai] bỏ qua lỗi:", _); }
     }
   }
 
@@ -373,7 +373,7 @@
     const link = sidebarLink(chatId);
     // Không thấy link = đã mất (xóa rồi hoặc chưa persist) → coi như xong.
     if (!link) return true;
-    try { link.scrollIntoView({ block: "nearest" }); } catch (_) {}
+    try { link.scrollIntoView({ block: "nearest" }); } catch (_) { console.debug("[Auto vjp][metaai] bỏ qua lỗi:", _); }
     await sleep(400);
     const li = link.closest("li");
     const scope = li || link.parentElement;
@@ -382,14 +382,14 @@
     // Menu Meta chỉ mở bằng click chuột thật (DOM click không ăn).
     if (!(await trustedClickAt(moreBtn))) return false;
     const delItem = await waitFor(menuDeleteItem, 6000);
-    if (!delItem) { try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); } catch (_) {} return false; }
+    if (!delItem) { try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); } catch (_) { console.debug("[Auto vjp][metaai] bỏ qua lỗi:", _); } return false; }
     if (!domClick(delItem) && !(await trustedClickAt(delItem))) return false;
     const confirmBtn = await waitFor(confirmDeleteButton, 6000);
     if (!confirmBtn) return false;
     if (!domClick(confirmBtn) && !(await trustedClickAt(confirmBtn))) return false;
     // Proof: link biến mất khỏi sidebar trong 10s.
     const gone = await waitFor(() => !sidebarLink(chatId), 10000);
-    try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); } catch (_) {}
+    try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); } catch (_) { console.debug("[Auto vjp][metaai] bỏ qua lỗi:", _); }
     return !!gone;
   }
   async function cleanChats(chatIds) {

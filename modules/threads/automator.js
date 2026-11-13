@@ -252,7 +252,7 @@ window.moigioi_injected_personal = true;
     try {
       const raw = post.images || post.media_urls || post.images_json;
       images = typeof raw === 'string' ? JSON.parse(raw) : (Array.isArray(raw) ? raw : []);
-    } catch(e) {}
+    } catch(e) { console.debug("[Auto vjp][automator] bỏ qua lỗi:", e); }
     
     if (images.length === 0) {
       addLog("⚠️ Bài không có ảnh. Áp dụng ảnh mặc định...");
@@ -472,7 +472,7 @@ window.moigioi_injected_personal = true;
         actorUrl = "https://www.threads.net" + profileLink.getAttribute('href');
         actorName = profileLink.getAttribute('href').replace('/@', '');
       }
-    } catch (e) {}
+    } catch (e) { console.debug("[Auto vjp][automator] bỏ qua lỗi:", e); }
 
     // 5. TRẢ KẾT QUẢ VÀ ĐÓNG TAB NGAY
     addLog(`✅ Bấm Đăng thành công! Trả kết quả và đóng tab.`);

@@ -108,7 +108,7 @@ window.mutXAffiliateCommenterInjected = true;
     let qualityFilter = null;
     try {
       qualityFilter = typeof task.quality_filter === 'string' ? JSON.parse(task.quality_filter) : task.quality_filter;
-    } catch {}
+    } catch (e) { console.debug("[Auto vjp][affiliate-commenter] bỏ qua lỗi:", e); }
 
     // Scan for articles
     let candidateArticles = [];

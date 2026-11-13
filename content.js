@@ -451,7 +451,7 @@
     try{
       el.scrollIntoView({behavior:"instant",block:"center"});
     }catch{
-      try{el.scrollIntoView({behavior:"smooth",block:"center"});}catch{}
+      try{el.scrollIntoView({behavior:"smooth",block:"center"});}catch (e) { console.debug("[Auto vjp][content] bỏ qua lỗi:", e); }
     }
     await sleep(400);
     const rect=el.getBoundingClientRect();
@@ -464,7 +464,7 @@
         try{
           const result=await chrome.runtime.sendMessage({action:"trustedMouse",kind:"click",x,y});
           if(result?.ok)debuggerSuccess=true;
-        }catch{}
+        }catch (e) { console.debug("[Auto vjp][content] bỏ qua lỗi:", e); }
       }
     }
     if(debuggerSuccess){if(telem&&typeof telem==="object")telem.path="debugger";return true;}
@@ -953,7 +953,7 @@
       try{
         const m=cleanText(card?.innerText||card?.textContent||"").match(/(\d{1,4})\s+(?:bạn chung|mutual friends?)/i);
         if(m)mutualCount=parseInt(m[1]);
-      }catch(_){}
+      }catch(_){ console.debug("[Auto vjp][content] bỏ qua lỗi:", _); }
       map.set(key,{key,name:fofNameFromLink(link,card),url,mutualCount,sourceKey:source.key||"",sourceName:source.name||""});
       if(map.size>=FOF_MAX_CANDIDATES)break;
     }
@@ -1415,7 +1415,7 @@
     let button=fofStreamButton(fofFriendsListRoot(),candidate.key);
     if(!button)return "skipped";
     try{button.scrollIntoView({behavior:"instant",block:"center"});}
-    catch{try{button.scrollIntoView({behavior:"smooth",block:"center"});}catch{}}
+    catch{try{button.scrollIntoView({behavior:"smooth",block:"center"});}catch (e) { console.debug("[Auto vjp][content] bỏ qua lỗi:", e); }}
     if(!await fofStreamWait(runId,500))return "stopped";
     // Durable write-ahead guard survives Stop, Reset, reload and a new run.
     const history=await loadFoFHistory();

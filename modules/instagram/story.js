@@ -68,7 +68,7 @@ window.__avjpIgStoryInjected = true;
     const timeStr = new Date().toLocaleTimeString('vi-VN', { hour12: false });
     logs.push(`[${timeStr}] ${msg}`);
     console.log('[Auto vjp][IG-Story]', msg);
-    try { chrome.storage.local.set({ lastStatus: msg }); } catch (_) {}
+    try { chrome.storage.local.set({ lastStatus: msg }); } catch (_) { console.debug("[Auto vjp][story] bỏ qua lỗi:", _); }
     let el = document.getElementById('avjp-story-status');
     if (!el && document.body) {
       el = document.createElement('div');
@@ -83,7 +83,7 @@ window.__avjpIgStoryInjected = true;
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       let v = null;
-      try { v = await fn(); } catch (_) {}
+      try { v = await fn(); } catch (_) { console.debug("[Auto vjp][story] bỏ qua lỗi:", _); }
       if (v) return v;
       await sleep(stepMs);
     }
@@ -203,7 +203,7 @@ window.__avjpIgStoryInjected = true;
   function doClick(el) {
     if (!el) return;
     const target = el.closest?.('a, button, [role="button"]') || el;
-    try { target.focus(); } catch (_) {}
+    try { target.focus(); } catch (_) { console.debug("[Auto vjp][story] bỏ qua lỗi:", _); }
     target.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true, view: window }));
     target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
     target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
@@ -317,12 +317,12 @@ window.__avjpIgStoryInjected = true;
           return hasMedia ? true : null;
         }, 12000, 600);
         if (inViewer) {
-          try { history.back(); } catch (_) {}
+          try { history.back(); } catch (_) { console.debug("[Auto vjp][story] bỏ qua lỗi:", _); }
           await sleep(800);
           await complete(actor, 'own_story_viewer');
           return;
         }
-        if (location.pathname.startsWith('/stories/')) { try { history.back(); } catch (_) {} await sleep(1200); }
+        if (location.pathname.startsWith('/stories/')) { try { history.back(); } catch (_) { console.debug("[Auto vjp][story] bỏ qua lỗi:", _); } await sleep(1200); }
       }
       // Cấp khay: link story của mình tồn tại ở feed = có tin đang sống.
       if (findOwnStoryLink(actor.name)) {

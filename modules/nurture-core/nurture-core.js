@@ -345,7 +345,7 @@
       const end = now() + timeoutMs;
       while (now() < end) {
         if (runId && !(await alive(runId))) return null;
-        try { const v = await checkFn(); if (v) return v; } catch (_) {}
+        try { const v = await checkFn(); if (v) return v; } catch (_) { console.debug("[Auto vjp][nurture-core] bỏ qua lỗi:", _); }
         await sleep(intervalMs);
       }
       try { return (await checkFn()) || null; } catch (_) { return null; }

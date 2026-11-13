@@ -147,7 +147,7 @@
         action: 'nurtureProgress', taskId: state.task.task_id,
         counters: { ...state.counters }
       }).catch(() => {});
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][adapter] bỏ qua lỗi:", _); }
   }
 
   async function finalize(info) {
@@ -246,7 +246,7 @@
         action: 'nurtureDone', taskId: state.task.task_id, platform: 'tiktok',
         status: 'failed', failure_code, resultMessage, items: [], counters: { ...state.counters }, skipped_ads_live: 0
       });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][adapter] bỏ qua lỗi:", _); }
   }
 
   async function main() {

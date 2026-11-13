@@ -114,7 +114,7 @@ if (window.top !== window.self) {
     try {
       report('failed', { action, cancelled: true, ...extra }, 'user_cancelled',
         'Đã dừng theo yêu cầu người dùng (user_cancelled)');
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     throw avjpCancelledError();
   }
 
@@ -127,7 +127,7 @@ if (window.top !== window.self) {
     const prev = (await getPhase()) || {};
     await chrome.storage.local.set({ [PHASE_KEY]: { ...prev, ...extra, taskId, action } });
   };
-  const clearPhase = async () => { try { await chrome.storage.local.remove(PHASE_KEY); } catch (_) {} };
+  const clearPhase = async () => { try { await chrome.storage.local.remove(PHASE_KEY); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); } };
 
   let reported = false;
   function report(status, details, failureCode, resultMessage) {
@@ -156,7 +156,7 @@ if (window.top !== window.self) {
     const end = Date.now() + timeoutMs;
     for (;;) {
       let v = null;
-      try { v = fn(); } catch (_) {}
+      try { v = fn(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
       if (v) return v;
       if (Date.now() >= end) return null;
       if (!(await avjpSleepCancellable(stepMs))) avjpAbortCancelled({ phase: 'waitFor' });
@@ -166,10 +166,10 @@ if (window.top !== window.self) {
   function plainClick(el) {
     if (!el) return false;
     const target = el.closest?.('a, button, [role="button"]') || el;
-    try { target.scrollIntoView({ block: 'center' }); } catch (_) {}
-    try { target.focus(); } catch (_) {}
+    try { target.scrollIntoView({ block: 'center' }); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
+    try { target.focus(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     for (const type of ['mouseover', 'mousedown', 'mouseup']) {
-      try { target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window })); } catch (_) {}
+      try { target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window })); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     }
     if (typeof target.click === 'function') target.click();
     else target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
@@ -191,14 +191,14 @@ if (window.top !== window.self) {
     try {
       const human = globalThis.AVJP?.human;
       if (human && typeof human.scrollBy === 'function') { await human.scrollBy(dy); return true; }
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     window.scrollBy(0, dy);
     return false;
   }
   function pressEscape() {
     const opts = { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true, cancelable: true };
-    try { document.dispatchEvent(new KeyboardEvent('keydown', opts)); } catch (_) {}
-    try { document.dispatchEvent(new KeyboardEvent('keyup', opts)); } catch (_) {}
+    try { document.dispatchEvent(new KeyboardEvent('keydown', opts)); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
+    try { document.dispatchEvent(new KeyboardEvent('keyup', opts)); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
   }
 
   // ── Bộ chọn riêng Instagram (bằng chứng: interaction.js:71-73 cho
@@ -253,7 +253,7 @@ if (window.top !== window.self) {
         "//*[text()[normalize-space()='Notifications' or normalize-space()='Thông báo']]",
         document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
       for (let i = 0; i < xp.snapshotLength; i++) nodes.push(xp.snapshotItem(i));
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     if (!nodes.length) {
       nodes = Array.from(document.querySelectorAll('h1, h2, h3, span'))
         .filter(el => /^(Notifications|Thông báo)$/.test((el.innerText || '').trim()));
@@ -541,7 +541,7 @@ if (window.top !== window.self) {
   async function hOpenProfileGrid(ctx) {
     const links = await waitFor(() => { const l = gridLinks(); return l.length ? l : null; }, 12000);
     if (!links) return F.sel('profile_grid');
-    try { links[0].scrollIntoView({ block: 'center' }); } catch (_) {}
+    try { links[0].scrollIntoView({ block: 'center' }); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     return {
       details: { opened: true, posts: links.length, sample: links.slice(0, 3).map(a => a.href) },
       message: `Đã mở lưới bài trên hồ sơ (${links.length} ô)`
@@ -584,9 +584,9 @@ if (window.top !== window.self) {
   async function hFocusCommentInput(ctx) {
     const box = await waitFor(() => findMainCommentBox(), 10000);
     if (!box) return F.sel('comment_input');
-    try { box.scrollIntoView({ block: 'center' }); } catch (_) {}
+    try { box.scrollIntoView({ block: 'center' }); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     box.focus();
-    try { box.click(); } catch (_) {}
+    try { box.click(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     await sleep(300);
     const focused = document.activeElement === box || !!box.contains?.(document.activeElement);
     return { details: { focused }, message: focused ? 'Đã focus ô nhập bình luận' : 'Đã bấm vào ô bình luận (chưa xác minh được focus)' };
@@ -764,7 +764,7 @@ if (window.top !== window.self) {
       const v = document.querySelector('video');
       if (v) {
         seenSrc.add(v.currentSrc || v.src || `reel_${i}`);
-        try { const p = v.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {}
+        try { const p = v.play(); if (p && p.catch) p.catch(() => {}); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
       }
       viewed++;
       if (i < count - 1) {

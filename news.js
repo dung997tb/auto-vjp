@@ -20,7 +20,7 @@
     try {
       const st = getComputedStyle(el);
       if (st.display === "none" || st.visibility === "hidden" || st.visibility === "collapse") return false;
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0;
   };
@@ -47,7 +47,7 @@
     } catch (_) { return false; }
   }
   async function setStatus(text, extra = {}) {
-    try { await chrome.storage.local.set({ newsWallStatus: String(text || ""), ...extra }); } catch (_) {}
+    try { await chrome.storage.local.set({ newsWallStatus: String(text || ""), ...extra }); } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
   }
 
   function sendMsg(msg) {
@@ -61,8 +61,8 @@
     if (!el || !visible(el)) return false;
     // Scroll + đo lại tọa độ NGAY trước khi dispatch: layout FB animation
     // làm tọa độ cũ lệch, click rơi ra ngoài (bắt live: bấm màu không ăn).
-    try { el.scrollIntoView({ block: "nearest" }); } catch (_) {}
-    try { el.scrollIntoView({ block: "center" }); } catch (_) {}
+    try { el.scrollIntoView({ block: "nearest" }); } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
+    try { el.scrollIntoView({ block: "center" }); } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
     await sleep(350);
     if (!visible(el)) return false;
     const r = el.getBoundingClientRect();
@@ -86,7 +86,7 @@
         list.push(url);
         await chrome.storage.local.set({ [USED_KEY]: list.slice(-USED_CAP) });
       }
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
   }
   async function markUrlsUsed(links) {
     for (const u of (Array.isArray(links) ? links : [links])) await markUrlUsed(u);
@@ -101,7 +101,7 @@
       const list = Array.isArray(s[SKIPLOG_KEY]) ? s[SKIPLOG_KEY] : [];
       list.push({ at: Date.now(), reason: String(reason || "").slice(0, 160), title: String(title || "").slice(0, 80) });
       await chrome.storage.local.set({ [SKIPLOG_KEY]: list.slice(-SKIPLOG_CAP) });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
   }
   async function recentSkipReasons(n = 3) {
     try {
@@ -198,7 +198,7 @@
         if (spread < 25 && Math.min(R, G, B) >= 40 && Math.max(R, G, B) <= 215) continue; // xám trung tính UI
         return true;
       }
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
     return false;
   }
   function offeredBgColors(dlg) {
@@ -270,7 +270,7 @@
         if (await verifyBg(id, 3000)) return { ok: true, color: pick.color, via: "keyboard" };
         const first = offered[0];
         if (first && first.el !== pick.el) {
-          try { first.el.focus(); } catch (_) {}
+          try { first.el.focus(); } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
           await sleep(200);
           for (let k = 0; k < pickIdx; k++) {
             await trustedKey("ArrowDown", "ArrowDown", 40);
@@ -280,7 +280,7 @@
           await trustedKey("Enter", "Enter", 13);
           if (await verifyBg(id, 3000)) return { ok: true, color: pick.color, via: "keyboard-arrows" };
         }
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
     }
     return composerHasBg(findDialog()) ? { ok: true } : { ok: false, stage: "unverified" };
   }
@@ -336,7 +336,7 @@
       if (!out) return null;
       return { blob: out };
     } catch (_) { return null; }
-    finally { if (objUrl) try { URL.revokeObjectURL(objUrl); } catch (_) {} }
+    finally { if (objUrl) try { URL.revokeObjectURL(objUrl); } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); } }
   }
   async function imageWidthOf(blob) {
     let objUrl = "";
@@ -345,7 +345,7 @@
       const img = await loadStampImage(objUrl);
       return img.naturalWidth || img.width || 0;
     } catch (_) { return 0; }
-    finally { if (objUrl) try { URL.revokeObjectURL(objUrl); } catch (_) {} }
+    finally { if (objUrl) try { URL.revokeObjectURL(objUrl); } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); } }
   }
   async function attachPhoto(id, imageUrl, dlg, credit, dataUrlDirect) {
     let dataUrl = dataUrlDirect || "";
@@ -566,7 +566,7 @@
         if (!actor.ok) { await setStatus("Facebook đang dùng Page, không đăng tường nick"); return "skip"; }
         if (actor.switched) { location.replace("https://www.facebook.com/"); return "navigated"; }
       }
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
     if (!(await live(id))) return "stopped";
     // 2. Mở composer
     const opener = findWallOpener();
@@ -599,14 +599,14 @@
     async function clearEditorVerified(pair) {
       for (let c = 0; c < 2; c++) {
         if (!(await live(id))) return false;
-        try { pair.ed.focus(); document.execCommand("selectAll", false, null); document.execCommand("delete", false, null); } catch (_) {}
+        try { pair.ed.focus(); document.execCommand("selectAll", false, null); document.execCommand("delete", false, null); } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
         await sleep(400);
         if (!norm(editorText(pair.ed))) return true;
       }
       return !norm(editorText(pair.ed));
     }
     async function reopenComposer() {
-      try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) {}
+      try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
       await sleep(1200);
       if (!(await live(id))) return null;
       const opener = findWallOpener();
@@ -630,7 +630,7 @@
         }
         comp.dlg = pair.dlg; comp.ed = pair.ed;
       } else { comp.dlg = pair.dlg; comp.ed = pair.ed; }
-      try { pair.ed.focus(); } catch (_) {}
+      try { pair.ed.focus(); } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
       await sleep(250);
       const typed = await sendMsg({ action: "trustedInput", text: content, pressEnter: false, typingConfig: cfg.typingConfig || null });
       // Lexical có thể thay node editor ngay sau khi debugger insertText hoàn
@@ -653,7 +653,7 @@
       const reason = `Nội dung trong ô không khớp bài đã duyệt (${diags.join("; ") || "?"}) — không đăng`;
       await setStatus(reason);
       await logNewsSkip(reason, item.title);
-      try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) {}
+      try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
       return "skip";
     }
     if (!(await live(id))) return "stopped";
@@ -729,11 +729,11 @@
       if (!(await live(id))) return "stopped";
       if (!sch?.ok) {
         await setStatus(`Không hẹn được lịch Facebook (${sch?.stage || "?"}) — bỏ bài này`);
-        try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) {}
+        try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true })); } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
         return "skip";
       }
       await markUrlsUsed([item.link, ...(extraLinks || [])]);
-      try { await chrome.storage.local.set({ newsWallLastContent: String(content || "").slice(0, 2000), newsWallLastMode: cfg.mode || "", newsWallLastAt: Date.now(), newsWallLastScheduledAt: sch.actualMs || myAt }); } catch (_) {}
+      try { await chrome.storage.local.set({ newsWallLastContent: String(content || "").slice(0, 2000), newsWallLastMode: cfg.mode || "", newsWallLastAt: Date.now(), newsWallLastScheduledAt: sch.actualMs || myAt }); } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
       await setStatus(`Đã hẹn lịch Facebook ${sch.slot || ""} ngày ${new Date(sch.actualMs).toLocaleString("vi-VN")}`);
       return "done";
     }
@@ -766,7 +766,7 @@
     }
     if (findDialog()) { await setStatus("Chưa xác minh bài đã đăng"); return "skip"; }
     await markUrlUsed(item.link);
-    try { await chrome.storage.local.set({ newsWallLastContent: String(content || "").slice(0, 2000), newsWallLastMode: cfg.mode || "", newsWallLastAt: Date.now() }); } catch (_) {}
+    try { await chrome.storage.local.set({ newsWallLastContent: String(content || "").slice(0, 2000), newsWallLastMode: cfg.mode || "", newsWallLastAt: Date.now() }); } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
     return "done";
   }
 
@@ -909,7 +909,7 @@
           try {
             const cur = await chrome.storage.local.get(["newsWallStatus"]);
             if (cur.newsWallStatus) lastSkipReason = String(cur.newsWallStatus).slice(0, 120);
-          } catch (_) {}
+          } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
           if (lastSkipReason) await logNewsSkip(lastSkipReason, item.title);
           await chrome.storage.local.set({ newsWallDone: done, newsWallSkipped: skipped });
         }
@@ -927,7 +927,7 @@
     } catch (e) {
       console.warn("[NewsWall]", e);
       active = false;
-      try { await chrome.storage.local.set({ [FLAG]: false, newsWallStatus: "Lỗi: " + String(e?.message || e || "").slice(0, 150) }); } catch (_) {}
+      try { await chrome.storage.local.set({ [FLAG]: false, newsWallStatus: "Lỗi: " + String(e?.message || e || "").slice(0, 150) }); } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
     } finally { active = false; }
   }
 
@@ -977,14 +977,14 @@
           catch (_) { res(null); }
         });
         if (r?.tabId && s.newsWallOwnerTabId && r.tabId !== s.newsWallOwnerTabId) ownerOk = false;
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
       if (!ownerOk) return;
       config = { ...s[CONFIG_KEY] };
       runId = String(s[RUN_KEY] || config.runId || `newswall-${Date.now()}`);
       active = true;
       await sleep(1500);
       if (active) newsWallLoop(runId);
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][news] bỏ qua lỗi:", _); }
   })();
 
   console.log("[News] news.js loaded");

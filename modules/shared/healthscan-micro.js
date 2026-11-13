@@ -113,7 +113,7 @@
     }
     try {
       chrome.storage.local.set({ lastStatus: `🩺 Micro healthscan ${spec.platform}: ${spec.key} -> ${found ? found.via : 'none'}` });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][healthscan-micro] bỏ qua lỗi:", _); }
     if (found) {
       report('success', { action, anchor: spec.key, found_via: found.via, spec: found.spec || null }, null,
         `Quét selector ${spec.key}: tìm thấy (${found.via})`);

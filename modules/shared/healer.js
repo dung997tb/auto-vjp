@@ -1,4 +1,4 @@
-// Auto vjp — TỰ CHỮA SELECTOR, phía trang (2.9.0, FORK-CHANGES #87).
+// Auto vjp — TỰ CHỮA SELECTOR, phía trang (2.9.0).
 // Namespace `AVJP.heal` cho content script. Thiết kế 3 lớp đã duyệt
 // (plan-dang-story-reels-shorts.md, bổ sung 12:45):
 //   locate() thử theo thứ tự: (a) selector ĐÃ HỌC (SW lưu trong

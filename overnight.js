@@ -11,7 +11,7 @@
       chrome.runtime.sendMessage({ action: "overnightHeartbeat" }, () => {
         void chrome.runtime.lastError;
       });
-    } catch (_) { }
+    } catch (_) { console.debug("[Auto vjp][overnight] bỏ qua lỗi:", _); }
   }
   beat();
   setInterval(beat, HEARTBEAT_MS);

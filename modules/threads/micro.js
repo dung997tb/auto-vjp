@@ -117,7 +117,7 @@ if (window.top !== window.self) {
     try {
       report('failed', { action, cancelled: true, ...extra }, 'user_cancelled',
         'Đã dừng theo yêu cầu người dùng (user_cancelled)');
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     throw avjpCancelledError();
   }
 
@@ -130,7 +130,7 @@ if (window.top !== window.self) {
     const prev = (await getPhase()) || {};
     await chrome.storage.local.set({ [PHASE_KEY]: { ...prev, ...extra, taskId, action } });
   };
-  const clearPhase = async () => { try { await chrome.storage.local.remove(PHASE_KEY); } catch (_) {} };
+  const clearPhase = async () => { try { await chrome.storage.local.remove(PHASE_KEY); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); } };
 
   let reported = false;
   function report(status, details, failureCode, resultMessage) {
@@ -158,7 +158,7 @@ if (window.top !== window.self) {
     const end = Date.now() + timeoutMs;
     for (;;) {
       let v = null;
-      try { v = fn(); } catch (_) {}
+      try { v = fn(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
       if (v) return v;
       if (Date.now() >= end) return null;
       if (!(await avjpSleepCancellable(stepMs))) avjpAbortCancelled({ phase: 'waitFor' });
@@ -167,10 +167,10 @@ if (window.top !== window.self) {
   function plainClick(el) {
     if (!el) return false;
     const target = el.closest?.('a, button, [role="button"]') || el;
-    try { target.scrollIntoView({ block: 'center' }); } catch (_) {}
-    try { target.focus(); } catch (_) {}
+    try { target.scrollIntoView({ block: 'center' }); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
+    try { target.focus(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     for (const type of ['mouseover', 'mousedown', 'mouseup']) {
-      try { target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window })); } catch (_) {}
+      try { target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window })); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     }
     if (typeof target.click === 'function') target.click();
     else target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
@@ -195,7 +195,7 @@ if (window.top !== window.self) {
     try {
       const human = globalThis.AVJP?.human;
       if (human && typeof human.scrollBy === 'function') { await human.scrollBy(dy); return true; }
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     window.scrollBy(0, dy);
     return false;
   }
@@ -232,9 +232,9 @@ if (window.top !== window.self) {
   // ClipboardEvent -> dự phòng selectAll + execCommand insertText.
   // Trả true khi editor đã nhận nội dung (so đoạn đầu đã chuẩn hoá).
   async function setEditorText(el, text) {
-    try { el.scrollIntoView({ block: 'center' }); } catch (_) {}
+    try { el.scrollIntoView({ block: 'center' }); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     await humanClick(el);
-    try { el.focus(); } catch (_) {}
+    try { el.focus(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     await sleep(250);
     if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) {
       const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;
@@ -245,7 +245,7 @@ if (window.top !== window.self) {
         const dt = new DataTransfer();
         dt.setData('text/plain', text);
         el.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt }));
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
       await sleep(200);
       if (!editorText(el).includes(norm(text).slice(0, 10))) {
         const selection = window.getSelection();
@@ -548,7 +548,7 @@ if (window.top !== window.self) {
       const ed = await waitFor(() => findPostEditor(), 10000);
       if (!ed) return failStep('post_editor');
       await humanClick(ed);
-      try { ed.focus(); } catch (_) {}
+      try { ed.focus(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
       await sleep(300);
       return okStep({ focused: document.activeElement === ed });
     },
@@ -650,7 +650,7 @@ if (window.top !== window.self) {
       const box = await waitFor(() => findCommentBox(), 8000);
       if (!box) return failStep('comment_box');
       await humanClick(box);
-      try { box.focus(); } catch (_) {}
+      try { box.focus(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
       await sleep(300);
       return okStep({ focused: document.activeElement === box });
     },
@@ -771,7 +771,7 @@ if (window.top !== window.self) {
       }, 12000);
       if (!units) return failStep('nurture_post_unit');
       const u = units[0];
-      try { u.el.scrollIntoView({ block: 'center' }); } catch (_) {}
+      try { u.el.scrollIntoView({ block: 'center' }); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
       await sleep(300);
       await humanClick(u.link);
       const opened = await waitFor(() => /\/@[^/]+\/post\//i.test(location.pathname)

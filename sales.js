@@ -19,7 +19,7 @@
   const normalizedPost=value=>clean(value).toLocaleLowerCase("vi");
   let loopActive=false,stopRequested=false,currentRunId="",ownerTabId=0;
   const salesLastMediaSig={};
-  const debug=(event,details={})=>{try{console.log("[SalesPost]",event,JSON.stringify(details));}catch(_){ }};
+  const debug=(event,details={})=>{try{console.log("[SalesPost]",event,JSON.stringify(details));}catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }};
   const SALES_POST_AUTO={
     groupReadyWait:45000,groupStableWait:1600,
     composerOpenWait:45000,composerReadyWait:45000,
@@ -48,7 +48,7 @@
   }
   async function trustedClick(el){
     if(!visible(el))return false;
-    try{el.scrollIntoView({block:"center",inline:"center"});}catch(_){ }
+    try{el.scrollIntoView({block:"center",inline:"center"});}catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }
     await sleep(250);
     const r=el.getBoundingClientRect(),x=Math.round(r.left+r.width/2),y=Math.round(r.top+r.height/2);
     // Click theo toạ độ trúng phần tử TRÊN CÙNG tại điểm đó: khi có overlay
@@ -57,14 +57,14 @@
     // click khi điểm giữa thật sự thuộc về chính element.
     const hit=document.elementFromPoint(x,y);
     if(hit&&(hit===el||el.contains(hit)||hit.contains(el))){
-      try{const res=await chrome.runtime.sendMessage({action:"trustedMouse",kind:"click",x,y});if(res?.ok)return true;}catch(_){ }
+      try{const res=await chrome.runtime.sendMessage({action:"trustedMouse",kind:"click",x,y});if(res?.ok)return true;}catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }
     }
     try{el.click();return true;}catch(_){return false;}
   }
   function currentGroupId(){return String(location.pathname.match(/^\/groups\/([^/?#]+)/i)?.[1]||"").toLowerCase();}
 function groupIds(group){
     const ids=[];
-    try{const id=new URL(String(group?.url||""),location.href).pathname.match(/^\/groups\/([^/?#]+)/i)?.[1];if(id)ids.push(String(id).toLowerCase());}catch(_){ }
+    try{const id=new URL(String(group?.url||""),location.href).pathname.match(/^\/groups\/([^/?#]+)/i)?.[1];if(id)ids.push(String(id).toLowerCase());}catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }
     const legacy=String(group?.id||"").trim().toLowerCase();if(legacy&&!ids.includes(legacy))ids.push(legacy);
     return ids;
   }
@@ -138,7 +138,7 @@ function groupIds(group){
   }
   async function waitFor(predicate,timeout=15000){
     const end=Date.now()+timeout;
-    while(Date.now()<end){if(!await isActive())return null;try{const value=predicate();if(value)return value;}catch(_){ }await sleep(220);}
+    while(Date.now()<end){if(!await isActive())return null;try{const value=predicate();if(value)return value;}catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }await sleep(220);}
     return null;
   }
   // Một số nhóm hiện dialog "Xin chào!" (giới thiệu bản thân) hoặc "Trả lời
@@ -172,7 +172,7 @@ function groupIds(group){
     try{
       const btns=[...document.querySelectorAll('[role="main"] [role="button"],[role="main"] button,button,[role="button"]')].filter(visible);
       if(btns.some(b=>/^(bán gì đó|sell something)/i.test(labelOf(b))))return "Nhóm Mua-và-bán (chỉ có ô “Bán gì đó”, chưa hỗ trợ)";
-    }catch(_){}
+    }catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }
     return "";
   }
   async function openComposer(groupName){
@@ -183,7 +183,7 @@ function groupIds(group){
     let button=null;
     while(Date.now()<openEnd){
       if(!await isActive())throw new Error("Đã dừng khi tìm nút mở ô đăng bài");
-      try{button=opener();if(button)break;}catch(_){}
+      try{button=opener();if(button)break;}catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }
       const left=Math.max(1,Math.ceil((openEnd-Date.now())/1000));
       await status(t("sales2.waitOpener",{name:groupName||"",left}));
       await sleep(500);
@@ -326,7 +326,7 @@ function groupIds(group){
     // khi số media hiện có không vượt quá selection cần gắn.
     if(beforeNames>=files.length&&(!configuredSelection||beforeCount<=files.length))return {ok:true,attached:true,count:files.length,expected,reused:true};
     if(!await isActive())throw new Error("Đã dừng trước khi đính kèm media");
-    try{input.multiple=true;}catch(_){ }
+    try{input.multiple=true;}catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }
     const transfer=new DataTransfer();files.forEach(file=>transfer.items.add(file));input.files=transfer.files;
     input.dispatchEvent(new Event("input",{bubbles:true}));input.dispatchEvent(new Event("change",{bubbles:true}));
     const loaded=await waitFor(()=>{
@@ -364,10 +364,10 @@ function groupIds(group){
     const initial=normalizedPost(editorText(ready.editor));
     if(initial===expected&&breaksOk(ready.editor))return;
     if(initial){
-      try{await trustedClick(ready.editor);ready.editor.focus();}catch(_){ }
+      try{await trustedClick(ready.editor);ready.editor.focus();}catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }
       const modifier=/Mac|iPhone|iPad/i.test(navigator.platform||"")?4:2;
-      try{await chrome.runtime.sendMessage({action:"trustedKey",key:"a",code:"KeyA",windowsVirtualKeyCode:65,modifiers:modifier,abortStorageKey:"salesPostActive",abortRunId:currentRunId,abortRunIdKey:"salesPostRunId"});}catch(_){ }
-      try{await chrome.runtime.sendMessage({action:"trustedKey",key:"Backspace",code:"Backspace",windowsVirtualKeyCode:8,abortStorageKey:"salesPostActive",abortRunId:currentRunId,abortRunIdKey:"salesPostRunId"});}catch(_){ }
+      try{await chrome.runtime.sendMessage({action:"trustedKey",key:"a",code:"KeyA",windowsVirtualKeyCode:65,modifiers:modifier,abortStorageKey:"salesPostActive",abortRunId:currentRunId,abortRunIdKey:"salesPostRunId"});}catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }
+      try{await chrome.runtime.sendMessage({action:"trustedKey",key:"Backspace",code:"Backspace",windowsVirtualKeyCode:8,abortStorageKey:"salesPostActive",abortRunId:currentRunId,abortRunIdKey:"salesPostRunId"});}catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }
       if(!await waitFor(()=>!normalizedPost(editorText(ready.editor)),2500)){const error=new Error("Facebook còn bản nháp cũ trong ô đăng bán hàng");error.salesIntegrity=true;throw error;}
     }
     debug("content-input-start");
@@ -379,14 +379,14 @@ function groupIds(group){
     // Establish the real browser focus after Facebook has replaced the
     // composer. A page-level .focus() alone can leave CDP input targeted at
     // the previous dialog.
-    try{await trustedClick(ready.editor);}catch(_){ }
-    try{ready.editor.focus();}catch(_){ }
+    try{await trustedClick(ready.editor);}catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }
+    try{ready.editor.focus();}catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }
     await sleep(350);
     let response=null;
     const typing=typingConfig
       ? normalizeAiTypingConfig(typingConfig)
       : normalizeAiTypingConfig({mode:"custom",minDelayMs:24,maxDelayMs:70,chunkSize:1,humanLike:true,punctuationPauseMinMs:140,punctuationPauseMaxMs:320,spacePauseMinMs:10,spacePauseMaxMs:40});
-    try{response=await chrome.runtime.sendMessage({action:"trustedInput",text:value,typingConfig:typing,abortStorageKey:"salesPostActive",abortRunId:currentRunId,abortRunIdKey:"salesPostRunId"});}catch(_){ }
+    try{response=await chrome.runtime.sendMessage({action:"trustedInput",text:value,typingConfig:typing,abortStorageKey:"salesPostActive",abortRunId:currentRunId,abortRunIdKey:"salesPostRunId"});}catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }
     if(response?.code==="ABORT_TYPING")throw new Error(response.error||"Đã dừng khi đang điền nội dung");
     if(response?.ok&&await waitFor(verify,12000)){debug("content-input-ok",{method:"trustedInput"});return;}
     debug("content-input-fallback",{trustedInput:!!response?.ok});
@@ -396,8 +396,8 @@ function groupIds(group){
     // replace its contents once, then verify the rendered text before submit.
     for(let attempt=0;attempt<2;attempt++){
       const current=await waitComposer(null,12000);if(!current)break;
-      try{await trustedClick(current.editor);}catch(_){ }
-      try{current.editor.focus();}catch(_){ }
+      try{await trustedClick(current.editor);}catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }
+      try{current.editor.focus();}catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }
       domReplaceEditor(current.editor,value);
       if(await waitFor(verify,12000)){debug("content-input-ok",{method:"dom-replace",attempt:attempt+1});return;}
       await sleep(450);
@@ -456,7 +456,7 @@ function groupIds(group){
         const key=salesArticleKey(node);
         if(key)keys.add(key);
       }
-    }catch(_){ }
+    }catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }
     return keys;
   }
   function salesPostContentVisible(content,beforeKeys){
@@ -612,7 +612,7 @@ function groupIds(group){
         if(alt)files=[...files.slice(0,-1),alt];
       }
       salesLastMediaSig[product.id]=sig(files);
-    }catch(_){ }
+    }catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }
     if(!files.length)return {ok:true,attached:false,count:0,expected:product.media.count};
     let scope=composerRoot,input=findFileInput(scope);
     if(!input){
@@ -624,7 +624,7 @@ function groupIds(group){
     const beforeCount=mediaPreviewCount(composerRoot),beforeNames=visibleMediaNameCount(composerRoot,files);
     if(beforeNames>=files.length&&beforeCount<=files.length)return {ok:true,attached:true,count:files.length,expected:files.length,reused:true};
     if(!await isActive())throw new Error("Đã dừng trước khi đính kèm media");
-    try{input.multiple=true;}catch(_){}
+    try{input.multiple=true;}catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }
     const transfer=new DataTransfer();files.forEach(file=>transfer.items.add(file));input.files=transfer.files;
     input.dispatchEvent(new Event("input",{bubbles:true}));input.dispatchEvent(new Event("change",{bubbles:true}));
     const loaded=await waitFor(()=>{
@@ -746,7 +746,7 @@ function groupIds(group){
             }
           }
         }
-        if(posted){postedCount++;done++;await chrome.storage.local.set({salesPostDone:done,salesPostStatus:`Đã đăng ${done}/${totalPosts} bài tổng (nhóm ${index+1}/${cfg.groups.length}, SP ${pIdx+1}/${products.length}${repeat>1?`, lượt ${rep+1}/${repeat}`:""}): ${productLabel} — ${group.name}`});try{const life=await chrome.storage.local.get("salesPostLifetimeDone");await chrome.storage.local.set({salesPostLifetimeDone:(Number(life.salesPostLifetimeDone)||0)+1});}catch(_){ }}
+        if(posted){postedCount++;done++;await chrome.storage.local.set({salesPostDone:done,salesPostStatus:`Đã đăng ${done}/${totalPosts} bài tổng (nhóm ${index+1}/${cfg.groups.length}, SP ${pIdx+1}/${products.length}${repeat>1?`, lượt ${rep+1}/${repeat}`:""}): ${productLabel} — ${group.name}`});try{const life=await chrome.storage.local.get("salesPostLifetimeDone");await chrome.storage.local.set({salesPostLifetimeDone:(Number(life.salesPostLifetimeDone)||0)+1});}catch(_){ console.debug("[Auto vjp][sales] bỏ qua lỗi:", _); }}
         if(!posted&&!halted)lastError=lastError||"Không đăng được";
         // Delay ngắn giữa các bài trong cùng nhóm (kể cả khác lượt)
         const isLastItem=rep===repeat-1&&pIdx===products.length-1;

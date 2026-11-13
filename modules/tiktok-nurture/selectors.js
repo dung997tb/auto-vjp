@@ -339,14 +339,14 @@
             var t = (els[j].textContent || '').trim();
             if (spec.texts.indexOf(t) >= 0) return els[j];
           }
-        } catch (e) {}
+        } catch (e) { console.debug("[Auto vjp][selectors] bỏ qua lỗi:", e); }
       }
       return null;
     }
     if (typeof key === 'string') {
       try {
         return doc.querySelector(key);
-      } catch (e) {}
+      } catch (e) { console.debug("[Auto vjp][selectors] bỏ qua lỗi:", e); }
     }
     return null;
   };
@@ -446,14 +446,14 @@
               found.push(n);
             }
           }
-        } catch (e) {}
+        } catch (e) { console.debug("[Auto vjp][selectors] bỏ qua lỗi:", e); }
       }
       return found;
     }
     if (typeof key === 'string') {
       try {
         return Array.prototype.slice.call(doc.querySelectorAll(key));
-      } catch (e) {}
+      } catch (e) { console.debug("[Auto vjp][selectors] bỏ qua lỗi:", e); }
     }
     return [];
   };
@@ -545,7 +545,7 @@
         bt.indexOf('kéo thanh trượt để khớp') >= 0 ||
         bt.indexOf('fit the puzzle') >= 0
       ) return true;
-    } catch (e) {}
+    } catch (e) { console.debug("[Auto vjp][selectors] bỏ qua lỗi:", e); }
 
     return false;
   };

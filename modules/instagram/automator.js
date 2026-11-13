@@ -56,7 +56,7 @@ window.moigioi_injected_ig = true;
   function doClick(el) {
     if (!el) return;
     const target = el.closest?.('a, button, [role="button"], [role="menuitem"]') || el;
-    try { target.focus(); } catch (e) {}
+    try { target.focus(); } catch (e) { console.debug("[Auto vjp][automator] bỏ qua lỗi:", e); }
     target.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true, view: window }));
     target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
     target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
@@ -982,7 +982,7 @@ window.moigioi_injected_ig = true;
     // (2.9.0) Module đã tới điểm hoàn tất (proof của automator) ->
     // cho phép lưu các selector học qua AI đã dùng trong phiên.
     for (const p of healPending) {
-      try { window.AVJP?.heal?.markProven(p); } catch (_) {}
+      try { window.AVJP?.heal?.markProven(p); } catch (_) { console.debug("[Auto vjp][automator] bỏ qua lỗi:", _); }
     }
     await new Promise(resolve => {
       chrome.runtime.sendMessage({

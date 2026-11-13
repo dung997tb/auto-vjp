@@ -131,7 +131,7 @@
 
         const target = el.closest('[role="tab"], button, div[class*="TabItem"], div[class*="tab"]') || el;
         ['pointerover', 'pointerenter', 'mouseover', 'mouseenter', 'pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(evt => {
-          try { target.dispatchEvent(new MouseEvent(evt, eventInit)); } catch (_) {}
+          try { target.dispatchEvent(new MouseEvent(evt, eventInit)); } catch (_) { console.debug("[Auto vjp][comment-replier] bỏ qua lỗi:", _); }
         });
         if (typeof target.click === 'function') target.click();
       };
@@ -323,7 +323,7 @@
           range.collapse(false);
           selection?.removeAllRanges();
           selection?.addRange(range);
-        } catch (_) {}
+        } catch (_) { console.debug("[Auto vjp][comment-replier] bỏ qua lỗi:", _); }
 
         try {
           editor.dispatchEvent(new InputEvent('beforeinput', {
@@ -332,11 +332,11 @@
             inputType: 'insertText',
             data: content
           }));
-        } catch (_) {}
+        } catch (_) { console.debug("[Auto vjp][comment-replier] bỏ qua lỗi:", _); }
 
         try {
           document.execCommand('insertText', false, content);
-        } catch (_) {}
+        } catch (_) { console.debug("[Auto vjp][comment-replier] bỏ qua lỗi:", _); }
 
         if (typeof editor.dispatchEvent === 'function') {
           try {
@@ -351,7 +351,7 @@
             const dt = new DataTransfer();
             dt.setData('text/plain', content);
             editor.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt }));
-          } catch (_) {}
+          } catch (_) { console.debug("[Auto vjp][comment-replier] bỏ qua lỗi:", _); }
         }
 
         if (normalize(editor.textContent) !== content) {
@@ -362,7 +362,7 @@
           } else {
             editor.textContent = content;
           }
-          try { editor.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {}
+          try { editor.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) { console.debug("[Auto vjp][comment-replier] bỏ qua lỗi:", _); }
         }
 
         if (normalize(editor.textContent) !== content) throw new Error('Nội dung thực tế trong ô trả lời không khớp mẫu');

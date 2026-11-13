@@ -159,7 +159,7 @@
         arr.push(id);
         sessionStorage.setItem(LIVE_IDS_KEY, JSON.stringify(arr.slice(-100)));
       }
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][adapter] bỏ qua lỗi:", _); }
   }
   function rememberedLiveId(id) {
     if (!id) return false;
@@ -271,7 +271,7 @@
   }
   function clickSkipAd() {
     const btn = document.querySelector('.ytp-skip-ad-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button-modern');
-    if (btn) { try { btn.click(); return true; } catch (_) {} }
+    if (btn) { try { btn.click(); return true; } catch (_) { console.debug("[Auto vjp][adapter] bỏ qua lỗi:", _); } }
     return false;
   }
   function playerErrorKind() {
@@ -292,7 +292,7 @@
     const flexy = document.querySelector('ytd-watch-flexy');
     if (flexy) {
       if (flexy.hasAttribute('is-live-video') || flexy.getAttribute('is-live-video') === 'true') return true;
-      try { if (flexy.isLiveVideo === true) return true; } catch (_) {}
+      try { if (flexy.isLiveVideo === true) return true; } catch (_) { console.debug("[Auto vjp][adapter] bỏ qua lỗi:", _); }
     }
     const p = playerEl();
     if (p) {
@@ -363,7 +363,7 @@
       // một lời gọi play() treo giết cả phiên; quá hạn thì vòng đo xem
       // tự quay lại ở nhịp kế tiếp.
       if (v.paused && !v.ended) {
-        try { await Promise.race([v.play(), sleep(1500)]); } catch (_) {}
+        try { await Promise.race([v.play(), sleep(1500)]); } catch (_) { console.debug("[Auto vjp][adapter] bỏ qua lỗi:", _); }
       }
       const ct = Number(v.currentTime) || 0;
       if (last != null) {
@@ -529,7 +529,7 @@
           action: 'nurtureProgress', taskId, platform: PLATFORM,
           counters: { today, session: { ...session } }
         }).catch(() => {});
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][adapter] bỏ qua lỗi:", _); }
     }
     // Chờ proof theo từng đoạn tối đa 5s + nurtureProgress giữa các đoạn:
     // tổng thời gian vẫn bị deadline cứng timeoutMs chặn, poll vẫn qua
@@ -907,9 +907,9 @@
       // Gõ: insertText trước; editor của YouTube nuốt cả cục thì gõ từng ký tự.
       const ed = parts.editable;
       ed.focus();
-      try { ed.click(); } catch (_) {}
+      try { ed.click(); } catch (_) { console.debug("[Auto vjp][adapter] bỏ qua lỗi:", _); }
       if (!(await store.waitCancellable(300, runId))) return 'stopped';
-      try { document.execCommand('insertText', false, text); } catch (_) {}
+      try { document.execCommand('insertText', false, text); } catch (_) { console.debug("[Auto vjp][adapter] bỏ qua lỗi:", _); }
       if (!normalizeText(ed.textContent).includes(normalizeText(text).slice(0, 20))) {
         for (const ch of text) {
           try { document.execCommand('insertText', false, ch); } catch (_) { break; }
@@ -1256,6 +1256,6 @@
         status: 'failed', failure_code: 'execution_error',
         resultMessage: 'youtube-nurture lỗi: ' + (err?.message || String(err)), items: []
       });
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][adapter] bỏ qua lỗi:", _); }
   });
 })();

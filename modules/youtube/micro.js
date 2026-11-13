@@ -109,7 +109,7 @@ if (window.top !== window.self) {
     try {
       report('failed', { action, cancelled: true, ...extra }, 'user_cancelled',
         'Đã dừng theo yêu cầu người dùng (user_cancelled)');
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     throw avjpCancelledError();
   }
 
@@ -122,7 +122,7 @@ if (window.top !== window.self) {
     const prev = (await getPhase()) || {};
     await chrome.storage.local.set({ [PHASE_KEY]: { ...prev, ...extra, taskId, action } });
   };
-  const clearPhase = async () => { try { await chrome.storage.local.remove(PHASE_KEY); } catch (_) {} };
+  const clearPhase = async () => { try { await chrome.storage.local.remove(PHASE_KEY); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); } };
 
   let reported = false;
   function report(status, details, failureCode, resultMessage) {
@@ -150,7 +150,7 @@ if (window.top !== window.self) {
     const end = Date.now() + timeoutMs;
     for (;;) {
       let v = null;
-      try { v = fn(); } catch (_) {}
+      try { v = fn(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
       if (v) return v;
       if (Date.now() >= end) return null;
       if (!(await avjpSleepCancellable(stepMs))) avjpAbortCancelled({ phase: 'waitFor' });
@@ -178,7 +178,7 @@ if (window.top !== window.self) {
     try {
       const direct = root.querySelector(selector);
       if (direct) return direct;
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     let allEls;
     try { allEls = root.querySelectorAll('*'); } catch (_) { return null; }
     for (const el of allEls) {
@@ -191,7 +191,7 @@ if (window.top !== window.self) {
   }
   function queryShadowAllRec(selector, root = document, results = []) {
     if (!root) return results;
-    try { root.querySelectorAll(selector).forEach(el => results.push(el)); } catch (_) {}
+    try { root.querySelectorAll(selector).forEach(el => results.push(el)); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     let allEls;
     try { allEls = root.querySelectorAll('*'); } catch (_) { return results; }
     for (const el of allEls) {
@@ -202,10 +202,10 @@ if (window.top !== window.self) {
   function plainClick(el) {
     if (!el) return false;
     const target = el.closest?.('a, button, [role="button"]') || el;
-    try { target.scrollIntoView({ block: 'center' }); } catch (_) {}
-    try { target.focus(); } catch (_) {}
+    try { target.scrollIntoView({ block: 'center' }); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
+    try { target.focus(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     for (const type of ['mouseover', 'mousedown', 'mouseup']) {
-      try { target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window })); } catch (_) {}
+      try { target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window })); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     }
     if (typeof target.click === 'function') target.click();
     else target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
@@ -219,7 +219,7 @@ if (window.top !== window.self) {
         const ok = await human.clickEl(el);
         if (ok) return true;
       }
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     return plainClick(el);
   }
   // hc — click cho handler MỚI theo luật 2.11.17: qua AVJP.human.clickEl;
@@ -239,7 +239,7 @@ if (window.top !== window.self) {
     try {
       const human = globalThis.AVJP?.human;
       if (human && typeof human.scrollBy === 'function') { await human.scrollBy(dy); return true; }
-    } catch (_) {}
+    } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     window.scrollBy(0, dy);
     return false;
   }
@@ -304,7 +304,7 @@ if (window.top !== window.self) {
     const v = await waitFor(() => document.querySelector('video.html5-main-video, #movie_player video, video'), 12000);
     if (!v) return failSelector('watch_video_element', extra);
     if (v.paused) {
-      try { await v.play(); } catch (_) {}
+      try { await v.play(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
       if (v.paused) await humanClick(v);
     }
     const t0 = v.currentTime || 0;
@@ -623,9 +623,9 @@ if (window.top !== window.self) {
     return { parts };
   }
   function typeIntoEditor(ed, text) {
-    try { ed.focus(); } catch (_) {}
-    try { ed.click(); } catch (_) {}
-    try { document.execCommand('insertText', false, text); } catch (_) {}
+    try { ed.focus(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
+    try { ed.click(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
+    try { document.execCommand('insertText', false, text); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     if (!normalize(ed.textContent).includes(normalize(text).slice(0, 20))) {
       for (const ch of text) {
         try { document.execCommand('insertText', false, ch); } catch (_) { break; }
@@ -761,10 +761,10 @@ if (window.top !== window.self) {
     const p = playerEl();
     const wasPaused = v.paused;
     if (wasPaused) {
-      try { if (p && typeof p.playVideo === 'function') p.playVideo(); else await v.play(); } catch (_) {}
+      try { if (p && typeof p.playVideo === 'function') p.playVideo(); else await v.play(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
       if (v.paused) await hc(v);
     } else {
-      try { if (p && typeof p.pauseVideo === 'function') p.pauseVideo(); else v.pause(); } catch (_) {}
+      try { if (p && typeof p.pauseVideo === 'function') p.pauseVideo(); else v.pause(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     }
     const flipped = await waitFor(() => (v.paused !== wasPaused) ? true : null, 3000, 200);
     if (!flipped) return fail('execution_error', `Trình phát không đổi trạng thái (vẫn ${wasPaused ? 'tạm dừng' : 'đang phát'})`, { paused: v.paused });
@@ -781,7 +781,7 @@ if (window.top !== window.self) {
     }
     const target = v.duration * ratio;
     const p = playerEl();
-    try { if (p && typeof p.seekTo === 'function') p.seekTo(target, true); else v.currentTime = target; } catch (_) { try { v.currentTime = target; } catch (_) {} }
+    try { if (p && typeof p.seekTo === 'function') p.seekTo(target, true); else v.currentTime = target; } catch (_) { try { v.currentTime = target; } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); } }
     await sleep(900);
     const now = v.currentTime || 0;
     if (Math.abs(now - target) > 8 && now < target - 8) {
@@ -796,8 +796,8 @@ if (window.top !== window.self) {
     const rate = Number.isFinite(rateRaw) ? rateRaw : 1.5;
     if (rate < 0.25 || rate > 2) return fail('execution_error', `rate ngoài khoảng 0.25..2: ${payload.rate}`, { reason: 'invalid_rate' });
     const p = playerEl();
-    try { if (p && typeof p.setPlaybackRate === 'function') p.setPlaybackRate(rate); } catch (_) {}
-    try { v.playbackRate = rate; } catch (_) {}
+    try { if (p && typeof p.setPlaybackRate === 'function') p.setPlaybackRate(rate); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
+    try { v.playbackRate = rate; } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     await sleep(400);
     if (Math.abs((v.playbackRate || 1) - rate) > 0.01) {
       return fail('execution_error', `Đặt tốc độ ${rate}x nhưng trình phát báo ${v.playbackRate}x`, { rate, actual: v.playbackRate });
@@ -812,7 +812,7 @@ if (window.top !== window.self) {
     try {
       if (p && typeof p.mute === 'function' && typeof p.unMute === 'function') { if (wasMuted) p.unMute(); else p.mute(); }
       else v.muted = !wasMuted;
-    } catch (_) { try { v.muted = !wasMuted; } catch (_) {} }
+    } catch (_) { try { v.muted = !wasMuted; } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); } }
     await sleep(400);
     const nowMuted = (p && typeof p.isMuted === 'function') ? Boolean(p.isMuted()) : Boolean(v.muted);
     if (nowMuted === wasMuted) return fail('execution_error', 'Bật/tắt tiếng không đổi trạng thái', { muted: nowMuted });
@@ -822,22 +822,22 @@ if (window.top !== window.self) {
     const v = await needPlayer();
     if (!v) return failSel('player_video_element');
     if (document.fullscreenElement) {
-      try { await document.exitFullscreen(); } catch (_) {}
+      try { await document.exitFullscreen(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
       await sleep(400);
       return ok({ toggled: 'exit', fullscreen_now: Boolean(document.fullscreenElement) });
     }
     const p = playerEl();
     let entered = false;
-    try { if (p && typeof p.requestFullscreen === 'function') { await p.requestFullscreen(); } } catch (_) {}
+    try { if (p && typeof p.requestFullscreen === 'function') { await p.requestFullscreen(); } } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     if (!document.fullscreenElement) {
-      try { const wrap = document.querySelector('ytd-player, #player-container, .html5-video-player'); if (wrap?.requestFullscreen) await wrap.requestFullscreen(); } catch (_) {}
+      try { const wrap = document.querySelector('ytd-player, #player-container, .html5-video-player'); if (wrap?.requestFullscreen) await wrap.requestFullscreen(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     }
     entered = Boolean(document.fullscreenElement);
     if (!entered) return fail('execution_error', 'Không vào được chế độ toàn màn hình', { fullscreen: false });
     // Luật brief: đã bật fullscreen thì phải THOÁT trước khi kết thúc
     // handler để không kẹt trạng thái cho hành động sau.
     await sleep(600);
-    try { await document.exitFullscreen(); } catch (_) {}
+    try { await document.exitFullscreen(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     await sleep(400);
     return ok({ entered: true, exited: !document.fullscreenElement, fullscreen_now: Boolean(document.fullscreenElement) });
   }
@@ -1036,12 +1036,12 @@ if (window.top !== window.self) {
       const p = playerEl();
       if (p && p.classList.contains('ad-showing')) {
         const skip = document.querySelector('.ytp-skip-ad-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button-modern');
-        if (skip) { try { skip.click(); } catch (_) {} }
+        if (skip) { try { skip.click(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); } }
         last = null;
         if (!(await avjpSleepCancellable(1000))) avjpAbortCancelled({ step: 'nurture_watch_video' });
         continue;
       }
-      if (v.paused && !v.ended) { try { await Promise.race([v.play(), sleep(1500)]); } catch (_) {} }
+      if (v.paused && !v.ended) { try { await Promise.race([v.play(), sleep(1500)]); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); } }
       const ct = Number(v.currentTime) || 0;
       if (last != null) { const d = ct - last; if (d > 0 && d < 5) watched += d; }
       last = ct;
@@ -1177,12 +1177,12 @@ if (window.top !== window.self) {
     if (!content) return fail('execution_error', 'missing_content: type_community_text cần payload.content', { reason: 'missing_content' });
     const ed = findCommunityEditor();
     if (!ed) return failSel('community_editor');
-    try { ed.focus(); } catch (_) {}
+    try { ed.focus(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     // Cách điền của automator.js: gán textContent + bắn sự kiện input,
     // rồi đọc lại đối chiếu.
-    try { ed.textContent = content; } catch (_) {}
+    try { ed.textContent = content; } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     try { ed.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: content })); } catch (_) {
-      try { ed.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {}
+      try { ed.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     }
     await sleep(400);
     if (!normalize(ed.textContent).includes(normalize(content).slice(0, 30))) {
@@ -1280,10 +1280,10 @@ if (window.top !== window.self) {
   }
   async function fillTextbox(box, value) {
     if (!box) return false;
-    try { box.focus(); } catch (_) {}
+    try { box.focus(); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     await hc(box);
     await sleep(250);
-    try { document.execCommand('selectAll', false, null); } catch (_) {}
+    try { document.execCommand('selectAll', false, null); } catch (_) { console.debug("[Auto vjp][micro] bỏ qua lỗi:", _); }
     let wrote = false;
     try { wrote = document.execCommand('insertText', false, value); } catch (_) { wrote = false; }
     if (!wrote || !normalize(box.textContent).startsWith(normalize(value).slice(0, 15))) {

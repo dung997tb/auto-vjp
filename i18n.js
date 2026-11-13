@@ -24,14 +24,14 @@ async function initI18n() {
   try {
     const s = await chrome.storage.sync.get("uiLang");
     if (s && s.uiLang && I18N[s.uiLang]) I18N_LANG = s.uiLang;
-  } catch (_) { }
+  } catch (_) { console.debug("[Auto vjp][i18n] bỏ qua lỗi:", _); }
   return I18N_LANG;
 }
 
 async function setUILang(lang) {
   if (!I18N[lang]) return I18N_LANG;
   I18N_LANG = lang;
-  try { await chrome.storage.sync.set({ uiLang: lang }); } catch (_) { }
+  try { await chrome.storage.sync.set({ uiLang: lang }); } catch (_) { console.debug("[Auto vjp][i18n] bỏ qua lỗi:", _); }
   return I18N_LANG;
 }
 
@@ -4286,4 +4286,4 @@ try {
       }
     });
   }
-} catch (_) { }
+} catch (_) { console.debug("[Auto vjp][i18n] bỏ qua lỗi:", _); }

@@ -237,7 +237,7 @@ window.__avjpYoutubeInteractionLoaded = true;
         if (found) {
           if (found.via === 'ai') healBoxSpec = found.spec;
           if (channelCreationPrompt()) return fail(CHANNEL_REQUIRED);
-          try { found.el.click(); } catch (_) {}
+          try { found.el.click(); } catch (_) { console.debug("[Auto vjp][interaction] bỏ qua lỗi:", _); }
           const opened = await waitFor(() => {
             const p = commentBoxParts();
             return p && p.editable ? p : null;
@@ -264,9 +264,9 @@ window.__avjpYoutubeInteractionLoaded = true;
     }
     const ed = parts.editable;
     ed.focus();
-    try { ed.click(); } catch (_) {}
+    try { ed.click(); } catch (_) { console.debug("[Auto vjp][interaction] bỏ qua lỗi:", _); }
     await sleep(300);
-    try { document.execCommand('insertText', false, text); } catch (_) {}
+    try { document.execCommand('insertText', false, text); } catch (_) { console.debug("[Auto vjp][interaction] bỏ qua lỗi:", _); }
     if (!normalize(ed.textContent).includes(normalize(text).slice(0, 20))) {
       for (const ch of text) {
         try { document.execCommand('insertText', false, ch); } catch (_) { break; }
@@ -291,7 +291,7 @@ window.__avjpYoutubeInteractionLoaded = true;
     // (2.9.0) Proof comment thật đã đạt -> lưu selector ô comment
     // nếu nó đến từ AI (markProven phía SW validate lại format).
     if (healBoxSpec) {
-      try { window.AVJP?.heal?.markProven({ platform: 'youtube', key: 'yt.reply.commentBox', spec: healBoxSpec }); } catch (_) {}
+      try { window.AVJP?.heal?.markProven({ platform: 'youtube', key: 'yt.reply.commentBox', spec: healBoxSpec }); } catch (_) { console.debug("[Auto vjp][interaction] bỏ qua lỗi:", _); }
     }
     const videoId = videoIdFromUrl(location.href);
     const title = textOf(document.querySelector('ytd-watch-metadata h1, #title h1, h1.ytd-watch-metadata'))

@@ -59,7 +59,7 @@
       try {
         const ctx = JSON.parse(document.documentElement.getAttribute('data-mut-tiktok-reply-context') || '{}');
         if (validUsername(ctx.actor)) return normalizeUsername(ctx.actor);
-      } catch (_) {}
+      } catch (_) { console.debug("[Auto vjp][accounts-scanner] bỏ qua lỗi:", _); }
       if (attempt < 3) await sleep(400);
     }
     return '';

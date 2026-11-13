@@ -383,7 +383,7 @@ liệu: dòng 1 = tiêu đề, còn lại = mô tả), `title` (ưu tiên hơn d
 1. Mở `studio.youtube.com`; vòng chờ 90s phân biệt 3 kết cục: nút
    Create/dialog đã sẵn sàng / bề mặt đăng nhập / dấu hiệu "chưa có
    kênh" (nút "Tạo kênh" hiện ≥5s mà không có Create). Bước trung
-   gian ĐÃ VERIFY BẰNG PROBE LIVE (FORK-CHANGES #88): trong Chrome
+   gian ĐÃ VERIFY BẰNG PROBE LIVE: trong Chrome
    headless, Studio dừng ở trang chặn "trình duyệt không được hỗ
    trợ" — module bấm link "Chuyển thẳng đến YouTube Studio"
    (`a[href*="approve_browser_access=true"]`, tối đa 2 lần qua mọi
@@ -480,7 +480,7 @@ thấy → `uploadFailed` `upload_proof_failed`.
   visibility public, ai_prompt mẫu để dạng comment tắt kèm ghi chú
   cách bật).
 
-## 12. Tự chữa selector (2.9.0, FORK-CHANGES #87)
+## 12. Tự chữa selector (2.9.0)
 
 - Contract cộng `modules/shared/healer.js` (HEALER) vào spec `reply`:
   `[CANONICAL, HEALER, modules/youtube/interaction.js]`. Kiến trúc +
