@@ -41,7 +41,9 @@ const PAGE_META = {
   library: ['Kho nội dung', 'Hàng đợi, phiên đang chạy và kết quả đã hoàn tất trong cùng một nơi.'],
   compose: ['Viết bài mới', 'Tạo task bằng contract local hiện có, đăng ngay hoặc lên lịch.'],
   activity: ['Nhật ký hoạt động', 'Biên lai local ghi lại kết quả và lỗi của từng lần thi hành.'],
+  facebook: ['Facebook', 'Chạy tính năng Facebook của lõi qua hàng đợi chung, dùng cấu hình đã tạo trong popup.'],
   accounts: ['Tài khoản MXH', 'Tài khoản đã quét và lưu hoàn toàn trong trình duyệt này.'],
+  settings: ['Cài đặt & kết nối', 'Nối profile với máy chủ quản lý và cập nhật extension.'],
   testactions: ['Test hành động', 'Chạy thử từng hành động của từng nền tảng và xem kết quả ngay tại bảng.']
 };
 
@@ -375,9 +377,10 @@ function renderActivity() {
           r.type === 'healthscan' && Array.isArray(r.items) && r.items.length
             ? `Neo: ${r.items.map(it => `${it.key} → ${it.found_via || 'none'}${it.spec ? ` (${it.spec.by}: ${it.spec.value})` : ''}`).join('; ')}`
             : '',
-          r.details ? `Chi tiết: ${r.details}` : '',
+          r.details ? `Chi tiết: ${typeof r.details === 'string' ? r.details : JSON.stringify(r.details)}` : '',
           r.actor_name ? `Tài khoản: ${r.actor_name}` : '',
           r.target_name ? `Đích: ${r.target_name}` : '',
+          r.origin === 'remote' ? 'Nguồn: máy chủ giao' : '',
           r.failure_code ? `Mã lỗi: ${r.failure_code}` : '',
           r.duration_ms ? `Thời lượng: ${Math.round(Number(r.duration_ms) / 1000)} giây` : ''
         ].filter(Boolean).join(' · ');

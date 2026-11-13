@@ -106,6 +106,12 @@
     return { state, active: Boolean(state[activeKey]), statusText: statusKey ? String(state[statusKey] || '').slice(0, 500) : '', counters };
   }
 
+  // Chuỗi ngắn cho nhật ký: tên tính năng + các bộ đếm khác 0 của lõi.
+  function detailText(task, core) {
+    const parts = Object.entries(core.counters).slice(0, 12).map(([k, v]) => `${k}=${v}`);
+    return [task.feature].concat(parts).join(' · ');
+  }
+
   async function stop(run) {
     try {
       const task = coreTask(run);
@@ -153,12 +159,12 @@
         const timeout = Number(run.timeout_ms) || globalThis.AVJP.contract.defaultTimeoutMs(run.type);
         if (now - startedAt > timeout) {
           await stop(run);
-          return await deliver(run, 'uncertain', 'Quá thời hạn của việc — đã gửi lệnh dừng. ' + core.statusText, { failure_code: 'task_timeout', details: { feature: task.feature, counters: core.counters } });
+          return await deliver(run, 'uncertain', 'Quá thời hạn của việc — đã gửi lệnh dừng. ' + core.statusText, { failure_code: 'task_timeout', details: detailText(task, core) });
         }
         if (run.fb_tab_id) {
           let tab = null;
           try { tab = await chrome.tabs.get(run.fb_tab_id); } catch (_) { tab = null; }
-          if (!tab) return await deliver(run, 'uncertain', 'Tab Facebook chạy việc này đã bị đóng giữa chừng. ' + core.statusText, { details: { feature: task.feature, counters: core.counters } });
+          if (!tab) return await deliver(run, 'uncertain', 'Tab Facebook chạy việc này đã bị đóng giữa chừng. ' + core.statusText, { details: detailText(task, core) });
         }
         watching = true;
         await S.touchRun({ lastActiveAt: now });
@@ -169,7 +175,7 @@
       return await deliver(run, done ? 'success' : 'uncertain',
         done ? `${label}: xong. ${core.statusText}`.trim()
           : `${label}: đã dừng nhưng chưa đủ bằng chứng hoàn tất (có thể làm được một phần). ${core.statusText}`.trim(),
-        { details: { feature: task.feature, counters: core.counters } });
+        { details: detailText(task, core) });
     } finally {
       ticking = false;
     }

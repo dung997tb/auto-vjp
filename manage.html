@@ -6,9 +6,8 @@
 <title>Auto vjp — Quản lý đa nền tảng</title>
 <link rel="stylesheet" href="manage.css">
 <style>
-/* Cập nhật extension (2.11.20) — class update-* chưa có trong manage.css.
-   Section này cố ý KHÔNG dùng class .view: manage.js showView() tắt
-   is-active của mọi .view không khớp data-view, sẽ ẩn mất khối này. */
+/* Cập nhật extension (2.11.20; 2.13.0 chuyển vào view "settings") — class update-* chưa có trong manage.css.
+   Từ 2.13.0 thẻ này nằm trong view "settings" cùng thẻ Kết nối máy chủ. */
 .update-wrap { margin-bottom: 18px; }
 .update-card { padding: 19px 20px; }
 .update-card-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
@@ -55,10 +54,19 @@
         <span>Nhật ký hoạt động</span>
       </button>
 
+      <button class="nav-item" type="button" data-nav-target="facebook">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M13 21v-8h2.5l.5-3H13V8.5c0-.9.4-1.5 1.6-1.5H16V4.3c-.4 0-1.2-.1-2.1-.1-2.2 0-3.4 1.3-3.4 3.7V10H8v3h2.5v8"/></svg>
+        <span>Facebook</span>
+      </button>
+
       <p class="nav-label nav-label-spaced">Công cụ</p>
       <button class="nav-item" type="button" data-nav-target="accounts">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3.5 20c.6-3.4 2.7-5 5.5-5s4.9 1.6 5.5 5"/><path d="M16 5.5a3.5 3.5 0 0 1 0 5.8M17.5 15.4c1.7.7 2.7 2.2 3 4.6"/></svg>
         <span>Tài khoản MXH</span>
+      </button>
+      <button class="nav-item" type="button" data-nav-target="settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>
+        <span>Cài đặt &amp; kết nối</span>
       </button>
       <button class="nav-item" type="button" data-nav-target="testactions">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3h4"/><path d="M11 3v5.2L5.6 18a2.2 2.2 0 0 0 2 3.2h8.8a2.2 2.2 0 0 0 2-3.2L13 8.2V3"/><path d="M8 15h8"/></svg>
@@ -152,28 +160,14 @@
           <span aria-hidden="true">⌕</span>
           <input id="globalSearch" type="search" placeholder="Tìm trong kho / nhật ký…">
         </label>
-        <span class="server-pill" id="remotePill"><span></span><b id="remotePillText" style="font-weight:inherit">Không dùng máy chủ</b></span>
+        <span class="server-pill" id="remotePill" data-nav-target="settings" role="button" tabindex="0" style="cursor:pointer" title="Mở Cài đặt &amp; kết nối"><span></span><b id="remotePillText" style="font-weight:inherit">Không dùng máy chủ</b></span>
         <button class="btn btn-primary" type="button" data-nav-target="compose">＋ Viết bài mới</button>
       </div>
     </header>
 
     <main class="content">
-      <section class="update-wrap" id="updateSection" aria-label="Cập nhật extension">
-        <div class="card update-card">
-          <div class="update-card-head">
-            <h2>Cập nhật extension</h2>
-            <span class="badge badge-neutral">Phiên bản hiện tại: <span id="updCurrentVersion">…</span></span>
-          </div>
-          <p class="update-note">Tải bản mới nhất từ GitHub và ghi đè vào thư mục extension đã chọn (chọn 1 lần). Sau khi ghi xong, mở chrome://extensions bấm ⟳ (Làm mới) ở thẻ Auto vjp để nạp bản mới.</p>
-          <div class="update-actions">
-            <button class="btn btn-primary" type="button" id="updBtn">Cập nhật</button>
-            <button class="btn" type="button" id="updOpenExt" hidden>Mở trang quản lý extension</button>
-            <button class="btn btn-ghost" type="button" id="updReselect">Chọn lại thư mục</button>
-          </div>
-          <p class="update-status" id="updStatus" role="status"></p>
-        </div>
-      </section>
-
+      <!-- CÀI ĐẶT & KẾT NỐI (2.13.0): gom thẻ Kết nối máy chủ + Cập nhật vào một view riêng -->
+      <section class="view" data-view="settings">
       <section class="update-wrap" id="remoteSection" aria-label="Kết nối máy chủ">
         <div class="card update-card">
           <div class="update-card-head">
@@ -194,6 +188,51 @@
           </div>
           <p class="update-status" id="remoteStatus" role="status"></p>
         </div>
+      </section>
+      <section class="update-wrap" id="updateSection" aria-label="Cập nhật extension">
+        <div class="card update-card">
+          <div class="update-card-head">
+            <h2>Cập nhật extension</h2>
+            <span class="badge badge-neutral">Phiên bản hiện tại: <span id="updCurrentVersion">…</span></span>
+          </div>
+          <p class="update-note">Tải bản mới nhất từ GitHub và ghi đè vào thư mục extension đã chọn (chọn 1 lần). Sau khi ghi xong, mở chrome://extensions bấm ⟳ (Làm mới) ở thẻ Auto vjp để nạp bản mới.</p>
+          <div class="update-actions">
+            <button class="btn btn-primary" type="button" id="updBtn">Cập nhật</button>
+            <button class="btn" type="button" id="updOpenExt" hidden>Mở trang quản lý extension</button>
+            <button class="btn btn-ghost" type="button" id="updReselect">Chọn lại thư mục</button>
+          </div>
+          <p class="update-status" id="updStatus" role="status"></p>
+        </div>
+      </section>
+      </section>
+
+
+      <!-- FACEBOOK (2.13.0) -->
+      <section class="view" data-view="facebook">
+        <div class="section-intro">
+          <div><h2>Facebook</h2><p>Chạy một tính năng Facebook qua cùng hàng đợi với các nền tảng khác. Kết quả hiện trong Nhật ký hoạt động.</p></div>
+          <span class="info-pill">Dùng cấu hình từ tab Lịch của popup</span>
+        </div>
+        <article class="card update-card">
+          <div class="form-grid form-grid-2">
+            <label class="field"><span>Mẫu cấu hình</span>
+              <select id="fbTemplate"></select>
+              <small>Mẫu lấy từ các lịch bạn đã tạo trong tab Lịch của popup. Chưa có mẫu: mở popup, cấu hình tính năng rồi bấm hẹn lịch một lần.</small>
+            </label>
+            <label class="field"><span>Tính năng</span>
+              <select id="fbFeature"></select>
+            </label>
+          </div>
+          <label class="field"><span>Cấu hình (JSON)</span>
+            <textarea id="fbConfig" rows="10" spellcheck="false" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px"></textarea>
+          </label>
+          <div class="update-actions">
+            <button class="btn btn-primary" type="button" id="fbRun">Đưa vào hàng đợi</button>
+            <button class="btn" type="button" id="fbReload">Tải lại mẫu</button>
+            <button class="btn btn-ghost" type="button" data-nav-target="activity">Xem nhật ký</button>
+          </div>
+          <p id="fbMessage" class="form-message" aria-live="polite"></p>
+        </article>
       </section>
 
       <!-- TRANG CHỦ -->
@@ -517,6 +556,7 @@
 <script src="modules/kernel/contract-data.js"></script>
 <script src="manage-updater.js"></script>
 <script src="manage-remote.js"></script>
+<script src="manage-facebook.js"></script>
 <script src="manage.js"></script>
 </body>
 </html>

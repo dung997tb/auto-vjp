@@ -518,6 +518,14 @@
         case 'autovjp.remoteSyncNow':
           await globalThis.AVJP.remote.sync({ force: true });
           return sendResponse({ success: true, remote: await globalThis.AVJP.remote.state() });
+        // (2.13.0) Mẫu cấu hình + danh sách tính năng Facebook cho trang quản lý.
+        case 'autovjp.fbTemplates':
+          return sendResponse({
+            success: true,
+            available: Boolean(globalThis.AVJP.fbtask && globalThis.AVJP.fbtask.available()),
+            features: globalThis.AVJP.contract.FB_FEATURES || [],
+            templates: globalThis.AVJP.fbtask ? await globalThis.AVJP.fbtask.templates() : []
+          });
         case 'autovjp.clearReceipts': {
           await S.set({ [K.RECEIPTS]: [], [K.RECEIPT_KEYS]: [] });
           return sendResponse({ success: true });

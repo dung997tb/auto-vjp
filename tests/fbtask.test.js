@@ -101,7 +101,7 @@ test('chạy trọn: enqueue → lõi khởi chạy → cờ active tắt + đ�
   assert.equal(r.platform, 'facebook');
   assert.equal(r.task_id, task.id);
   assert.match(r.message, /Đã đăng 2\/2 nhóm/);
-  assert.equal(r.details.counters.groupPostDone, 2);
+  assert.equal(r.details, 'groupPost · groupPostDone=2');
   assert.equal(await S.getRun(), null);
   assert.deepEqual(mock.removedTabs, []);
 });
