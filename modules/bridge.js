@@ -13,6 +13,7 @@
     'modules/kernel/media.js',
     'modules/kernel/aitab.js',
     'modules/kernel/heal.js',
+    'modules/kernel/fbtask.js',
     'modules/kernel/runner.js',
     'modules/kernel/source.js',
     'modules/kernel/results.js'

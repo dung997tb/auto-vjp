@@ -489,7 +489,7 @@
             currentRun: stored[K.CANONICAL] || null,
             learnedSelectors: stored[K.LEARNED] || {},
             testState: stored[K.TEST_STATE] || {},
-            platforms: globalThis.AVJP.contract.platformNames.filter(p => p !== 'probe')
+            platforms: globalThis.AVJP.contract.platformNames.filter(p => p !== 'probe' && p !== 'facebook')
           });
         }
         case 'autovjp.healForget': {

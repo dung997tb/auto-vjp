@@ -106,6 +106,8 @@
   // start(run): mở tab cho canonical run đã ghi trong storage. Trả về tabId.
   async function start(run) {
     if (run.platform === 'probe') { handleProbe(run); return null; }
+    // (2.13.0) Việc Facebook do lõi FB thi hành — không mở tab managed, không inject.
+    if (run.platform === 'facebook') { globalThis.AVJP.fbtask.start(run); return null; }
     const url = C().startUrl(run);
     if (!url) throw new Error(`Không có URL khởi chạy cho ${run.platform}/${run.type}`);
     // (2.11.11) scan_account — quét ngầm tầng 1: dùng lại tab platform user
@@ -466,6 +468,8 @@
   async function watchdog() {
     const run = await S.getRun();
     if (!run || run.platform === 'probe') return;
+    // (2.13.0) Run facebook có vòng theo dõi riêng (cờ active + bằng chứng của lõi).
+    if (run.platform === 'facebook') { await globalThis.AVJP.fbtask.tick(run); return; }
     const now = Date.now();
     const timeout = Number(run.timeout_ms) || C().defaultTimeoutMs(run.type);
     const lastActive = Number(run.lastActiveAt || run.startedAt || now);
@@ -489,6 +493,7 @@
       flags[String(run.task_id)] = Date.now();
       await S.set({ [S.KEYS.CANCEL_FLAGS]: flags });
     } catch (_) { console.debug("[Auto vjp][runner] bỏ qua lỗi:", _); }
+    if (run.platform === 'facebook') await globalThis.AVJP.fbtask.stop(run); // gửi lệnh dừng cho tính năng lõi đang chạy
     await globalThis.AVJP.outbox.deliver({
       type: run.type, taskId: run.task_id, platform: run.platform, tabId: run.tabId || null,
       status: 'failed', failure_code: 'user_cancelled', forceCleanup: true,

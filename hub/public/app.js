@@ -134,6 +134,34 @@
     fillSelect(form.profile, approved.map(function (p) { return [p.id, p.name || p.id]; }), true);
     fillSelect(form.platform, Object.keys(state.types).map(function (p) { return [p, p]; }), true);
     fillSelect(form.type, (state.types[form.platform.value] || []).map(function (t) { return [t, t]; }), true);
+    syncFacebook();
+  }
+  // Việc Facebook: chọn mẫu cấu hình mà profile đã báo lên (lịch tạo trong popup),
+  // ô JSON khi đó là "config" của tính năng.
+  function fbTemplates() {
+    var form = $('taskForm');
+    var p = state.profiles.filter(function (x) { return x.id === form.profile.value; })[0];
+    return { profile: p, list: (p && p.fb_templates) || [] };
+  }
+  function syncFacebook() {
+    var form = $('taskForm');
+    var isFb = form.platform.value === 'facebook';
+    $('fbRow').hidden = !isFb;
+    $('fbHint').hidden = !isFb;
+    $('contentLabel').hidden = isFb;
+    form.extra.rows = isFb ? 10 : 3;
+    $('extraLabel').textContent = isFb
+      ? 'Cấu hình tính năng (JSON "config" — chọn mẫu ở trên để điền sẵn, sửa được trước khi giao)'
+      : 'Trường khác (JSON, tuỳ loại việc — xem modules/MODULE-CONTRACT.md)';
+    if (!isFb) return;
+    var t = fbTemplates();
+    fillSelect(form.fb_template, [['', t.list.length ? '— chọn mẫu —' : '(profile này chưa có mẫu)']].concat(
+      t.list.map(function (item, i) { return [String(i), item.label + ' (' + item.feature + ')']; })), true);
+    fillSelect(form.fb_feature, (state.fb_features || []).map(function (f) { return [f, f]; }), true);
+    $('fbHint').textContent = !t.profile ? ''
+      : !t.profile.fb_available ? 'Profile này chưa báo có lõi Facebook (extension bản cũ?).'
+      : t.list.length ? 'Mẫu lấy từ các lịch bạn đã tạo trong tab Lịch của popup trên profile này.'
+      : 'Để có mẫu: trên profile đó, mở popup, cấu hình tính năng rồi bấm hẹn lịch một lần. Mẫu sẽ hiện ở đây sau lần đồng bộ kế tiếp.';
   }
   function taskRow(t) {
     var buttons = [];
@@ -142,7 +170,7 @@
       if (confirm('Tạo một việc mới giống việc này và giao ngay?')) act('requeueTask', { id: t.id }, 'Đã giao lại.');
     } }));
     var label = t.payload.platform + ' / ' + t.payload.type + (t.repeat === 'daily' ? ' (hằng ngày)' : '');
-    var summary = String(t.payload.content || t.payload.target_url || t.payload.source_url || '').slice(0, 80);
+    var summary = String(t.payload.label || t.payload.feature || t.payload.content || t.payload.target_url || t.payload.source_url || '').slice(0, 80);
     return el('tr', {}, [
       el('td', { class: 'nowrap', text: fmtTime(t.run_at) }),
       el('td', { text: profileName(t.profile_id) }),
@@ -220,6 +248,14 @@
     document.querySelectorAll('main > section').forEach(function (s) { s.hidden = s.dataset.view !== tab.dataset.tab; });
   });
   $('taskForm').platform.addEventListener('change', syncTaskForm);
+  $('taskForm').profile.addEventListener('change', syncFacebook);
+  $('taskForm').fb_template.addEventListener('change', function () {
+    var form = $('taskForm');
+    var item = fbTemplates().list[Number(form.fb_template.value)];
+    if (!item || form.fb_template.value === '') return;
+    form.fb_feature.value = item.feature;
+    form.extra.value = JSON.stringify(item.config, null, 2);
+  });
   $('taskForm').addEventListener('submit', function (event) {
     event.preventDefault();
     var form = event.target;
@@ -228,9 +264,12 @@
       try { payload = JSON.parse(form.extra.value); } catch (err) { return flash('Ô "Trường khác" không phải JSON hợp lệ.', true); }
       if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return flash('Ô "Trường khác" phải là một object JSON.', true);
     }
+    if (form.platform.value === 'facebook') {
+      var chosen = fbTemplates().list[Number(form.fb_template.value)];
+      payload = { feature: form.fb_feature.value, config: payload, label: chosen && form.fb_template.value !== '' ? chosen.label : form.fb_feature.value };
+    } else if (form.content.value.trim()) payload.content = form.content.value;
     payload.platform = form.platform.value;
     payload.type = form.type.value;
-    if (form.content.value.trim()) payload.content = form.content.value;
     var runAt = form.run_at.value ? new Date(form.run_at.value).getTime() : 0;
     api('createTask', { profile_id: form.profile.value, payload: payload, run_at: runAt, repeat: form.daily.checked ? 'daily' : null })
       .then(function () { form.content.value = ''; flash('Đã giao việc.'); return refresh(); })

@@ -21,6 +21,7 @@ contract-data: **2.11.9** (xem §3).
 | `modules/shared/*` | Dùng chung cho module | canonical-task-storage, dom-utils, account-scan-utils (port từ MUT) |
 | `modules/aitab/ai-bridge.js` | Kernel aitab | Cầu nối ChatGPT/Gemini trong trang web AI |
 | Key canonical `currentAutomationRun` | Kernel (qua AVJP.store) | Hợp đồng với content script MUT — giữ nguyên tên + hình dạng |
+| `modules/kernel/fbtask.js` | Kernel — **ngoại lệ có chủ đích** (2.13.0) | File kernel duy nhất được gọi hàm của lõi FB và ĐỌC key của lõi (cờ active, bộ đếm, dòng trạng thái, `scheduledTasks`); không ghi key nào của lõi. Xem §5a "Việc Facebook" |
 | Key `autovjp.*` | Kernel | queue/schedules/receipts/outbox/accounts/managedTabs/paused |
 
 **Điểm chạm vào lõi FB: đúng 2 chỗ** — (1) cuối `background.js`: `importScripts('modules/bridge.js')`
@@ -52,7 +53,7 @@ tab đóng sớm ─▶ receipt `failed`; trang login/checkpoint/captcha ─▶ 
   `AVJP.contract.TASK_TYPES` trong `kernel/contract.js`, cổng qua `validateTask` ở
   `kernel/source.js`) hiện gồm: `post`, `reply`, `affiliate`, `scan_account`, `probe`
   (nội bộ, kiểm tra vòng đời) + các bổ sung cộng thêm: `nurture` (2.1.0), `story` (2.7.0),
-  `upload` (2.8.0), `healthscan` (2.9.0). Facebook KHÔNG qua tầng module (lõi lo).
+  `upload` (2.8.0), `healthscan` (2.9.0), `fb_feature` (2.13.0). Facebook KHÔNG chạy bằng script của tầng module: task `fb_feature` chỉ là vỏ chuyển việc cho lõi FB (xem §5a "Việc Facebook").
   Tên type ở tầng kernel là tên "transport"; riêng `affiliate` có tên canonical trong
   contract-data là `affiliate_comment` — hai phía nối nhau bằng `LEGACY_TASK_TYPE_MAP` /
   `LEGACY_TRANSPORT_TASK_TYPE`, và metadata (timeout/retryable) của task affiliate được
@@ -172,6 +173,16 @@ Tổng 2.11.17: **216 hàng** (instagram 34, threads 23, tiktok 78, x 32, youtub
 `humanMouse {kind: click|scroll|move, x, y, dy?}` (content → background.js, KHÔNG qua results.js) → `{ok}` — chuột thật qua chrome.debugger cho `AVJP.human` (modules/shared/humanmouse.js, 2.11.16); lỗi/tắt công tắc → `{ok:false}`, content tự fallback click DOM.
 
 Action lạ: listener của kernel **không trả lời** — để lõi FB xử lý action của nó.
+
+#### Việc Facebook qua hàng đợi kernel — `modules/kernel/fbtask.js` (2.13.0)
+
+- **Hình dạng**: `{platform:'facebook', type:'fb_feature', feature, label?, config, timeout_ms?}`. `feature` ∈ `AVJP.contract.FB_FEATURES` (= `SCHEDULE_FEATURES` của lõi; `tests/fbtask.test.js` canh hai bên khớp). `config` đúng dạng `task.config` của lệnh `scheduleCreate` trong lõi. `validateTask` gọi `fbtask.validate` → `normalizeScheduledTask` của lõi, sai thì ném lỗi ngay lúc enqueue. Chưa nhận `kind:'chain'`.
+- **Thi hành**: `runner.start` không mở tab managed, không inject — gọi `fbtask.start(run)` → `launchScheduledTask(task)` của lõi (lõi tự mở/tìm tab Facebook, đổi actor, gửi lệnh Start). Task KHÔNG được ghi vào `scheduledTasks` và không đặt alarm của lõi.
+- **Phase trên canonical run**: `claimed` → (`fb_waiting` nếu `hasActiveFeature()` đang true, thử lại mỗi nhịp, quá 60 phút → `failed`/`fb_busy`) → `fb_launching` (tối đa ~4 phút) → `fb_running` (`fb_tab_id`, `fb_run_id`; `tabId` của run để null nên outbox không đóng tab Facebook của người dùng).
+- **Theo dõi**: `runner.watchdog` chuyển run facebook cho `fbtask.tick` mỗi phút (và ngay khi cờ active của lõi tắt, qua `storage.onChanged`). Cờ active tắt + `scheduleChainCompletionEvidence` đúng → `success`; cờ tắt mà thiếu bằng chứng → `uncertain` (có thể đã làm một phần — không tự chạy lại); tab Facebook bị đóng → `uncertain`; quá `timeout_ms` (mặc định 4 giờ) → gửi lệnh dừng của lõi rồi `uncertain`/`task_timeout`; lõi ném lỗi khi khởi chạy → `failed`/`fb_launch_failed`. Không mã nào trong số này nằm trong danh sách retry.
+- **Huỷ**: `runner.cancelCurrent` gửi lệnh dừng của tính năng (`scheduleChainStopAction`) trước khi ghi receipt.
+- **Mẫu cấu hình**: `fbtask.templates()` đọc `scheduledTasks` của lõi (kể cả từng bước của chuỗi), bỏ trùng theo `feature+label`, tối đa 20 mẫu/150KB; `remote.sync` gửi kèm khi nội dung đổi để hub giao lại đúng cấu hình đó.
+- Trang quản lý: `listState.platforms` không gồm `facebook` (các màn soạn bài/quét của module không áp dụng); receipt facebook vẫn hiện trong nhật ký.
 
 #### Nguồn việc từ xa — `modules/kernel/remote.js` + `hub/` (2.12.0)
 

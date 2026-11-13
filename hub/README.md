@@ -41,6 +41,16 @@ Nếu đặt sau reverse proxy đang có ở một đường dẫn con (ví dụ
 
 Muốn khỏi nhập địa chỉ trên từng profile: điền `DEFAULT_HUB_URL` ở đầu `modules/kernel/remote.js` rồi phát hành bản extension đó.
 
+## Giao việc Facebook
+
+Cấu hình của tính năng Facebook (danh sách nhóm, nội dung, giới hạn…) khá dài, nên hub không bắt gõ tay:
+
+1. Trên profile, mở popup, cấu hình tính năng như bình thường rồi bấm hẹn lịch một lần (hẹn giờ nào cũng được, huỷ sau cũng được).
+2. Lần đồng bộ kế tiếp, profile báo cấu hình đó lên hub làm **mẫu**.
+3. Trên hub, mục **Việc**: chọn profile, nền tảng `facebook`, chọn mẫu. Ô cấu hình được điền sẵn, sửa được trước khi giao; tích "Lặp lại hằng ngày" nếu muốn.
+
+Payload gửi cho extension có dạng `{platform: "facebook", type: "fb_feature", feature, label, config}`. Extension kiểm lại `config` bằng bộ chuẩn hoá của lõi; sai thì từ chối và báo lý do về hub.
+
 ## Biến môi trường
 
 | Biến | Ý nghĩa |
@@ -67,7 +77,9 @@ Mọi lệnh là `POST` với JSON. Sau khi báo danh, extension gửi kèm `Aut
 
 ## Giới hạn hiện tại
 
-- Chỉ giao được việc của tầng module (Instagram, Threads, TikTok, X, YouTube). Tính năng Facebook chưa đi qua hàng đợi này.
+- Việc Facebook chạy bằng bộ hẹn giờ của lõi extension, nên chỉ chạy được một tính năng Facebook tại một thời điểm trên mỗi profile; việc đến sau sẽ chờ (tối đa 60 phút).
+- Chưa giao được cả một chuỗi Facebook trong một việc; giao từng bước.
+- Tính năng Facebook dừng giữa chừng được ghi là "Không chắc" (có thể đã làm một phần). Kiểm tra trước khi bấm **Giao lại** để tránh đăng trùng.
 - Việc đã giao mà profile tắt giữa chừng sẽ nằm ở "Đã giao, đang làm"; hub không tự giao lại để tránh chạy trùng, bạn bấm **Giao lại** khi cần.
 - Hub chưa có màn hình tạo thêm người dùng; dữ liệu đã gắn chủ sở hữu sẵn cho việc đó.
 - Giới hạn số lần đăng nhập sai dựa vào địa chỉ IP; sau reverse proxy cần proxy gửi đúng `X-Forwarded-For`.

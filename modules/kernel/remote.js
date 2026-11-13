@@ -50,6 +50,12 @@
     return (u.origin + u.pathname).replace(/\/+$/, '');
   }
 
+  function quickHash(text) {
+    let h = 5381;
+    for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(36) + ':' + text.length;
+  }
+
   function randomId(prefix, bytes) {
     const buf = new Uint8Array(bytes);
     crypto.getRandomValues(buf);
@@ -244,6 +250,9 @@
       }
       const run = await S.getRun();
       const queuedRemote = await remoteQueued();
+      // (2.13.0) Mẫu cấu hình Facebook (các lịch đã tạo trong popup): chỉ gửi khi đổi.
+      const fbTemplates = globalThis.AVJP.fbtask ? await globalThis.AVJP.fbtask.templates() : [];
+      const fbHash = quickHash(JSON.stringify(fbTemplates));
       const res = await call(cfg, '/api/agent/sync', {
         profile_id: profileId,
         version: extVersion(),
@@ -251,7 +260,10 @@
         accept: Boolean(cfg.accept),
         capacity: cfg.accept ? Math.max(0, MAX_CLAIM - queuedRemote) : 0,
         nonce: cfg.nonce || null,
-        accounts: await accountSummary()
+        accounts: await accountSummary(),
+        fb_available: Boolean(globalThis.AVJP.fbtask && globalThis.AVJP.fbtask.available()),
+        fb_templates_hash: fbHash,
+        ...(fbHash !== cfg.fbHash ? { fb_templates: fbTemplates } : {})
       }, cfg.token);
 
       if (res.status === 401 || res.status === 403) {
@@ -265,6 +277,7 @@
         nonce: res.data.nonce || cfg.nonce || null,
         name: res.data.name || cfg.name || '',
         lastSyncAt: Date.now(),
+        fbHash,
         lastError: ''
       });
       if (cfg.status === 'approved') {

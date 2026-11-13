@@ -228,6 +228,15 @@
         return null;
       }
     },
+    // (2.13.0) Facebook: KHÔNG inject script của tầng module. Task fb_feature
+    // được chuyển cho bộ hẹn giờ của lõi FB qua modules/kernel/fbtask.js.
+    facebook: {
+      label: 'Facebook (tính năng của lõi)',
+      hosts: [],
+      home: null,
+      core: true,
+      scripts(run) { return run && run.type === 'fb_feature' ? { core: true } : null; }
+    },
     probe: {
       label: 'Probe (kiểm tra vòng đời, không mở tab)',
       hosts: [],
@@ -305,6 +314,7 @@
   function defaultTimeoutMs(type) {
     const meta = D && D.getTaskMetadata ? D.getTaskMetadata(type) : null;
     if (meta && meta.default_timeout_ms) return meta.default_timeout_ms;
+    if (type === 'fb_feature') return 4 * 3600 * 1000; // tính năng lõi FB chạy dài (đăng nhiều nhóm, tương tác...)
     return type === 'reply' ? 12 * 60 * 1000 : 20 * 60 * 1000;
   }
 
@@ -317,6 +327,9 @@
     isVideoPost,
     defaultTimeoutMs,
     INACTIVITY_TIMEOUT_MS: 5 * 60 * 1000,
-    TASK_TYPES: ['post', 'reply', 'affiliate', 'scan_account', 'probe', 'nurture', 'story', 'upload', 'healthscan', 'micro_action']
+    TASK_TYPES: ['post', 'reply', 'affiliate', 'scan_account', 'probe', 'nurture', 'story', 'upload', 'healthscan', 'micro_action', 'fb_feature'],
+    // (2.13.0) Tên tính năng lõi FB nhận qua task fb_feature. Nguồn sự thật là
+    // SCHEDULE_FEATURES trong background.js; tests/fbtask.test.js canh hai bên khớp nhau.
+    FB_FEATURES: ['friend', 'scrape', 'feed', 'aiFeed', 'groupInteract', 'groupComment', 'groupPost', 'keyword', 'discover', 'share', 'sales', 'trendLearn', 'trendPost', 'newsWall', 'pageGroupJoin', 'pageGroupPost', 'pageNewsWall', 'pageComment', 'pageSales', 'pageGroupComment', 'friendReengage', 'fbStory', 'fbReels']
   };
 })();

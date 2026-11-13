@@ -27,7 +27,7 @@ Mặc định extension chạy độc lập và không gửi gì ra ngoài. Nế
 - Extension luôn là bên gọi ra; hub không gọi vào extension.
 - API key AI và phiên đăng nhập không được gửi lên hub. Hub chỉ nhận ID profile, phiên bản, tên các tài khoản đã quét và kết quả từng việc.
 - Tại máy luôn có quyền cao hơn: tắt "Nhận việc từ máy chủ" hoặc bấm "Ngắt kết nối" bất cứ lúc nào.
-- Hiện hub giao được việc của Instagram, Threads, TikTok, X, YouTube; tính năng Facebook chưa đi qua kênh này.
+- Hub giao được việc của Instagram, Threads, TikTok, X, YouTube và 23 tính năng Facebook của lõi (đăng nhóm, share, kết bạn, tương tác…). Với Facebook, hub dùng lại cấu hình bạn đã tạo trong tab Lịch của popup trên profile đó.
 
 ## Cấu trúc
 

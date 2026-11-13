@@ -128,6 +128,10 @@ function createHub(options = {}) {
     );
   `);
   const q = sql => db.prepare(sql);
+  // Nâng cấp lược đồ cho DB tạo từ bản trước.
+  const profileCols = new Set(q('PRAGMA table_info(profiles)').all().map(c => c.name));
+  if (!profileCols.has('fb_templates_json')) db.exec('ALTER TABLE profiles ADD COLUMN fb_templates_json TEXT');
+  if (!profileCols.has('fb_available')) db.exec('ALTER TABLE profiles ADD COLUMN fb_available INTEGER NOT NULL DEFAULT 0');
 
   // Tài khoản đầu tiên: "admin", mật khẩu lấy từ môi trường (đổi biến môi
   // trường rồi khởi động lại là đổi mật khẩu).
@@ -183,6 +187,14 @@ function createHub(options = {}) {
     if (platform === 'youtube' && type === 'post' && contract.isVideoPost(payload)) {
       throw new HttpError(400, 'YouTube: video phải dùng loại việc "upload", không phải "post".');
     }
+    if (platform === 'facebook') {
+      if (!(contract.FB_FEATURES || []).includes(String(payload.feature || ''))) {
+        throw new HttpError(400, `Tính năng Facebook không hỗ trợ: ${payload.feature || '(trống)'}`);
+      }
+      if (!payload.config || typeof payload.config !== 'object' || Array.isArray(payload.config)) {
+        throw new HttpError(400, 'Việc Facebook cần trường "config" (object). Chọn một mẫu từ profile hoặc tự điền.');
+      }
+    }
     const clean = { ...payload, platform, type };
     // Các trường do extension tự gắn — không cho web ghi đè.
     for (const key of ['id', 'status', 'origin', 'remote_task_id', 'run_id', 'delivery_id', 'task_id', 'tabId', 'meta']) delete clean[key];
@@ -232,6 +244,13 @@ function createHub(options = {}) {
       // lượt sync hub phát một nonce mới, lượt sau phải gửi lại đúng nonce đó.
       const conflict = profile.nonce && body.nonce && body.nonce !== profile.nonce ? now() : profile.conflict_at;
       const nonce = rid('', 8);
+      if (Array.isArray(body.fb_templates)) {
+        const templates = body.fb_templates.slice(0, 20).filter(t => t && (contract.FB_FEATURES || []).includes(t.feature)
+          && t.config && typeof t.config === 'object').map(t => ({ feature: t.feature, label: String(t.label || t.feature).slice(0, 120), config: t.config }));
+        const json = JSON.stringify(templates);
+        if (json.length <= 200 * 1000) q('UPDATE profiles SET fb_templates_json = ? WHERE id = ?').run(json, profile.id);
+      }
+      q('UPDATE profiles SET fb_available = ? WHERE id = ?').run(body.fb_available ? 1 : 0, profile.id);
       q('UPDATE profiles SET nonce = ?, conflict_at = ?, version = ?, accounts_json = ?, busy = ?, accept = ?, last_seen_at = ? WHERE id = ?')
         .run(nonce, conflict || null,
           body.version ? String(body.version).slice(0, 20) : profile.version,
@@ -307,7 +326,8 @@ function createHub(options = {}) {
         id: p.id, name: p.name, status: p.status, version: p.version,
         accounts: parseJson(p.accounts_json, []), busy: Boolean(p.busy), accept: Boolean(p.accept),
         online: Boolean(p.last_seen_at && now() - p.last_seen_at < ONLINE_WINDOW_MS),
-        last_seen_at: p.last_seen_at, created_at: p.created_at, conflict_at: p.conflict_at
+        last_seen_at: p.last_seen_at, created_at: p.created_at, conflict_at: p.conflict_at,
+        fb_available: Boolean(p.fb_available), fb_templates: parseJson(p.fb_templates_json, [])
       }));
       const tasks = q('SELECT * FROM tasks WHERE owner_id = ? ORDER BY created_at DESC LIMIT 200').all(user.id).map(t => ({
         id: t.id, profile_id: t.profile_id, payload: parseJson(t.payload_json, {}), run_at: t.run_at, repeat: t.repeat,
@@ -318,7 +338,7 @@ function createHub(options = {}) {
         ? q(`SELECT receipt_id, profile_id, task_id, origin, platform, type, status, message, received_at FROM results
              WHERE profile_id IN (${ids.map(() => '?').join(',')}) ORDER BY received_at DESC LIMIT 100`).all(...ids)
         : [];
-      return { user: { username: user.username, role: user.role }, now: now(), types, profiles, tasks, results };
+      return { user: { username: user.username, role: user.role }, now: now(), types, fb_features: contract.FB_FEATURES || [], profiles, tasks, results };
     },
     approve(user, body) {
       const profile = ownedProfile(user, body.id);

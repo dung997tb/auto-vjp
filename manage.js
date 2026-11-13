@@ -14,6 +14,7 @@ const PLATFORM_META = {
   probe: { label: 'Probe', className: 'probe' }
 };
 const TYPE_LABELS = {
+  fb_feature: 'Tính năng Facebook',
   post: 'Đăng bài',
   story: 'Đăng Story',
   upload: 'Tải video lên',
@@ -81,7 +82,7 @@ const truncate = (value, length = 110) => {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
   return text.length > length ? `${text.slice(0, length - 1)}…` : text;
 };
-const platformLabel = value => PLATFORM_META[value]?.label || String(value || 'Không rõ');
+const platformLabel = value => PLATFORM_META[value]?.label || (value === 'facebook' ? 'Facebook' : String(value || 'Không rõ'));
 const typeLabel = value => TYPE_LABELS[value] || String(value || 'Task');
 const statusLabel = value => STATUS_LABELS[value] || String(value || 'Không rõ');
 const statusBadge = status => `<span class="badge badge-${esc(status || 'neutral')}">${esc(statusLabel(status))}</span>`;

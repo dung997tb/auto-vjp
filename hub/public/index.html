@@ -53,10 +53,17 @@
           <label>Chạy lúc <input name="run_at" type="datetime-local"></label>
           <label class="check"><input name="daily" type="checkbox"> Lặp lại hằng ngày</label>
         </div>
-        <label>Nội dung (dùng cho đăng bài / bình luận)
+        <div class="row" id="fbRow" hidden>
+          <label>Mẫu Facebook từ profile (các lịch đã tạo trong popup của profile đó)
+            <select name="fb_template"></select>
+          </label>
+          <label>Tính năng Facebook <select name="fb_feature"></select></label>
+        </div>
+        <p class="muted" id="fbHint" hidden></p>
+        <label id="contentLabel">Nội dung (dùng cho đăng bài / bình luận)
           <textarea name="content" rows="3" placeholder="Nội dung bài viết…"></textarea>
         </label>
-        <label>Trường khác (JSON, tuỳ loại việc — xem modules/MODULE-CONTRACT.md)
+        <label><span id="extraLabel">Trường khác (JSON, tuỳ loại việc — xem modules/MODULE-CONTRACT.md)</span>
           <textarea name="extra" rows="3" spellcheck="false" placeholder='{"target_url": "https://…", "images": ["https://…"]}'></textarea>
         </label>
         <div class="row">

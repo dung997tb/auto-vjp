@@ -34,7 +34,8 @@ const POST = { platform: 'threads', type: 'post', content: 'xin chào' };
 
 test('validateTask: từ chối platform/type lạ và video post YouTube', () => {
   assert.throws(() => source.validateTask(null), /object/);
-  assert.throws(() => source.validateTask({ platform: 'facebook', type: 'post' }), /platform/);
+  assert.throws(() => source.validateTask({ platform: 'zalo', type: 'post' }), /platform/);
+  assert.throws(() => source.validateTask({ platform: 'facebook', type: 'post' }), /chưa hỗ trợ/);
   assert.throws(() => source.validateTask({ platform: 'threads', type: 'khong_co' }), /type/);
   assert.throws(() => source.validateTask({ platform: 'youtube', type: 'post', images: ['https://a.b/c.mp4'] }), /YouTube/);
   assert.deepEqual(source.validateTask({ platform: 'Threads', type: 'POST' }), { platform: 'threads', type: 'post' });

@@ -212,3 +212,33 @@ test('normalizeUrl: chỉ nhận http(s), bỏ dấu / cuối, cấm nhúng mậ
   assert.throws(() => remote.normalizeUrl('https://u:p@a.b'));
   assert.throws(() => remote.normalizeUrl('không phải url'));
 });
+
+test('Facebook: profile báo mẫu cấu hình; hub chỉ nhận tính năng hợp lệ có config và giao đúng nguyên dạng', async () => {
+  const agent = (name, body, token) => fetch(`${base}/api/agent/${name}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify(body)
+  }).then(r => r.json());
+  const id = 'pf_' + 'fb01'.repeat(6);
+  const { token } = await agent('register', { profile_id: id, version: '2.13.0' });
+  await admin('approve', { id, name: 'Máy FB' });
+  const templates = [
+    { feature: 'groupPost', label: 'Đăng nhóm sáng', config: { groups: [{ url: 'https://facebook.com/groups/1' }], content: 'chào' } },
+    { feature: 'tinh_nang_la', label: 'bị loại', config: {} }
+  ];
+  await agent('sync', { profile_id: id, capacity: 0, fb_available: true, fb_templates: templates }, token);
+  await agent('sync', { profile_id: id, capacity: 0, fb_available: true }, token); // không gửi lại mẫu -> giữ nguyên
+  const state = (await admin('state')).data;
+  const profile = state.profiles.find(p => p.id === id);
+  assert.equal(profile.fb_available, true);
+  assert.deepEqual(profile.fb_templates, [templates[0]]);
+  assert.deepEqual(state.types.facebook, ['fb_feature']);
+  assert.ok(state.fb_features.includes('groupPost') && !state.types.threads.includes('fb_feature'));
+
+  const create = payload => admin('createTask', { profile_id: id, payload });
+  assert.equal((await create({ platform: 'facebook', type: 'fb_feature', feature: 'tinh_nang_la', config: {} })).status, 400);
+  assert.equal((await create({ platform: 'facebook', type: 'fb_feature', feature: 'groupPost' })).status, 400);
+  assert.equal((await create({ platform: 'facebook', type: 'post', content: 'x' })).status, 400);
+  const ok = await create({ platform: 'facebook', type: 'fb_feature', feature: 'groupPost', label: 'Đăng nhóm sáng', config: templates[0].config });
+  assert.equal(ok.status, 200);
+  const { tasks } = await agent('sync', { profile_id: id, capacity: 3 }, token);
+  assert.deepEqual(tasks, [{ id: ok.data.id, payload: { platform: 'facebook', type: 'fb_feature', feature: 'groupPost', label: 'Đăng nhóm sáng', config: templates[0].config } }]);
+});

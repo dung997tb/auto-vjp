@@ -19,6 +19,11 @@
     if (platform !== 'probe' && !C().PLATFORMS[platform].scripts({ type })) {
       throw new Error(`Module ${platform} chưa hỗ trợ loại task ${type}`);
     }
+    // (2.13.0) Việc Facebook: để bộ chuẩn hoá của lõi FB kiểm cấu hình ngay lúc nhận.
+    if (platform === 'facebook') {
+      if (!globalThis.AVJP.fbtask) throw new Error('Cầu nối Facebook chưa được nạp');
+      globalThis.AVJP.fbtask.validate(input);
+    }
     // YouTube scope hẹp (plan §6-S7): upload video bị cắt khỏi v1 — không nhận task video YouTube.
     if (platform === 'youtube' && type === 'post' && C().isVideoPost(input)) {
       throw new Error('YouTube upload video ngoài scope v1 (chỉ Community post/comment).');
