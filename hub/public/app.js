@@ -106,6 +106,7 @@
       el('p', { class: 'muted', text: 'Lần cuối thấy: ' + ago(p.last_seen_at) + ' · bản ' + (p.version || '?') + ' · ' + queued + ' việc chờ' }),
       p.conflict_at ? el('p', { class: 'error', text: 'Cảnh báo: có vẻ hai nơi đang dùng chung ID này (thư mục profile bị sao chép?). Trên bản sao, bấm "Đăng ký lại" trong extension. Đổi tên profile để tắt cảnh báo.' }) : null,
       accountList(p.accounts),
+      p.status === 'approved' ? gemControls(p) : null,
       el('div', { class: 'actions' }, [
         el('button', { text: 'Đổi tên', onclick: function () {
           var name = prompt('Tên mới cho profile:', p.name || '');
@@ -116,6 +117,65 @@
         } }) : null,
         el('button', { class: 'danger', text: 'Xoá', onclick: function () {
           if (confirm('Xoá hẳn "' + (p.name || p.id) + '" cùng toàn bộ việc và kết quả của nó?')) act('remove', { id: p.id }, 'Đã xoá.');
+        } })
+      ])
+    ]);
+  }
+
+  /* ---------- GemLogin ---------- */
+  // Chọn profile GemLogin tương ứng + bật tắt tự mở, ngay trên thẻ profile.
+  function gemControls(p) {
+    var launchers = state.launchers || [];
+    if (!launchers.length) return null;
+    var taken = {};
+    state.profiles.forEach(function (x) { if (x.gem_id && x.id !== p.id) taken[x.launcher_id + '|' + x.gem_id] = true; });
+    var select = el('select', { 'aria-label': 'Profile GemLogin' }, [el('option', { value: '', text: 'Chưa ghép GemLogin' })]);
+    launchers.forEach(function (l) {
+      l.gem_profiles.forEach(function (g) {
+        var key = l.id + '|' + g.id;
+        if (taken[key]) return;
+        var o = el('option', { value: key, text: l.name + ' / ' + (g.name || g.id) });
+        if (p.launcher_id === l.id && p.gem_id === g.id) o.selected = true;
+        select.appendChild(o);
+      });
+    });
+    select.addEventListener('change', function () {
+      var parts = select.value.split('|');
+      act('mapProfile', select.value ? { id: p.id, launcher_id: parts[0], gem_id: parts.slice(1).join('|') } : { id: p.id, launcher_id: null, gem_id: null },
+        select.value ? 'Đã ghép với GemLogin.' : 'Đã bỏ ghép.');
+    });
+    var auto = el('input', { type: 'checkbox', 'aria-label': 'Tự mở khi có việc' });
+    auto.checked = p.auto_start;
+    auto.disabled = !p.gem_id;
+    auto.addEventListener('change', function () { act('mapProfile', { id: p.id, auto_start: auto.checked }); });
+    return el('div', {}, [
+      el('div', { class: 'actions' }, [select, el('label', { class: 'check' }, [auto, document.createTextNode('Tự mở khi có việc')])]),
+      p.launch_fail_at ? el('p', { class: 'error', text: 'Lần mở gần nhất (' + ago(p.launch_fail_at) + '): GemLogin đã mở profile nhưng extension không báo sống. Kiểm tra Auto vjp đã cài và nối hub trong profile này chưa. Hub sẽ thử lại sau 60 phút.' }) : null
+    ]);
+  }
+  function launcherCard(l) {
+    var mapped = state.profiles.filter(function (p) { return p.launcher_id === l.id; }).length;
+    var d = l.discover;
+    var notes = d && d.done ? d.done.map(function (x) {
+      var g = l.gem_profiles.filter(function (y) { return y.id === x.gem_id; })[0];
+      return el('li', { text: ((g && g.name) || x.gem_id) + ': ' + x.note });
+    }) : [];
+    return el('div', { class: 'card profile' }, [
+      el('h3', {}, [document.createTextNode(l.name),
+        el('span', { class: 'chip ' + (l.online ? 'ok' : ''), text: l.online ? 'Đang chạy' : 'Không thấy' }),
+        l.online && !l.gem_ok ? el('span', { class: 'chip bad', text: 'GemLogin không phản hồi' }) : null]),
+      el('p', { class: 'muted', text: 'Lần cuối thấy: ' + ago(l.last_seen_at) + ' · ' + l.gem_profiles.length + ' profile GemLogin · ' + mapped + ' đã ghép · ' + l.running.length + ' đang mở' }),
+      l.last_error ? el('p', { class: 'error', text: l.last_error }) : null,
+      d && d.active ? el('p', { text: 'Đang dò ghép' + (d.current ? ': đang mở thử một profile…' : '…') + ' (' + d.done.length + ' xong)' }) : null,
+      notes.length ? el('ul', { class: 'accounts' }, notes) : null,
+      el('div', { class: 'actions' }, [
+        d && d.active
+          ? el('button', { text: 'Dừng dò ghép', onclick: function () { act('discover', { id: l.id, active: false }); } })
+          : el('button', { class: 'primary', text: 'Dò ghép tự động', onclick: function () {
+              if (confirm('Launcher sẽ lần lượt mở từng profile GemLogin chưa ghép (mỗi cái tối đa khoảng 2,5 phút) để xem profile Auto vjp nào báo sống, rồi ghép hai bên. Trong lúc dò, không tự mở profile để làm việc. Bắt đầu?')) act('discover', { id: l.id }, 'Đã bắt đầu dò ghép.');
+            } }),
+        el('button', { class: 'danger', text: 'Xoá', onclick: function () {
+          if (confirm('Xoá máy chạy "' + l.name + '"? Các profile đã ghép với nó sẽ bị bỏ ghép.')) act('removeLauncher', { id: l.id }, 'Đã xoá.');
         } })
       ])
     ]);
@@ -204,7 +264,12 @@
     if (!$('pendingList').contains(document.activeElement)) {
       $('pendingList').replaceChildren.apply($('pendingList'), pending.map(function (p) { return pendingCard(p, approved); }));
     }
-    $('profileList').replaceChildren.apply($('profileList'), mine.map(profileCard));
+    if (!$('profileList').contains(document.activeElement)) {
+      $('profileList').replaceChildren.apply($('profileList'), mine.map(profileCard));
+    }
+    var launchers = state.launchers || [];
+    $('launchersEmpty').hidden = launchers.length > 0;
+    $('launcherList').replaceChildren.apply($('launcherList'), launchers.map(launcherCard));
     syncTaskForm();
     var tbody = $('taskTable').tBodies[0];
     tbody.replaceChildren.apply(tbody, state.tasks.map(taskRow));
@@ -246,6 +311,16 @@
     if (!tab) return;
     document.querySelectorAll('#tabs button').forEach(function (b) { b.classList.toggle('active', b === tab); });
     document.querySelectorAll('main > section').forEach(function (s) { s.hidden = s.dataset.view !== tab.dataset.tab; });
+  });
+  $('launcherForm').addEventListener('submit', function (event) {
+    event.preventDefault();
+    var form = event.target;
+    api('createLauncher', { name: form.name.value }).then(function (data) {
+      form.name.value = '';
+      $('launcherTokenText').textContent = JSON.stringify({ HUB_URL: location.origin + location.pathname.replace(/\/$/, ''), LAUNCHER_TOKEN: data.token, MAX_PARALLEL: 2, IDLE_CLOSE_MINUTES: 3 }, null, 2);
+      $('launcherToken').hidden = false;
+      return refresh();
+    }).catch(function (err) { flash(err.message, true); });
   });
   $('taskForm').platform.addEventListener('change', syncTaskForm);
   $('taskForm').profile.addEventListener('change', syncFacebook);

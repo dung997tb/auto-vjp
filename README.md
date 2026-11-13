@@ -42,6 +42,7 @@ Mặc định extension chạy độc lập và không gửi gì ra ngoài. Nế
 | `modules/<nền tảng>/` | Module từng nền tảng, mỗi module có `MODULE.md` |
 | `modules/shared/` | Tiện ích dùng chung cho module |
 | `hub/` | Máy chủ điều phối (tuỳ chọn): duyệt profile, giao việc từ xa, xem kết quả — xem [`hub/README.md`](hub/README.md) |
+| `launcher/` | Đầu nối GemLogin (tuỳ chọn): chạy trên máy có GemLogin, tự mở profile khi có việc và đóng khi xong — xem [`launcher/README.md`](launcher/README.md) |
 | `i18n.js` | Từ điển Việt/Anh |
 | `tests/`, `tools/` | Test và công cụ kiểm tra |
 
@@ -55,7 +56,7 @@ Cần Node.js 22.13 trở lên (hub dùng SQLite có sẵn trong Node), không p
 npm run check          # chạy cả ba bước dưới
 npm run check:syntax   # cú pháp mọi file .js + file manifest tham chiếu
 npm run check:i18n     # từ điển vi/en: khoá trùng, khoá lệch
-npm test               # test kernel, bộ cập nhật, hub, phân tích số liệu
+npm test               # test kernel, bộ cập nhật, hub, launcher, phân tích số liệu
 npm run hub            # chạy hub tại chỗ (cần đặt HUB_ADMIN_PASSWORD)
 ```
 

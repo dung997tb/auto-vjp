@@ -8,6 +8,9 @@
  *       POST register  báo danh, nhận token; profile ở trạng thái pending
  *       POST sync      báo sống + nhận việc đến hạn (chỉ khi đã duyệt)
  *       POST results   gửi receipt
+ *   /api/launcher/sync — chương trình launcher trên máy có GemLogin gọi (Bearer
+ *       token riêng từng máy): báo danh sách profile GemLogin + cái đang mở,
+ *       nhận lệnh mở/đóng
  *   /api/admin/*  — trang quản lý gọi (cookie phiên đăng nhập)
  *
  * Biến môi trường:
@@ -28,6 +31,11 @@ const { DatabaseSync } = require('node:sqlite');
 const MAX_BODY = 1024 * 1024;
 const SESSION_TTL_MS = 14 * 24 * 3600 * 1000;
 const ONLINE_WINDOW_MS = 3 * 60 * 1000;
+const NEVER_ONLINE_MS = 10 * 60 * 1000;   // launcher mở profile mà quá lâu extension không báo sống
+const LAUNCH_BACKOFF_MS = 60 * 60 * 1000;  // sau lần mở hỏng, chờ bấy lâu mới thử lại
+const WORKING_WINDOW_MS = 4 * 3600 * 1000; // việc "đã giao" trong khoảng này coi như còn đang làm
+const DISCOVER_MIN_MS = 20 * 1000;
+const DISCOVER_MAX_MS = 150 * 1000;
 const FINAL_STATUSES = new Set(['success', 'failed', 'uncertain', 'skipped', 'cancelled']);
 
 /* ---------- Hợp đồng task: dùng lại đúng file của extension ---------- */
@@ -132,6 +140,18 @@ function createHub(options = {}) {
   const profileCols = new Set(q('PRAGMA table_info(profiles)').all().map(c => c.name));
   if (!profileCols.has('fb_templates_json')) db.exec('ALTER TABLE profiles ADD COLUMN fb_templates_json TEXT');
   if (!profileCols.has('fb_available')) db.exec('ALTER TABLE profiles ADD COLUMN fb_available INTEGER NOT NULL DEFAULT 0');
+  // (2.14.0) Ghép profile với GemLogin qua launcher.
+  if (!profileCols.has('launcher_id')) {
+    db.exec('ALTER TABLE profiles ADD COLUMN launcher_id TEXT');
+    db.exec('ALTER TABLE profiles ADD COLUMN gem_id TEXT');
+    db.exec('ALTER TABLE profiles ADD COLUMN auto_start INTEGER NOT NULL DEFAULT 1');
+    db.exec('ALTER TABLE profiles ADD COLUMN launch_fail_at INTEGER');
+  }
+  db.exec(`CREATE TABLE IF NOT EXISTS launchers (
+    id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, name TEXT NOT NULL, token_hash TEXT NOT NULL,
+    gem_profiles_json TEXT, running_json TEXT, gem_ok INTEGER NOT NULL DEFAULT 0, last_error TEXT,
+    discover_json TEXT, last_seen_at INTEGER, created_at INTEGER NOT NULL
+  )`);
 
   // Tài khoản đầu tiên: "admin", mật khẩu lấy từ môi trường (đổi biến môi
   // trường rồi khởi động lại là đổi mật khẩu).
@@ -308,6 +328,107 @@ function createHub(options = {}) {
     }
   };
 
+  /* ---------- API cho launcher (máy có GemLogin) ---------- */
+  function launcherSync(req, body) {
+    const token = /^Bearer\s+(.+)$/i.exec(String(req.headers.authorization || ''));
+    const launcher = token ? q('SELECT * FROM launchers WHERE token_hash = ?').get(sha256(token[1])) : null;
+    if (!launcher) throw new HttpError(401, 'Token launcher không hợp lệ.');
+    const t = now();
+    const gemProfiles = Array.isArray(body.gem_profiles)
+      ? body.gem_profiles.slice(0, 2000).filter(p => p && p.id).map(p => ({ id: String(p.id).slice(0, 80), name: String(p.name || '').slice(0, 120), group: String(p.group || '').slice(0, 80) }))
+      : parseJson(launcher.gem_profiles_json, []);
+    const running = (Array.isArray(body.running) ? body.running : []).slice(0, 200)
+      .filter(r => r && r.gem_id).map(r => ({ gem_id: String(r.gem_id), started_at: Number(r.started_at) || t }));
+    const runningAt = new Map(running.map(r => [r.gem_id, r.started_at]));
+    const gemName = new Map(gemProfiles.map(p => [p.id, p.name]));
+    const idleCloseMs = Math.max(60 * 1000, Math.min(60 * 60 * 1000, Number(body.idle_close_ms) || 3 * 60 * 1000));
+    const online = p => Boolean(p.last_seen_at && t - p.last_seen_at < ONLINE_WINDOW_MS);
+    const start = [];
+    const stop = [];
+
+    const mapped = q('SELECT * FROM profiles WHERE launcher_id = ? AND gem_id IS NOT NULL').all(launcher.id);
+    for (const p of mapped) {
+      const canWork = p.status === 'approved' && Boolean(p.accept);
+      const dueRow = canWork ? q("SELECT COUNT(*) AS n, MIN(run_at) AS first FROM tasks WHERE profile_id = ? AND status = 'queued' AND run_at <= ?").get(p.id, t) : { n: 0, first: null };
+      const startedAt = runningAt.get(p.gem_id);
+      const name = gemName.get(p.gem_id) || p.name || p.gem_id;
+      if (startedAt === undefined) {
+        const backingOff = p.launch_fail_at && t - p.launch_fail_at < LAUNCH_BACKOFF_MS;
+        if (p.auto_start && dueRow.n > 0 && !online(p) && !backingOff && gemName.has(p.gem_id)) {
+          start.push({ gem_id: p.gem_id, name, reason: `${dueRow.n} việc đến hạn`, due_at: dueRow.first });
+        }
+        continue;
+      }
+      if (!online(p)) {
+        if (t - startedAt > NEVER_ONLINE_MS) {
+          q('UPDATE profiles SET launch_fail_at = ? WHERE id = ?').run(t, p.id);
+          stop.push({ gem_id: p.gem_id, name, reason: 'mở rồi nhưng extension không báo sống' });
+        }
+        continue;
+      }
+      if (p.launch_fail_at) q('UPDATE profiles SET launch_fail_at = NULL WHERE id = ?').run(p.id);
+      const working = q("SELECT COUNT(*) AS n FROM tasks WHERE profile_id = ? AND status = 'claimed' AND claimed_at > ?").get(p.id, t - WORKING_WINDOW_MS).n;
+      if (p.busy || dueRow.n > 0 || working > 0) continue;
+      const lastTask = q('SELECT MAX(MAX(COALESCE(claimed_at, 0)), MAX(COALESCE(finished_at, 0))) AS at FROM tasks WHERE profile_id = ?').get(p.id).at || 0;
+      const lastResult = q('SELECT MAX(received_at) AS at FROM results WHERE profile_id = ?').get(p.id).at || 0;
+      if (t - Math.max(startedAt, lastTask, lastResult) > idleCloseMs) stop.push({ gem_id: p.gem_id, name, reason: 'hết việc' });
+    }
+    start.sort((a, b) => (a.due_at || 0) - (b.due_at || 0));
+
+    // Dò ghép: mở lần lượt từng profile GemLogin chưa ghép, xem profile Auto vjp
+    // nào (đang tắt lúc bắt đầu) báo sống thì ghép hai bên với nhau.
+    let discover = parseJson(launcher.discover_json, null);
+    if (discover && discover.active) {
+      start.length = 0; // trong lúc dò chỉ mở từng cái một để không nhầm
+      const mappedGem = new Set(mapped.map(p => p.gem_id));
+      const cur = discover.current;
+      if (cur) {
+        const elapsed = t - cur.started_at;
+        const baseline = new Set(cur.baseline || []);
+        const candidates = q('SELECT * FROM profiles WHERE launcher_id IS NULL AND (owner_id = ? OR owner_id IS NULL) AND last_seen_at >= ?')
+          .all(launcher.owner_id, cur.started_at).filter(p => !baseline.has(p.id) && p.status !== 'revoked');
+        let finished = null;
+        if (candidates.length === 1 && elapsed >= DISCOVER_MIN_MS) {
+          const p = candidates[0];
+          q('UPDATE profiles SET launcher_id = ?, gem_id = ?, name = CASE WHEN name = \'\' THEN ? ELSE name END WHERE id = ?')
+            .run(launcher.id, cur.gem_id, gemName.get(cur.gem_id) || '', p.id);
+          finished = { gem_id: cur.gem_id, ok: true, note: 'đã ghép' };
+        } else if (elapsed >= DISCOVER_MAX_MS) {
+          finished = { gem_id: cur.gem_id, ok: false, note: candidates.length > 1 ? 'nhiều profile cùng báo sống, không chắc cái nào' : 'không thấy extension báo danh (đã cài Auto vjp và nhập địa chỉ hub chưa?)' };
+        }
+        if (finished) {
+          discover.done.push(finished);
+          discover.current = null;
+          if (runningAt.has(cur.gem_id) && !stop.some(s => s.gem_id === cur.gem_id)) stop.push({ gem_id: cur.gem_id, name: gemName.get(cur.gem_id), reason: 'dò ghép xong' });
+        }
+      }
+      if (!discover.current) {
+        const doneIds = new Set(discover.done.map(d => d.gem_id));
+        const stopping = new Set(stop.map(s => s.gem_id));
+        const others = running.filter(r => !stopping.has(r.gem_id)).length;
+        const next = gemProfiles.find(g => !mappedGem.has(g.id) && !doneIds.has(g.id) && !runningAt.has(g.id));
+        if (!next) discover.active = false;
+        else if (others === 0) {
+          discover.current = {
+            gem_id: next.id, started_at: t,
+            baseline: q('SELECT id FROM profiles WHERE last_seen_at >= ?').all(t - ONLINE_WINDOW_MS).map(r => r.id)
+          };
+          start.push({ gem_id: next.id, name: next.name, reason: 'dò ghép' });
+        }
+      }
+    }
+
+    q('UPDATE launchers SET gem_profiles_json = ?, running_json = ?, gem_ok = ?, last_error = ?, discover_json = ?, last_seen_at = ? WHERE id = ?')
+      .run(JSON.stringify(gemProfiles), JSON.stringify(running), body.gem_ok === false ? 0 : 1, String(body.error || '').slice(0, 500),
+        discover ? JSON.stringify(discover) : null, t, launcher.id);
+    return { start: start.map(({ due_at, ...rest }) => rest), stop };
+  }
+  function ownedLauncher(user, id) {
+    const launcher = q('SELECT * FROM launchers WHERE id = ? AND owner_id = ?').get(String(id || ''), user.id);
+    if (!launcher) throw new HttpError(404, 'Không tìm thấy máy chạy.');
+    return launcher;
+  }
+
   /* ---------- API cho trang quản lý ---------- */
   function ownedProfile(user, id) {
     const profile = q('SELECT * FROM profiles WHERE id = ?').get(String(id || ''));
@@ -327,7 +448,14 @@ function createHub(options = {}) {
         accounts: parseJson(p.accounts_json, []), busy: Boolean(p.busy), accept: Boolean(p.accept),
         online: Boolean(p.last_seen_at && now() - p.last_seen_at < ONLINE_WINDOW_MS),
         last_seen_at: p.last_seen_at, created_at: p.created_at, conflict_at: p.conflict_at,
-        fb_available: Boolean(p.fb_available), fb_templates: parseJson(p.fb_templates_json, [])
+        fb_available: Boolean(p.fb_available), fb_templates: parseJson(p.fb_templates_json, []),
+        launcher_id: p.launcher_id, gem_id: p.gem_id, auto_start: Boolean(p.auto_start), launch_fail_at: p.launch_fail_at
+      }));
+      const launchers = q('SELECT * FROM launchers WHERE owner_id = ? ORDER BY created_at').all(user.id).map(l => ({
+        id: l.id, name: l.name, gem_ok: Boolean(l.gem_ok), last_error: l.last_error || '',
+        online: Boolean(l.last_seen_at && now() - l.last_seen_at < ONLINE_WINDOW_MS), last_seen_at: l.last_seen_at,
+        gem_profiles: parseJson(l.gem_profiles_json, []), running: parseJson(l.running_json, []),
+        discover: parseJson(l.discover_json, null)
       }));
       const tasks = q('SELECT * FROM tasks WHERE owner_id = ? ORDER BY created_at DESC LIMIT 200').all(user.id).map(t => ({
         id: t.id, profile_id: t.profile_id, payload: parseJson(t.payload_json, {}), run_at: t.run_at, repeat: t.repeat,
@@ -338,7 +466,7 @@ function createHub(options = {}) {
         ? q(`SELECT receipt_id, profile_id, task_id, origin, platform, type, status, message, received_at FROM results
              WHERE profile_id IN (${ids.map(() => '?').join(',')}) ORDER BY received_at DESC LIMIT 100`).all(...ids)
         : [];
-      return { user: { username: user.username, role: user.role }, now: now(), types, fb_features: contract.FB_FEATURES || [], profiles, tasks, results };
+      return { user: { username: user.username, role: user.role }, now: now(), types, fb_features: contract.FB_FEATURES || [], profiles, launchers, tasks, results };
     },
     approve(user, body) {
       const profile = ownedProfile(user, body.id);
@@ -369,6 +497,43 @@ function createHub(options = {}) {
       const profile = ownedProfile(user, body.id);
       q("UPDATE profiles SET status = 'revoked' WHERE id = ?").run(profile.id);
       q("UPDATE tasks SET status = 'cancelled', finished_at = ? WHERE profile_id = ? AND status = 'queued'").run(now(), profile.id);
+      return { ok: true };
+    },
+    // ---- Máy chạy (launcher + GemLogin) ----
+    createLauncher(user, body) {
+      const name = String(body.name || '').trim().slice(0, 80);
+      if (!name) throw new HttpError(400, 'Hãy đặt tên cho máy chạy.');
+      const id = rid('l_', 8);
+      const token = rid('', 32);
+      q('INSERT INTO launchers (id, owner_id, name, token_hash, created_at) VALUES (?, ?, ?, ?, ?)').run(id, user.id, name, sha256(token), now());
+      return { ok: true, id, token }; // token chỉ trả đúng một lần
+    },
+    removeLauncher(user, body) {
+      const launcher = ownedLauncher(user, body.id);
+      q('UPDATE profiles SET launcher_id = NULL, gem_id = NULL WHERE launcher_id = ?').run(launcher.id);
+      q('DELETE FROM launchers WHERE id = ?').run(launcher.id);
+      return { ok: true };
+    },
+    discover(user, body) {
+      const launcher = ownedLauncher(user, body.id);
+      q('UPDATE launchers SET discover_json = ? WHERE id = ?')
+        .run(body.active === false ? null : JSON.stringify({ active: true, current: null, done: [] }), launcher.id);
+      return { ok: true };
+    },
+    // Ghép / bỏ ghép profile Auto vjp với một profile GemLogin, bật tắt tự mở.
+    mapProfile(user, body) {
+      const profile = ownedProfile(user, body.id);
+      if (body.launcher_id && body.gem_id) {
+        const launcher = ownedLauncher(user, body.launcher_id);
+        const gemId = String(body.gem_id);
+        if (!parseJson(launcher.gem_profiles_json, []).some(g => g.id === gemId)) throw new HttpError(400, 'Máy chạy này không có profile GemLogin đó.');
+        const taken = q('SELECT id FROM profiles WHERE launcher_id = ? AND gem_id = ? AND id != ?').get(launcher.id, gemId, profile.id);
+        if (taken) throw new HttpError(400, 'Profile GemLogin này đã ghép với profile khác.');
+        q('UPDATE profiles SET launcher_id = ?, gem_id = ?, launch_fail_at = NULL WHERE id = ?').run(launcher.id, gemId, profile.id);
+      } else if (body.launcher_id === null || body.gem_id === null) {
+        q('UPDATE profiles SET launcher_id = NULL, gem_id = NULL, launch_fail_at = NULL WHERE id = ?').run(profile.id);
+      }
+      if (typeof body.auto_start === 'boolean') q('UPDATE profiles SET auto_start = ?, launch_fail_at = NULL WHERE id = ?').run(body.auto_start ? 1 : 0, profile.id);
       return { ok: true };
     },
     remove(user, body) {
@@ -456,6 +621,11 @@ function createHub(options = {}) {
           if (!(err instanceof HttpError)) console.error('[hub] agent error', err);
           return sendJson(res, err.status || 500, { error: err instanceof HttpError ? err.message : 'Lỗi máy chủ.' }, cors);
         }
+      }
+
+      if (pathname === '/api/launcher/sync') {
+        if (req.method !== 'POST') throw new HttpError(405, 'Chỉ nhận POST.');
+        return sendJson(res, 200, launcherSync(req, await readBody(req)));
       }
 
       if (pathname.startsWith('/api/admin/')) {

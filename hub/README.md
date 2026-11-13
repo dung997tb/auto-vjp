@@ -51,6 +51,12 @@ Cấu hình của tính năng Facebook (danh sách nhóm, nội dung, giới h�
 
 Payload gửi cho extension có dạng `{platform: "facebook", type: "fb_feature", feature, label, config}`. Extension kiểm lại `config` bằng bộ chuẩn hoá của lõi; sai thì từ chối và báo lý do về hub.
 
+## Tự mở profile bằng GemLogin
+
+Nếu profile chạy trong GemLogin, hub có thể tự mở profile khi có việc đến hạn và đóng khi xong, qua chương trình launcher đặt trên máy có GemLogin. Cách cài và cách hub quyết định mở/đóng: xem [`launcher/README.md`](../launcher/README.md).
+
+Launcher gọi `POST /api/launcher/sync` (Bearer token của máy chạy) với `gem_profiles`, `running`, `idle_close_ms`, `error`; hub trả `{start: [{gem_id, name, reason}], stop: [{gem_id, name, reason}]}`.
+
 ## Biến môi trường
 
 | Biến | Ý nghĩa |

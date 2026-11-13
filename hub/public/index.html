@@ -23,6 +23,7 @@
     <nav id="tabs">
       <button data-tab="profiles" class="active">Profile <span id="pendingCount" class="count" hidden></span></button>
       <button data-tab="tasks">Việc</button>
+      <button data-tab="launchers">Máy chạy</button>
       <button data-tab="results">Kết quả</button>
     </nav>
     <span class="spacer"></span>
@@ -77,6 +78,24 @@
         <thead><tr><th>Chạy lúc</th><th>Profile</th><th>Việc</th><th>Trạng thái</th><th>Ghi chú</th><th></th></tr></thead>
         <tbody></tbody>
       </table></div>
+    </section>
+
+    <section data-view="launchers" hidden>
+      <h2>Máy chạy (GemLogin)</h2>
+      <p class="muted">Mỗi máy có GemLogin chạy một chương trình nhỏ (launcher). Khi profile có việc đến hạn mà đang tắt, launcher nhờ GemLogin mở profile đó, và đóng lại khi hết việc.</p>
+      <form id="launcherForm" class="card form">
+        <div class="row">
+          <label>Tên máy <input name="name" placeholder='vd "Máy Windows phòng khách"' required></label>
+          <button class="primary" type="submit">Thêm máy chạy</button>
+        </div>
+        <div id="launcherToken" hidden>
+          <p><strong>Token của máy này (chỉ hiện một lần):</strong></p>
+          <pre id="launcherTokenText"></pre>
+          <p class="muted">Trên máy có GemLogin, trong thư mục <code>launcher</code> của Auto vjp, tạo file <code>launcher.config.json</code> với nội dung trên rồi chạy <code>node launcher.js</code>.</p>
+        </div>
+      </form>
+      <p class="muted" id="launchersEmpty">Chưa có máy chạy nào.</p>
+      <div id="launcherList" class="grid"></div>
     </section>
 
     <section data-view="results" hidden>

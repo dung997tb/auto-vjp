@@ -1,6 +1,8 @@
 node_modules/
 hub/data/
 hub/docker-compose.yml
+launcher/launcher.config.json
+launcher/launcher-state.json
 *.zip
 *.crx
 *.pem
