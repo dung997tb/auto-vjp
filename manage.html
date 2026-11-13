@@ -152,7 +152,7 @@
           <span aria-hidden="true">⌕</span>
           <input id="globalSearch" type="search" placeholder="Tìm trong kho / nhật ký…">
         </label>
-        <span class="server-pill"><span></span>Không dùng máy chủ</span>
+        <span class="server-pill" id="remotePill"><span></span><b id="remotePillText" style="font-weight:inherit">Không dùng máy chủ</b></span>
         <button class="btn btn-primary" type="button" data-nav-target="compose">＋ Viết bài mới</button>
       </div>
     </header>
@@ -171,6 +171,28 @@
             <button class="btn btn-ghost" type="button" id="updReselect">Chọn lại thư mục</button>
           </div>
           <p class="update-status" id="updStatus" role="status"></p>
+        </div>
+      </section>
+
+      <section class="update-wrap" id="remoteSection" aria-label="Kết nối máy chủ">
+        <div class="card update-card">
+          <div class="update-card-head">
+            <h2>Kết nối máy chủ</h2>
+            <span class="badge badge-neutral" id="remoteBadge">Chưa kết nối</span>
+          </div>
+          <p class="update-note">Nối profile này với máy chủ quản lý của bạn để nhận việc từ xa và gửi kết quả về. Profile tự báo danh bằng ID bên dưới; bạn duyệt nó một lần trên web. API key AI và phiên đăng nhập không bao giờ được gửi đi.</p>
+          <p class="update-note">ID profile: <code id="remoteProfileId">…</code> <span id="remoteName"></span></p>
+          <div class="update-actions">
+            <input id="remoteUrl" type="url" placeholder="https://ten-may-chu.ts.net/hub" style="flex:1;min-width:260px;padding:9px 11px;border:1px solid var(--line, #d8dee8);border-radius:9px;font:inherit">
+            <button class="btn btn-primary" type="button" id="remoteConnect">Kết nối</button>
+            <button class="btn" type="button" id="remoteSync">Đồng bộ ngay</button>
+          </div>
+          <div class="update-actions">
+            <label style="display:inline-flex;align-items:center;gap:7px;font-size:13px"><input type="checkbox" id="remoteAccept" checked> Nhận việc từ máy chủ</label>
+            <button class="btn btn-ghost" type="button" id="remoteReRegister">Đăng ký lại (ID mới)</button>
+            <button class="btn btn-ghost" type="button" id="remoteDisconnect">Ngắt kết nối</button>
+          </div>
+          <p class="update-status" id="remoteStatus" role="status"></p>
         </div>
       </section>
 
@@ -494,6 +516,7 @@
 </div>
 <script src="modules/kernel/contract-data.js"></script>
 <script src="manage-updater.js"></script>
+<script src="manage-remote.js"></script>
 <script src="manage.js"></script>
 </body>
 </html>

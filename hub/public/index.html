@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auto vjp Hub</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<section id="loginView" class="login" hidden>
+  <form id="loginForm" class="card login-card">
+    <h1>Auto vjp Hub</h1>
+    <label>Tên đăng nhập <input name="username" value="admin" autocomplete="username" required></label>
+    <label>Mật khẩu <input name="password" type="password" autocomplete="current-password" required></label>
+    <button class="primary" type="submit">Đăng nhập</button>
+    <p class="error" id="loginError" role="alert"></p>
+  </form>
+</section>
+
+<div id="appView" hidden>
+  <header class="top">
+    <strong>Auto vjp Hub</strong>
+    <nav id="tabs">
+      <button data-tab="profiles" class="active">Profile <span id="pendingCount" class="count" hidden></span></button>
+      <button data-tab="tasks">Việc</button>
+      <button data-tab="results">Kết quả</button>
+    </nav>
+    <span class="spacer"></span>
+    <span id="who" class="muted"></span>
+    <button id="logout">Đăng xuất</button>
+  </header>
+  <p id="flash" class="flash" role="status" hidden></p>
+
+  <main>
+    <section data-view="profiles">
+      <h2>Chờ duyệt</h2>
+      <p class="muted" id="pendingEmpty">Không có profile nào chờ duyệt. Profile mới sẽ hiện ở đây sau khi extension báo danh.</p>
+      <div id="pendingList" class="grid"></div>
+      <h2>Profile của bạn</h2>
+      <p class="muted" id="profilesEmpty">Chưa có profile nào được duyệt.</p>
+      <div id="profileList" class="grid"></div>
+    </section>
+
+    <section data-view="tasks" hidden>
+      <h2>Giao việc</h2>
+      <form id="taskForm" class="card form">
+        <div class="row">
+          <label>Profile <select name="profile" required></select></label>
+          <label>Nền tảng <select name="platform" required></select></label>
+          <label>Loại việc <select name="type" required></select></label>
+        </div>
+        <div class="row">
+          <label>Chạy lúc <input name="run_at" type="datetime-local"></label>
+          <label class="check"><input name="daily" type="checkbox"> Lặp lại hằng ngày</label>
+        </div>
+        <label>Nội dung (dùng cho đăng bài / bình luận)
+          <textarea name="content" rows="3" placeholder="Nội dung bài viết…"></textarea>
+        </label>
+        <label>Trường khác (JSON, tuỳ loại việc — xem modules/MODULE-CONTRACT.md)
+          <textarea name="extra" rows="3" spellcheck="false" placeholder='{"target_url": "https://…", "images": ["https://…"]}'></textarea>
+        </label>
+        <div class="row">
+          <button class="primary" type="submit">Giao việc</button>
+          <span class="muted">Để trống giờ chạy = làm ngay khi profile mở.</span>
+        </div>
+      </form>
+      <h2>Danh sách việc</h2>
+      <p class="muted" id="tasksEmpty">Chưa có việc nào.</p>
+      <div class="table-wrap"><table id="taskTable" hidden>
+        <thead><tr><th>Chạy lúc</th><th>Profile</th><th>Việc</th><th>Trạng thái</th><th>Ghi chú</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </section>
+
+    <section data-view="results" hidden>
+      <h2>Kết quả gần đây</h2>
+      <p class="muted">Gồm cả việc chạy tay tại máy của profile (nguồn "tại chỗ").</p>
+      <p class="muted" id="resultsEmpty">Chưa có kết quả nào.</p>
+      <div class="table-wrap"><table id="resultTable" hidden>
+        <thead><tr><th>Lúc</th><th>Profile</th><th>Việc</th><th>Nguồn</th><th>Trạng thái</th><th>Ghi chú</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </section>
+  </main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

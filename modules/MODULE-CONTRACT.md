@@ -173,6 +173,18 @@ Tổng 2.11.17: **216 hàng** (instagram 34, threads 23, tiktok 78, x 32, youtub
 
 Action lạ: listener của kernel **không trả lời** — để lõi FB xử lý action của nó.
 
+#### Nguồn việc từ xa — `modules/kernel/remote.js` + `hub/` (2.12.0)
+
+- **Mặc định tắt.** Chưa có địa chỉ hub (`autovjp.remote.url` trống và `DEFAULT_HUB_URL` trống) thì không có request nào đi ra. Extension luôn là bên gọi; không có `externally_connectable`/`onMessageExternal`.
+- **Định danh**: `autovjp.profileId` = `pf_` + 24 hex, sinh một lần. `register` → hub cấp token (lưu trong `autovjp.remote.token`), profile `pending` tới khi được duyệt trên hub.
+- **Nhịp**: `source.kick()` gọi `AVJP.remote.sync()` không chờ (tối đa 1 lượt/45 giây, 1 lượt tại một thời điểm) — tức lúc nạp SW, lúc khởi động trình duyệt và mỗi nhịp alarm 1 phút. `sync` báo `busy/accept/capacity` + tên tài khoản đã quét, nhận `tasks:[{id,payload}]`.
+- **Việc từ xa đi đúng đường việc tại chỗ**: `source.enqueue({...payload, origin:'remote', remote_task_id})` — cùng `validateTask`, cùng hàng đợi singleton. Task/run/receipt có thêm `origin` (`local`|`remote`) và `remote_task_id`. Chống nhận trùng bằng `autovjp.remoteSeen` (ghi TRƯỚC khi enqueue: thà hụt một việc để người dùng giao lại còn hơn chạy hai lần). Giữ tối đa 3 việc từ xa trong hàng đợi local, phần còn lại nằm ở hub.
+- **Báo kết quả**: `outbox.deliver` sau khi ghi receipt gọi `AVJP.remote.onReceipt(receipt)` (ngoài khoá, lỗi không ảnh hưởng deliver) → hàng `autovjp.remoteReports` (bền, tối đa 300) → `POST /api/agent/results`. Receipt của việc tại chỗ cũng được báo (để hub thống kê), receipt quá 60KB bị cắt `items/details`.
+- **Quyền tại chỗ**: `accept:false` = vẫn báo sống, không nhận việc; `disconnect()` xoá địa chỉ + token (địa chỉ ghi sẵn cũng không tự nối lại); hub trả 401/403 → trạng thái `revoked`, dừng hẳn, không tự đăng ký lại; `reRegister()` sinh ID mới.
+- **Không gửi lên hub**: API key AI, cookie/phiên, storage của lõi FB, bản ghi quét tài khoản đầy đủ.
+- **Lệnh trang quản lý**: `autovjp.remoteState` · `autovjp.remoteConfigure {url}` · `autovjp.remoteSetAccept {accept}` · `autovjp.remoteSyncNow` · `autovjp.remoteReRegister` · `autovjp.remoteDisconnect` — đều trả `{success, remote}`. UI: `manage-remote.js` (thẻ "Kết nối máy chủ").
+- Đặc tả API phía hub: `hub/README.md`. Test trọn luồng: `tests/hub.test.js`.
+
 ### 5b. Trang quản lý → kernel (tiền tố `autovjp.`)
 `autovjp.createTask {task}` · `autovjp.createSchedule {template, run_at, repeat?}` ·
 `autovjp.deleteSchedule {id}` · `autovjp.cancelTask {taskId}` · `autovjp.cancelAll` (2.11.18) ·

@@ -504,6 +504,20 @@
           const result = await globalThis.AVJP.source.probe(message.echo);
           return sendResponse(result);
         }
+        // (2.12.0) Kết nối máy chủ — xem modules/kernel/remote.js
+        case 'autovjp.remoteState':
+          return sendResponse({ success: true, remote: await globalThis.AVJP.remote.state() });
+        case 'autovjp.remoteConfigure':
+          return sendResponse({ success: true, remote: await globalThis.AVJP.remote.configure(message.url) });
+        case 'autovjp.remoteSetAccept':
+          return sendResponse({ success: true, remote: await globalThis.AVJP.remote.setAccept(message.accept) });
+        case 'autovjp.remoteDisconnect':
+          return sendResponse({ success: true, remote: await globalThis.AVJP.remote.disconnect() });
+        case 'autovjp.remoteReRegister':
+          return sendResponse({ success: true, remote: await globalThis.AVJP.remote.reRegister() });
+        case 'autovjp.remoteSyncNow':
+          await globalThis.AVJP.remote.sync({ force: true });
+          return sendResponse({ success: true, remote: await globalThis.AVJP.remote.state() });
         case 'autovjp.clearReceipts': {
           await S.set({ [K.RECEIPTS]: [], [K.RECEIPT_KEYS]: [] });
           return sendResponse({ success: true });

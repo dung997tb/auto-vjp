@@ -1,4 +1,6 @@
 node_modules/
+hub/data/
+hub/docker-compose.yml
 *.zip
 *.crx
 *.pem

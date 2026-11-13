@@ -1,0 +1,19 @@
+# Mẫu chạy Auto vjp Hub. Chép thành docker-compose.yml (hoặc ghép service này
+# vào file compose đang có), đặt mật khẩu, rồi: docker compose up -d --build
+services:
+  auto-vjp-hub:
+    build:
+      context: ..            # thư mục gốc của repo auto-vjp
+      dockerfile: hub/Dockerfile
+    restart: unless-stopped
+    environment:
+      HUB_ADMIN_PASSWORD: "doi-mat-khau-nay-ngay"   # tối thiểu 10 ký tự
+      # HUB_BASE_PATH: "/hub"      # bật khi đặt sau reverse proxy ở đường dẫn /hub
+      # HUB_SECURE_COOKIE: "1"     # bật khi truy cập qua HTTPS
+    volumes:
+      - auto-vjp-hub-data:/data
+    ports:
+      - "127.0.0.1:8787:8787"      # chỉ mở trên máy; ra ngoài đi qua reverse proxy / Tailscale
+
+volumes:
+  auto-vjp-hub-data:

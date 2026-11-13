@@ -1,15 +1,16 @@
 {
   "name": "auto-vjp",
-  "version": "2.11.20",
+  "version": "2.12.0",
   "private": true,
   "description": "Auto vjp — extension Chrome (Manifest V3). File này chỉ phục vụ kiểm tra/test; extension không cần build.",
   "scripts": {
     "check:syntax": "node tools/check-syntax.js",
     "check:i18n": "node tools/check-i18n.js",
-    "test": "node --test tests/*.test.js",
+    "test": "node --disable-warning=ExperimentalWarning --test tests/*.test.js",
+    "hub": "node --disable-warning=ExperimentalWarning hub/server.js",
     "check": "npm run check:syntax && npm run check:i18n && npm test"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13"
   }
 }

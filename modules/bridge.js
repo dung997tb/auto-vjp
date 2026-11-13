@@ -9,6 +9,7 @@
     'modules/kernel/contract.js',
     'modules/kernel/store.js',
     'modules/kernel/outbox.js',
+    'modules/kernel/remote.js',
     'modules/kernel/media.js',
     'modules/kernel/aitab.js',
     'modules/kernel/heal.js',

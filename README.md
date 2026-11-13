@@ -20,6 +20,15 @@ Trang quản lý (`manage.html`, mở từ popup) có nút **Cập nhật**: ch�
 
 Bước xác nhận không thay được chữ ký số: hãy đọc kỹ bản tóm tắt, nhất là khi bản mới xin thêm quyền.
 
+## Quản lý nhiều profile từ xa (tuỳ chọn)
+
+Mặc định extension chạy độc lập và không gửi gì ra ngoài. Nếu bạn chạy [Auto vjp Hub](hub/README.md) trên máy chủ của mình, mỗi profile có thể nối vào hub ở thẻ **Kết nối máy chủ** trong trang quản lý: profile tự báo danh bằng một ID riêng, bạn duyệt một lần trên hub, sau đó profile mở lên là tự nhận việc đến hạn và gửi kết quả về.
+
+- Extension luôn là bên gọi ra; hub không gọi vào extension.
+- API key AI và phiên đăng nhập không được gửi lên hub. Hub chỉ nhận ID profile, phiên bản, tên các tài khoản đã quét và kết quả từng việc.
+- Tại máy luôn có quyền cao hơn: tắt "Nhận việc từ máy chủ" hoặc bấm "Ngắt kết nối" bất cứ lúc nào.
+- Hiện hub giao được việc của Instagram, Threads, TikTok, X, YouTube; tính năng Facebook chưa đi qua kênh này.
+
 ## Cấu trúc
 
 | Đường dẫn | Vai trò |
@@ -32,6 +41,7 @@ Bước xác nhận không thay được chữ ký số: hãy đọc kỹ bản 
 | `modules/kernel/` | Hàng đợi, lịch, runner, outbox/receipt, tự chữa selector |
 | `modules/<nền tảng>/` | Module từng nền tảng, mỗi module có `MODULE.md` |
 | `modules/shared/` | Tiện ích dùng chung cho module |
+| `hub/` | Máy chủ điều phối (tuỳ chọn): duyệt profile, giao việc từ xa, xem kết quả — xem [`hub/README.md`](hub/README.md) |
 | `i18n.js` | Từ điển Việt/Anh |
 | `tests/`, `tools/` | Test và công cụ kiểm tra |
 
@@ -39,13 +49,14 @@ Tài liệu thiết kế: [`modules/MODULE-CONTRACT.md`](modules/MODULE-CONTRACT
 
 ## Phát triển
 
-Cần Node.js 20 trở lên, không phải cài gói nào.
+Cần Node.js 22.13 trở lên (hub dùng SQLite có sẵn trong Node), không phải cài gói nào.
 
 ```bash
 npm run check          # chạy cả ba bước dưới
 npm run check:syntax   # cú pháp mọi file .js + file manifest tham chiếu
 npm run check:i18n     # từ điển vi/en: khoá trùng, khoá lệch
-npm test               # test kernel, bộ cập nhật, phân tích số liệu
+npm test               # test kernel, bộ cập nhật, hub, phân tích số liệu
+npm run hub            # chạy hub tại chỗ (cần đặt HUB_ADMIN_PASSWORD)
 ```
 
 GitHub Actions chạy đúng ba bước này cho mỗi lần push và pull request.

@@ -41,6 +41,8 @@
       platform,
       type,
       status: 'queued',
+      // (2.12.0) Nhãn nguồn việc: 'local' = tạo tại chỗ, 'remote' = máy chủ giao.
+      origin: input.origin === 'remote' ? 'remote' : 'local',
       created_at: Date.now()
     };
     const queue = (await S.get(K.QUEUE)) || [];
@@ -134,6 +136,9 @@
   async function kick() {
     await processSchedules().catch(err => console.error('[Auto vjp][source] schedules', err));
     await globalThis.AVJP.runner.watchdog().catch(() => {});
+    // (2.12.0) Báo sống + nhận việc từ máy chủ nếu đã cấu hình. Không chờ: mạng
+    // chậm không được chặn hàng đợi local; việc nhận về sẽ tự kick qua enqueue.
+    globalThis.AVJP.remote?.sync().catch(() => {});
     return claimNext();
   }
 

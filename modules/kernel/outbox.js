@@ -70,6 +70,9 @@
         details: result.details || null,
         failure_code: result.failure_code || null,
         source_url: result.sourceUrl || null,
+        // (2.12.0) Nguồn việc + mã việc phía máy chủ (nếu do máy chủ giao).
+        origin: run?.origin === 'remote' ? 'remote' : 'local',
+        remote_task_id: run?.remote_task_id || null,
         started_at: run?.startedAt || null,
         received_at: now,
         duration_ms: run?.startedAt ? now - run.startedAt : null
@@ -124,6 +127,9 @@
         chrome.tabs.remove(tabId).catch(() => {});
       }
       await S.set({ [K.LAST_STATUS]: `Auto vjp: ${receipt.type}/${receipt.platform} -> ${receipt.status}` });
+      // (2.12.0) Báo receipt về máy chủ (nếu đã ghép nối). Chạy ngoài khoá, lỗi
+      // ở đây không được ảnh hưởng tới deliver.
+      Promise.resolve().then(() => globalThis.AVJP.remote?.onReceipt(receipt)).catch(() => {});
       return true;
     }).then(confirmed => {
       // Sau khi dọn xong mới claim việc tiếp theo (ngoài lock để tránh deadlock).
