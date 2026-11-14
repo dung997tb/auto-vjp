@@ -45,7 +45,7 @@ Muốn khỏi nhập địa chỉ trên từng profile: điền `DEFAULT_HUB_URL
 
 Mục mặc định của hub. Một lần giao chỉ có ba câu hỏi, không phải chọn nền tảng hay loại việc:
 
-- **Làm gì**: Nuôi nick hoặc Quét nick.
+- **Làm gì**: Nuôi nick, Đăng, hoặc Quét nick.
 - **Cho ai**: tất cả profile, một nhóm, hoặc một profile. Nhóm đặt bằng nút **Nhóm** trên thẻ profile.
 - **Khi nào**: ngay, hằng ngày từ một giờ nhất định, hoặc hẹn một lần. Với hai lựa chọn sau, việc được rải ngẫu nhiên trong số phút bạn đặt.
 
@@ -68,6 +68,37 @@ Theo dõi và đăng ký kênh luôn tắt ở cả ba mức. Các mức hiện 
 **Các lần giao**: mỗi lần giao là một dòng với số việc xong, đang chờ, lỗi. Mở ra để xem chi tiết **theo nick** (mỗi nick một dòng) hoặc **theo profile Chrome** (mỗi profile một dòng, trạng thái từng nền tảng nằm cạnh nhau). Có nút giao lại phần lỗi và huỷ phần chưa chạy; với lần giao lặp hằng ngày, huỷ cũng dừng việc lặp.
 
 Các việc của cùng một profile trong một lần giao được xếp chạy liền nhau, nên profile chỉ phải mở một lần; các profile khác nhau chạy lệch giờ nhau.
+
+### Đăng một nội dung lên nhiều nền tảng
+
+Chọn **Đăng**, đưa video hoặc ảnh vào, viết tiêu đề và nội dung một lần, chọn cho ai và khi nào. Không chọn nền tảng, không chọn Reels hay Shorts.
+
+Tệp lấy từ ba nguồn, dùng lẫn được:
+
+- **Từ máy**: chọn file, hub lưu vào kho tệp trên máy chủ.
+- **URL**: dán link, hub tự tải về kho.
+- **Kho**: tích lại tệp đã tải lên trước đó.
+
+Hub nhìn loại nội dung để chọn kiểu đăng cho từng nền tảng mà nick có:
+
+| Nội dung | Instagram | TikTok | YouTube | Threads | X | Facebook |
+|---|---|---|---|---|---|---|
+| Video | bài kèm video (Reels) | bài kèm video | tải video lên | bài kèm video | bài kèm video | Reels |
+| Ảnh | bài ảnh | bài ảnh | bài cộng đồng | bài ảnh | bài ảnh | bỏ qua |
+| Chỉ có chữ | bỏ qua | bỏ qua | bài cộng đồng | bài chữ | bài chữ | bỏ qua |
+
+- Caption là tiêu đề cộng nội dung; YouTube tách tiêu đề riêng. X bị cắt ở 280 ký tự, Threads ở 500.
+- **Viết riêng cho từng nền tảng** (tuỳ chọn) thay caption chung ở nền tảng đó.
+- Một lần đăng gồm một video, hoặc tối đa 10 ảnh; không trộn hai loại.
+- Kết quả hiện trong Các lần giao, kèm link bài đã đăng khi extension báo về.
+
+**Kho tệp** nằm ở `media/` trong thư mục dữ liệu của hub (cùng volume với `hub.db`). Extension tải tệp qua đường dẫn có mã riêng của từng tệp, không cần đăng nhập. Tệp ở lại kho tới khi bạn bấm Xoá; xoá tệp mà còn việc chưa chạy dùng nó thì việc đó hỏng.
+
+Lưu ý dung lượng:
+
+- Mỗi tệp tối đa `HUB_MAX_UPLOAD_MB` (mặc định 500).
+- Nếu hub đặt sau reverse proxy, proxy cũng phải cho phép thân request lớn (nginx: `client_max_body_size`).
+- Extension nạp cả video vào bộ nhớ trước khi đưa vào trang, nên video vài trăm MB trở lên có thể làm profile chậm hoặc hỏng việc. Nên giữ video dưới khoảng 200MB.
 
 ## Nick
 
@@ -116,6 +147,7 @@ Launcher gọi `POST /api/launcher/sync` (Bearer token của máy chạy) với 
 | `HUB_DATA` | Thư mục chứa `hub.db`, mặc định `./data` (trong Docker là `/data`) |
 | `HUB_BASE_PATH` | Tiền tố đường dẫn khi đặt sau reverse proxy, ví dụ `/hub` |
 | `HUB_SECURE_COOKIE` | `1` = cookie đăng nhập chỉ gửi qua HTTPS |
+| `HUB_MAX_UPLOAD_MB` | Dung lượng tối đa một tệp tải lên hoặc tải về từ URL, mặc định `500` |
 
 ## API cho extension
 
@@ -138,5 +170,7 @@ Mọi lệnh là `POST` với JSON. Sau khi báo danh, extension gửi kèm `Aut
 - Tính năng Facebook dừng giữa chừng được ghi là "Không chắc" (có thể đã làm một phần). Kiểm tra trước khi bấm **Giao lại** để tránh đăng trùng.
 - Việc đã giao mà profile tắt giữa chừng sẽ nằm ở "Đã giao, đang làm"; hub không tự giao lại để tránh chạy trùng, bạn bấm **Giao lại** khi cần.
 - Chưa có giới hạn số phiên mỗi ngày theo nick ở phía hub; mỗi việc là một phiên, bạn tự quyết số việc giao.
+- Đăng trong Giao nhanh chưa có: Story, đăng lên Page Facebook, đăng ảnh hoặc bài chữ lên tường Facebook, AI viết lại caption theo nền tảng.
+- Một profile có nhiều nick cùng nền tảng chỉ đăng lên nick đang hoạt động.
 - Hub chưa có màn hình tạo thêm người dùng; dữ liệu đã gắn chủ sở hữu sẵn cho việc đó.
 - Giới hạn số lần đăng nhập sai dựa vào địa chỉ IP; sau reverse proxy cần proxy gửi đúng `X-Forwarded-For`.

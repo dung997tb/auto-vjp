@@ -177,6 +177,8 @@
       }));
     }
     var intent = radio('intent'), when = radio('when');
+    $('quickPost').hidden = intent !== 'post';
+    syncQuickPost(platforms);
     $('quickLevelWrap').hidden = intent !== 'nurture';
     $('quickTimeRow').hidden = when === 'now';
     $('quickDailyWrap').hidden = when !== 'daily';
@@ -185,17 +187,107 @@
     var only = quickPlatformFilter();
     var targets = quickTargetProfiles();
     var tasks = 0, profiles = 0, noNick = 0;
+    var kind = intent === 'post' ? quickPostKind() : '';
+    var perPlatform = {};
     targets.forEach(function (p) {
       var list = intent === 'scan'
         ? platforms.filter(function (pl) { return state.types[pl].indexOf('scan_account') >= 0; })
-        : nickPlatformsOf(p).filter(function (pl) { return pl === 'facebook' ? p.fb_available : (state.types[pl] || []).indexOf('nurture') >= 0; });
+        : intent === 'post'
+          ? nickPlatformsOf(p).filter(function (pl) { return (pl !== 'facebook' || p.fb_available) && canPost(pl, kind); })
+          : nickPlatformsOf(p).filter(function (pl) { return pl === 'facebook' ? p.fb_available : (state.types[pl] || []).indexOf('nurture') >= 0; });
+      (only ? list.filter(function (pl) { return only.indexOf(pl) >= 0; }) : list).forEach(function (pl) { perPlatform[pl] = (perPlatform[pl] || 0) + 1; });
       if (only) list = list.filter(function (pl) { return only.indexOf(pl) >= 0; });
       if (list.length) { tasks += list.length; profiles++; } else noNick++;
     });
     $('quickPreview').textContent = !targets.length ? 'Chưa có profile nào đã duyệt.'
       : intent === 'scan' ? 'Sẽ quét ' + tasks + ' lượt trên ' + profiles + ' profile.'
+      : intent === 'post' ? (tasks
+          ? 'Sẽ đăng ' + ({ video: 'video', image: 'ảnh', text: 'bài chữ' })[kind] + ' lên ' + tasks + ' nick trên ' + profiles + ' profile: '
+            + Object.keys(perPlatform).map(function (pl) { return perPlatform[pl] + ' ' + (PLATFORM_LABEL[pl] || pl); }).join(', ') + '.'
+          : 'Không nick nào đăng được ' + ({ video: 'video', image: 'ảnh', text: 'bài chỉ có chữ' })[kind] + '.')
       : 'Sẽ nuôi ' + tasks + ' nick trên ' + profiles + ' profile.' + (noNick ? ' ' + noNick + ' profile chưa có nick (quét trước).' : '');
   }
+  // Loại nội dung đang soạn: theo tệp đã chọn (từ máy, URL hoặc kho).
+  function quickPostKind() {
+    var form = $('quickForm');
+    var isVideo = function (name) { return /\.(mp4|webm|mov)(\?|$)/i.test(name); };
+    if (form.files.files.length) return Array.prototype.some.call(form.files.files, function (f) { return f.type.indexOf('video/') === 0 || isVideo(f.name); }) ? 'video' : 'image';
+    if (form.media_url.value.trim()) return isVideo(form.media_url.value) ? 'video' : 'image';
+    var stored = pickedStored();
+    if (stored.length) return stored[0].kind;
+    return 'text';
+  }
+  // Khớp với postPayload ở máy chủ: nền tảng nào đăng được loại nội dung nào.
+  function canPost(platform, kind) {
+    var has = function (t) { return (state.types[platform] || []).indexOf(t) >= 0; };
+    if (platform === 'facebook') return kind === 'video';
+    if (kind === 'video') return platform === 'youtube' ? has('upload') : has('post');
+    if (!has('post')) return false;
+    return kind === 'image' || (platform !== 'instagram' && platform !== 'tiktok');
+  }
+  function pickedStored() {
+    var ids = Array.prototype.map.call($('quickStoredList').querySelectorAll('input:checked'), function (i) { return i.value; });
+    return (state.media || []).filter(function (m) { return ids.indexOf(m.id) >= 0; });
+  }
+  function fmtSize(n) { return n >= 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
+  function syncQuickPost(platforms) {
+    var media = state.media || [];
+    $('quickStored').hidden = !media.length;
+    var box = $('quickStoredList');
+    var sig = media.map(function (m) { return m.id; }).join('|');
+    if (box.getAttribute('data-sig') !== sig) {
+      var keep = {};
+      pickedStored().forEach(function (m) { keep[m.id] = true; });
+      box.setAttribute('data-sig', sig);
+      box.replaceChildren.apply(box, media.map(function (m) {
+        var input = el('input', { type: 'checkbox', value: m.id });
+        input.checked = Boolean(keep[m.id]);
+        var del = el('button', { type: 'button', class: 'danger', text: 'Xoá', onclick: function () {
+          if (confirm('Xoá "' + m.name + '" khỏi kho? Việc chưa chạy đang dùng tệp này sẽ hỏng.')) act('deleteMedia', { id: m.id }, 'Đã xoá tệp.');
+        } });
+        del.style.padding = '1px 8px';
+        return el('label', {}, [input, document.createTextNode((m.kind === 'video' ? 'Video' : 'Ảnh') + ': ' + m.name + ' (' + fmtSize(m.size) + ') '), del]);
+      }));
+    }
+    var ov = $('quickOverrides');
+    if (ov.getAttribute('data-sig') !== platforms.join('|')) {
+      ov.setAttribute('data-sig', platforms.join('|'));
+      ov.replaceChildren.apply(ov, platforms.map(function (p) {
+        return el('label', {}, [document.createTextNode(PLATFORM_LABEL[p] || p), el('textarea', { rows: '2', 'data-platform': p })]);
+      }));
+    }
+  }
+  function uploadFile(file) {
+    return fetch('api/admin/upload', {
+      method: 'POST', credentials: 'same-origin', body: file,
+      headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name), 'X-Hub-Upload': '1' }
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (!res.ok) throw new Error(data.error || ('Tải lên lỗi HTTP ' + res.status + (res.status === 413 ? ' (tệp quá lớn, hoặc reverse proxy giới hạn dung lượng)' : '')));
+        return data.media;
+      });
+    });
+  }
+  // Gom tệp cho lần đăng: tải tệp từ máy lên, nhờ hub tải URL, cộng tệp chọn trong kho.
+  function gatherPostMedia(form) {
+    var refs = pickedStored().map(function (m) { return m.ref; });
+    var files = Array.prototype.slice.call(form.files.files);
+    var chain = Promise.resolve();
+    files.forEach(function (file, i) {
+      chain = chain.then(function () {
+        $('quickPreview').textContent = 'Đang tải lên ' + (i + 1) + '/' + files.length + ': ' + file.name + ' (' + fmtSize(file.size) + ')…';
+        if (state.max_upload_mb && file.size > state.max_upload_mb * 1048576) throw new Error('"' + file.name + '" vượt quá ' + state.max_upload_mb + 'MB.');
+        return uploadFile(file).then(function (m) { refs.push(m.ref); });
+      });
+    });
+    var url = form.media_url.value.trim();
+    if (url) chain = chain.then(function () {
+      $('quickPreview').textContent = 'Hub đang tải URL về…';
+      return api('importMedia', { url: url }).then(function (data) { refs.push(data.media.ref); });
+    });
+    return chain.then(function () { return refs; });
+  }
+
   function countChips(items) {
     var counts = {};
     items.forEach(function (i) { counts[i.status] = (counts[i.status] || 0) + 1; });
@@ -245,7 +337,8 @@
           el('td', { text: p ? (p.name || p.id) : i.profile_id }),
           el('td', { class: 'nowrap', text: fmtTime(i.run_at) }),
           el('td', {}, [chip(i.status)]),
-          el('td', { class: 'note', text: i.message || '' })
+          el('td', { class: 'note' }, [/^https?:\/\//.test(i.result_url || '') ? el('a', { href: i.result_url, target: '_blank', rel: 'noopener noreferrer', text: 'Mở bài đã đăng' }) : null,
+            document.createTextNode((i.result_url && i.message ? ' · ' : '') + (i.message || ''))])
         ]);
       }))
     ]);
@@ -670,6 +763,7 @@
     document.querySelectorAll('main > section').forEach(function (s) { s.hidden = s.dataset.view !== tab.dataset.tab; });
   });
   $('quickForm').addEventListener('change', syncQuick);
+  $('quickForm').media_url.addEventListener('input', syncQuick);
   $('groupBy').addEventListener('change', renderBatches);
   $('quickForm').addEventListener('submit', function (event) {
     event.preventDefault();
@@ -678,6 +772,7 @@
     var target = value.indexOf('tag:') === 0 ? { tag: value.slice(4) } : value.indexOf('one:') === 0 ? { profile_ids: [value.slice(4)] } : { all: true };
     var when = radio('when');
     var body = { intent: radio('intent'), target: target, level: form.level.value, platforms: quickPlatformFilter() };
+    var submitBtn = form.querySelector('button[type=submit]');
     if (when !== 'now') body.jitter_minutes = Number(form.jitter.value) || 0;
     if (when === 'daily') {
       var parts = (form.daily_time.value || '09:00').split(':');
@@ -690,11 +785,26 @@
       if (!form.once_at.value) return flash('Hãy chọn thời điểm chạy.', true);
       body.run_at = new Date(form.once_at.value).getTime();
     }
-    api('dispatch', body).then(function (data) {
+    var prepare = Promise.resolve();
+    if (body.intent === 'post') {
+      var overrides = {};
+      $('quickOverrides').querySelectorAll('textarea').forEach(function (t) { if (t.value.trim()) overrides[t.getAttribute('data-platform')] = t.value.trim(); });
+      submitBtn.disabled = true;
+      prepare = gatherPostMedia(form).then(function (refs) {
+        body.content = { title: form.title.value, text: form.text.value, media: refs, overrides: overrides };
+      });
+    }
+    prepare.then(function () { return api('dispatch', body); }).then(function (data) {
+      if (body.intent === 'post') {
+        form.files.value = ''; form.media_url.value = ''; form.title.value = ''; form.text.value = '';
+        $('quickOverrides').querySelectorAll('textarea').forEach(function (t) { t.value = ''; });
+        $('quickStoredList').querySelectorAll('input').forEach(function (i) { i.checked = false; });
+      }
       openBatches[data.batch_id] = true;
-      flash('Đã giao ' + data.tasks + ' việc cho ' + data.profiles + ' profile.' + (data.skipped.length ? ' Bỏ qua ' + data.skipped.length + ' profile chưa có nick.' : ''));
+      flash('Đã giao ' + data.tasks + ' việc cho ' + data.profiles + ' profile.' + (data.skipped.length ? ' Bỏ qua ' + data.skipped.length + ' profile không có nick phù hợp.' : ''));
       return refresh();
-    }).catch(function (err) { flash(err.message, true); });
+    }).catch(function (err) { flash(err.message, true); return refresh(); })
+      .then(function () { submitBtn.disabled = false; syncQuick(); });
   });
   $('nickPlatform').addEventListener('change', renderNicks);
   $('nickSearch').addEventListener('input', renderNicks);

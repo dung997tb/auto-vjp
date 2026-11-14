@@ -1,6 +1,6 @@
 {
   "name": "auto-vjp",
-  "version": "2.17.0",
+  "version": "2.18.0",
   "private": true,
   "description": "Auto vjp — extension Chrome (Manifest V3). File này chỉ phục vụ kiểm tra/test; extension không cần build.",
   "scripts": {

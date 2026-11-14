@@ -20,6 +20,7 @@ nav { display: flex; gap: 4px; overflow-x: auto; max-width: 100%; }
 nav button { white-space: nowrap; }
 .batch .body { overflow-x: auto; }
 .batch > summary { min-width: 0; }
+a { color: var(--accent); }
 button, select, input, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); }
 button:hover { border-color: var(--accent); }

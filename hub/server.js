@@ -19,6 +19,7 @@
  *   HUB_DATA            thư mục chứa hub.db, mặc định ./data
  *   HUB_BASE_PATH       tiền tố đường dẫn khi đặt sau reverse proxy, vd /hub
  *   HUB_SECURE_COOKIE   "1" = cookie chỉ gửi qua HTTPS (bật khi có HTTPS)
+ *   HUB_MAX_UPLOAD_MB   dung lượng tối đa một tệp tải lên / tải về từ URL, mặc định 500
  */
 'use strict';
 
@@ -27,6 +28,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
+const { Readable } = require('node:stream');
+const { pipeline } = require('node:stream/promises');
 
 const MAX_BODY = 1024 * 1024;
 const SESSION_TTL_MS = 14 * 24 * 3600 * 1000;
@@ -97,12 +100,14 @@ function createHub(options = {}) {
   const contract = options.contract || loadContract();
   const types = supportedTypes(contract);
 
+  const dataDir = options.dataDir || process.env.HUB_DATA || path.join(__dirname, 'data');
   let dbPath = options.dbPath;
   if (!dbPath) {
-    const dataDir = options.dataDir || process.env.HUB_DATA || path.join(__dirname, 'data');
     fs.mkdirSync(dataDir, { recursive: true });
     dbPath = path.join(dataDir, 'hub.db');
   }
+  const mediaDir = options.mediaDir || path.join(dataDir, 'media');
+  const maxUploadBytes = (Number(options.maxUploadMb ?? process.env.HUB_MAX_UPLOAD_MB) || 500) * 1024 * 1024;
   const db = new DatabaseSync(dbPath);
   db.exec(`
     PRAGMA journal_mode = WAL;
@@ -159,6 +164,11 @@ function createHub(options = {}) {
   db.exec(`CREATE TABLE IF NOT EXISTS batches (
     id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, intent TEXT NOT NULL, label TEXT NOT NULL,
     params_json TEXT, created_at INTEGER NOT NULL
+  )`);
+  // (2.18.0) Kho tệp: video/ảnh tải lên hoặc hub tự tải về từ URL, để extension lấy khi đăng.
+  db.exec(`CREATE TABLE IF NOT EXISTS media (
+    id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, name TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL,
+    token TEXT NOT NULL, file TEXT NOT NULL, source_url TEXT, created_at INTEGER NOT NULL
   )`);
   db.exec(`CREATE TABLE IF NOT EXISTS launchers (
     id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, name TEXT NOT NULL, token_hash TEXT NOT NULL,
@@ -275,6 +285,79 @@ function createHub(options = {}) {
       default: return null;
     }
   }
+  /* ---------- Kho tệp ---------- */
+  const MEDIA_EXT = { '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' };
+  const EXT_OF_MIME = { 'video/mp4': '.mp4', 'video/webm': '.webm', 'video/quicktime': '.mov', 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' };
+  const mediaRef = m => `hub://media/${m.id}/${m.token}/${m.name}`;
+  const mediaKind = m => (String(m.mime).startsWith('video/') ? 'video' : 'image');
+  // Lưu một luồng dữ liệu thành tệp trong kho. Chỉ nhận video/ảnh; quá dung lượng thì huỷ.
+  async function saveMedia(stream, { ownerId, name, mime, sourceUrl }) {
+    let base = path.basename(String(name || 'tep')).replace(/[^\w.\-]+/g, '_').replace(/^\.+/, '').slice(-80) || 'tep';
+    let ext = path.extname(base).toLowerCase();
+    const cleanMime = String(mime || '').split(';')[0].trim().toLowerCase();
+    if (!MEDIA_EXT[ext]) {
+      if (!EXT_OF_MIME[cleanMime]) throw new HttpError(415, 'Chỉ nhận video (mp4, webm, mov) hoặc ảnh (jpg, png, webp, gif).');
+      ext = EXT_OF_MIME[cleanMime];
+      base += ext;
+    } else base = base.slice(0, -ext.length) + ext;
+    const id = rid('m_', 8);
+    const file = id + ext;
+    fs.mkdirSync(mediaDir, { recursive: true });
+    const full = path.join(mediaDir, file);
+    let size = 0;
+    try {
+      await pipeline(stream, async function* (source) {
+        for await (const chunk of source) {
+          size += chunk.length;
+          if (size > maxUploadBytes) throw new HttpError(413, `Tệp vượt quá ${Math.round(maxUploadBytes / 1048576)}MB.`);
+          yield chunk;
+        }
+      }, fs.createWriteStream(full));
+    } catch (err) {
+      fs.rmSync(full, { force: true });
+      throw err;
+    }
+    if (!size) { fs.rmSync(full, { force: true }); throw new HttpError(400, 'Tệp rỗng.'); }
+    const row = { id, owner_id: ownerId, name: base, mime: MEDIA_EXT[ext], size, token: rid('', 16), file, source_url: sourceUrl || null, created_at: now() };
+    q('INSERT INTO media (id, owner_id, name, mime, size, token, file, source_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(row.id, row.owner_id, row.name, row.mime, row.size, row.token, row.file, row.source_url, row.created_at);
+    return row;
+  }
+  const mediaView = m => ({ id: m.id, name: m.name, kind: mediaKind(m), size: m.size, created_at: m.created_at, ref: mediaRef(m), source_url: m.source_url });
+  function mediaFromRef(user, ref) {
+    const match = /^hub:\/\/media\/(m_[a-f0-9]+)\//.exec(String(ref || ''));
+    const row = match ? q('SELECT * FROM media WHERE id = ? AND owner_id = ?').get(match[1], user.id) : null;
+    if (!row) throw new HttpError(400, 'Không tìm thấy tệp trong kho (đã bị xoá?).');
+    return row;
+  }
+
+  /* ---------- Đăng: một nội dung -> việc đúng kiểu cho từng nền tảng ---------- */
+  const LIMITS = { x: 280, threads: 500 };
+  const clip = (text, max) => (max && text.length > max ? text.slice(0, max - 1).trimEnd() + '…' : text);
+  // kind: 'video' | 'image' | 'text'. Trả payload, hoặc null nếu nền tảng không đăng được loại nội dung này.
+  function postPayload(platform, kind, { title, text, media, override }) {
+    const caption = clip(override || [title, text].filter(Boolean).join('\n\n'), LIMITS[platform]);
+    const has = type => (types[platform] || []).includes(type);
+    if (platform === 'facebook') {
+      // Lõi Facebook chỉ có đường đăng video (Reels) phù hợp với "đăng một nội dung".
+      if (kind !== 'video') return null;
+      return { platform, type: 'fb_feature', feature: 'fbReels', label: 'Đăng Reels: ' + (title || text).slice(0, 60), config: { videoUrl: media[0], content: caption } };
+    }
+    if (kind === 'video') {
+      if (platform === 'youtube') {
+        if (!has('upload')) return null;
+        // YouTube: dòng đầu của content là tiêu đề, phần còn lại là mô tả.
+        return { platform, type: 'upload', images: [media[0]], content: override || [title || text.split('\n')[0], title ? text : text.split('\n').slice(1).join('\n')].filter(Boolean).join('\n'), visibility: 'public' };
+      }
+      return has('post') ? { platform, type: 'post', images: [media[0]], content: caption } : null;
+    }
+    if (!has('post')) return null;
+    if (kind === 'image') return { platform, type: 'post', images: media.slice(0, 10), content: caption };
+    // Bài chỉ có chữ: Instagram và TikTok bắt buộc có ảnh/video nên bỏ qua.
+    if (platform === 'instagram' || platform === 'tiktok') return null;
+    return { platform, type: 'post', content: caption };
+  }
+
   const profileTags = p => parseJson(p.tags_json, []).filter(t => typeof t === 'string');
   // Nền tảng mà profile có nick (theo lần quét gần nhất).
   function nickPlatforms(p) {
@@ -530,7 +613,8 @@ function createHub(options = {}) {
           const payload = parseJson(t.payload_json, {});
           latest.set(t.profile_id + '|' + payload.platform, {
             task_id: t.id, profile_id: t.profile_id, platform: payload.platform, type: payload.type, status: t.status,
-            message: t.message || '', run_at: t.run_at, finished_at: t.finished_at, repeat: t.repeat
+            message: t.message || '', run_at: t.run_at, finished_at: t.finished_at, repeat: t.repeat,
+            result_url: String(parseJson(t.result_json, {}).result_url || '')
           });
         }
         return { id: b.id, intent: b.intent, label: b.label, params: parseJson(b.params_json, {}), created_at: b.created_at, items: [...latest.values()] };
@@ -546,6 +630,8 @@ function createHub(options = {}) {
              WHERE profile_id IN (${ids.map(() => '?').join(',')}) AND type != 'scan_account' GROUP BY profile_id, platform`).all(...ids)
         : [];
       return { user: { username: user.username, role: user.role }, now: now(), types, last_results: lastResults, fb_features: contract.FB_FEATURES || [], profiles, launchers, tasks, results, batches,
+        media: q('SELECT * FROM media WHERE owner_id = ? ORDER BY created_at DESC LIMIT 60').all(user.id).map(mediaView),
+        max_upload_mb: Math.round(maxUploadBytes / 1048576),
         levels: Object.fromEntries(Object.entries(LEVELS).map(([k, v]) => [k, v.label])) };
     },
     approve(user, body) {
@@ -583,7 +669,24 @@ function createHub(options = {}) {
      */
     dispatch(user, body) {
       const intent = String(body.intent || '');
-      if (!['nurture', 'scan'].includes(intent)) throw new HttpError(400, 'Chưa hỗ trợ loại việc này trong Giao nhanh.');
+      if (!['nurture', 'scan', 'post'].includes(intent)) throw new HttpError(400, 'Chưa hỗ trợ loại việc này trong Giao nhanh.');
+      // Đăng: nội dung dùng chung + tệp trong kho; loại nội dung quyết định kiểu đăng từng nền tảng.
+      let post = null;
+      if (intent === 'post') {
+        const c = body.content && typeof body.content === 'object' ? body.content : {};
+        const rows = (Array.isArray(c.media) ? c.media : []).slice(0, 10).map(ref => mediaFromRef(user, ref));
+        const kinds = new Set(rows.map(mediaKind));
+        if (kinds.size > 1) throw new HttpError(400, 'Một lần đăng chỉ gồm video hoặc ảnh, không trộn cả hai.');
+        if (kinds.has('video') && rows.length > 1) throw new HttpError(400, 'Mỗi lần đăng chỉ một video.');
+        post = {
+          kind: rows.length ? mediaKind(rows[0]) : 'text',
+          title: String(c.title || '').trim().slice(0, 200), text: String(c.text || '').trim().slice(0, 5000),
+          media: rows.map(mediaRef),
+          overrides: c.overrides && typeof c.overrides === 'object' ? c.overrides : {}
+        };
+        if (!post.title && !post.text && !rows.length) throw new HttpError(400, 'Chưa có nội dung để đăng.');
+        if (post.kind === 'text' && !post.text && !post.title) throw new HttpError(400, 'Bài chỉ có chữ cần phần nội dung.');
+      }
       const target = body.target && typeof body.target === 'object' ? body.target : { all: true };
       let profiles = q("SELECT * FROM profiles WHERE owner_id = ? AND status = 'approved' ORDER BY created_at").all(user.id);
       let who = 'tất cả profile';
@@ -603,27 +706,57 @@ function createHub(options = {}) {
       for (const p of profiles) {
         let platforms;
         if (intent === 'scan') platforms = Object.keys(types).filter(pl => types[pl].includes('scan_account'));
-        else platforms = nickPlatforms(p).filter(pl => pl === 'facebook' ? Boolean(p.fb_available) : (types[pl] || []).includes('nurture'));
+        else platforms = nickPlatforms(p).filter(pl => pl === 'facebook' ? Boolean(p.fb_available) : intent === 'post' || (types[pl] || []).includes('nurture'));
         if (only) platforms = platforms.filter(pl => only.has(pl));
-        if (!platforms.length) { skipped.push(p.name || p.id); continue; }
+        let added = 0;
         for (const platform of platforms) {
-          plan.push({ profile: p, payload: validatePayload(intent === 'scan' ? { platform, type: 'scan_account' } : nurturePayload(platform, level)) });
+          const payload = intent === 'scan' ? { platform, type: 'scan_account' }
+            : intent === 'post' ? postPayload(platform, post.kind, { ...post, override: String(post.overrides[platform] || '').trim().slice(0, 5000) })
+            : nurturePayload(platform, level);
+          if (!payload) continue;
+          plan.push({ profile: p, payload: validatePayload(payload) });
+          added++;
         }
+        if (!added) skipped.push(p.name || p.id);
       }
       if (!plan.length) {
         throw new HttpError(400, intent === 'nurture'
           ? 'Chưa profile nào có nick để nuôi. Hãy quét nick trước (Giao nhanh → Quét).'
+          : intent === 'post' ? 'Không nick nào đăng được loại nội dung này. Hãy quét nick trước, hoặc đổi loại nội dung.'
           : 'Không có việc nào để giao.');
       }
       const runAt = Number(body.run_at) > 0 ? Number(body.run_at) : now();
       const repeat = body.repeat === 'daily' ? 'daily' : null;
       const jitterMs = Math.max(0, Number(body.jitter_minutes) || 0) * 60 * 1000;
       const batchId = rid('b_', 8);
-      const label = (intent === 'scan' ? 'Quét nick' : 'Nuôi (' + LEVELS[level].label + ')') + ' · ' + who + (repeat ? ' · hằng ngày' : '');
+      const label = (intent === 'scan' ? 'Quét nick'
+        : intent === 'post' ? 'Đăng ' + ({ video: 'video', image: 'ảnh', text: 'bài' })[post.kind] + ': ' + (post.title || post.text).slice(0, 50)
+        : 'Nuôi (' + LEVELS[level].label + ')') + ' · ' + who + (repeat ? ' · hằng ngày' : '');
       q('INSERT INTO batches (id, owner_id, intent, label, params_json, created_at) VALUES (?, ?, ?, ?, ?, ?)')
         .run(batchId, user.id, intent, label, JSON.stringify({ level: intent === 'nurture' ? level : null, repeat, jitter_minutes: jitterMs / 60000, run_at: runAt, platforms: only ? [...only] : null }), now());
       for (const item of plan) insertTask(user.id, item.profile.id, item.payload, runAt, repeat, jitterMs, batchId);
       return { ok: true, batch_id: batchId, tasks: plan.length, profiles: new Set(plan.map(i => i.profile.id)).size, skipped };
+    },
+    // Hub tự tải một URL về kho (video/ảnh công khai).
+    async importMedia(user, body) {
+      let url;
+      try { url = new URL(String(body.url || '')); } catch (_) { throw new HttpError(400, 'URL không hợp lệ.'); }
+      if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new HttpError(400, 'Chỉ nhận URL http(s).');
+      let res;
+      try { res = await (options.fetch || fetch)(url, { redirect: 'follow', signal: AbortSignal.timeout(10 * 60 * 1000) }); }
+      catch (err) { throw new HttpError(502, 'Không tải được URL: ' + (err.cause?.code || err.message)); }
+      if (!res.ok || !res.body) throw new HttpError(502, 'Không tải được URL: máy chủ đích trả HTTP ' + res.status);
+      const row = await saveMedia(Readable.fromWeb(res.body), {
+        ownerId: user.id, name: decodeURIComponent(path.basename(url.pathname)) || 'tep', mime: res.headers.get('content-type'), sourceUrl: url.href
+      });
+      return { ok: true, media: mediaView(row) };
+    },
+    deleteMedia(user, body) {
+      const row = q('SELECT * FROM media WHERE id = ? AND owner_id = ?').get(String(body.id || ''), user.id);
+      if (!row) throw new HttpError(404, 'Không tìm thấy tệp.');
+      fs.rmSync(path.join(mediaDir, row.file), { force: true });
+      q('DELETE FROM media WHERE id = ?').run(row.id);
+      return { ok: true };
     },
     // Huỷ mọi việc chưa giao của một lần giao (kể cả lần lặp kế tiếp).
     cancelBatch(user, body) {
@@ -797,6 +930,31 @@ function createHub(options = {}) {
         }
       }
 
+      // Tải tệp lên kho: thân request là nội dung tệp (không phải JSON).
+      if (pathname === '/api/admin/upload') {
+        if (req.method !== 'POST') throw new HttpError(405, 'Chỉ nhận POST.');
+        // Chống CSRF: header tự đặt buộc trình duyệt hỏi preflight (hub không trả lời), cộng cookie SameSite=Strict.
+        if (req.headers['x-hub-upload'] !== '1') throw new HttpError(400, 'Thiếu header X-Hub-Upload.');
+        const origin = req.headers.origin;
+        if (origin && new URL(origin).host !== req.headers.host) throw new HttpError(403, 'Origin không hợp lệ.');
+        const user = currentUser(req);
+        if (!user) throw new HttpError(401, 'Chưa đăng nhập.');
+        let name = 'tep';
+        try { name = decodeURIComponent(String(req.headers['x-file-name'] || 'tep')); } catch (_) { name = 'tep'; }
+        const row = await saveMedia(req, { ownerId: user.id, name, mime: req.headers['content-type'] });
+        return sendJson(res, 200, { ok: true, media: mediaView(row) });
+      }
+      // Extension tải tệp về để đăng: không cần đăng nhập, bảo vệ bằng token riêng của từng tệp.
+      const mediaMatch = /^\/media\/(m_[a-f0-9]+)\/([a-f0-9]+)\/[^/]+$/.exec(pathname);
+      if (mediaMatch && (req.method === 'GET' || req.method === 'HEAD')) {
+        const row = q('SELECT * FROM media WHERE id = ?').get(mediaMatch[1]);
+        const full = row ? path.join(mediaDir, row.file) : '';
+        if (!row || !safeEqual(row.token, mediaMatch[2]) || !fs.existsSync(full)) throw new HttpError(404, 'Không tìm thấy.');
+        res.writeHead(200, { 'Content-Type': row.mime, 'Content-Length': String(row.size), 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff' });
+        if (req.method === 'HEAD') return res.end();
+        return await pipeline(fs.createReadStream(full), res);
+      }
+
       if (pathname === '/api/launcher/sync') {
         if (req.method !== 'POST') throw new HttpError(405, 'Chỉ nhận POST.');
         return sendJson(res, 200, launcherSync(req, await readBody(req)));
@@ -821,7 +979,7 @@ function createHub(options = {}) {
           return sendJson(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie('', 0) });
         }
         if (!Object.prototype.hasOwnProperty.call(adminApi, name)) throw new HttpError(404, 'Không tìm thấy.');
-        return sendJson(res, 200, adminApi[name](user, body));
+        return sendJson(res, 200, await adminApi[name](user, body));
       }
 
       if (req.method === 'GET' && STATIC[pathname]) {

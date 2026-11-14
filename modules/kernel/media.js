@@ -30,9 +30,19 @@
   // 2002::/16, IPv4-compatible ::/96, hostname một nhãn và hậu tố
   // .internal/.lan/.home.arpa. Đây là BẢN DUY NHẤT của hàm này trong
   // repo: background.js dùng chung qua AVJP.mediaHostBlocked.
+  // (2.18.0) Máy chủ quản lý (hub) do chính người dùng nhập địa chỉ là đích tin
+  // cậy DUY NHẤT được miễn luật chặn host nội bộ — hub thường nằm trong mạng
+  // riêng (LAN / Tailscale 100.64/10) và là nơi chứa video/ảnh cần đăng.
+  // kernel/remote.js gọi setTrustedHost mỗi khi đọc cấu hình kết nối.
+  let trustedHost = '';
+  function setTrustedHost(hostname) {
+    trustedHost = String(hostname || '').toLowerCase().replace(/\.$/, '').replace(/^\[|\]$/g, '');
+  }
+
   function mediaHostBlocked(hostname) {
     const host = String(hostname || '').toLowerCase().replace(/\.$/, '').replace(/^\[|\]$/g, '');
     if (!host) return true;
+    if (trustedHost && host === trustedHost) return false;
     if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true;
     if (host.endsWith('.internal') || host.endsWith('.lan') || host.endsWith('.home.arpa')) return true;
     if (host.includes(':')) {
@@ -153,7 +163,7 @@
     return { success: true, dataUrl: `data:${type};base64,${toBase64(buf, 0, buf.byteLength)}`, type };
   }
 
-  globalThis.AVJP.media = { start, chunk, end, fetchImage };
+  globalThis.AVJP.media = { start, chunk, end, fetchImage, setTrustedHost };
 
   // (2.11.15) Phơi hàm chặn host dùng chung — background.js gọi
   // AVJP.mediaHostBlocked(hostname) thay cho bản sao riêng đã xoá.

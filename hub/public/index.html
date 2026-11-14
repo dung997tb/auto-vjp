@@ -42,8 +42,31 @@
           <div class="q-label">Làm gì?</div>
           <div class="seg" id="quickIntent">
             <label><input type="radio" name="intent" value="nurture" checked><span>Nuôi nick</span></label>
+            <label><input type="radio" name="intent" value="post"><span>Đăng</span></label>
             <label><input type="radio" name="intent" value="scan"><span>Quét nick</span></label>
           </div>
+        </div>
+        <div id="quickPost" class="form" hidden>
+          <label>Video hoặc ảnh từ máy
+            <input name="files" type="file" multiple accept="video/mp4,video/webm,video/quicktime,image/*">
+          </label>
+          <label>…hoặc dán URL (hub tự tải về)
+            <input name="media_url" type="url" placeholder="https://…/video.mp4">
+          </label>
+          <div id="quickStored" hidden>
+            <div class="q-label">…hoặc dùng tệp đã có trong kho</div>
+            <div class="pick-list" id="quickStoredList"></div>
+          </div>
+          <label>Tiêu đề (tuỳ chọn; YouTube dùng làm tiêu đề video)
+            <input name="title" type="text" maxlength="200">
+          </label>
+          <label>Nội dung / mô tả
+            <textarea name="text" rows="4" placeholder="Viết một lần, dùng cho mọi nền tảng…"></textarea>
+          </label>
+          <details>
+            <summary>Viết riêng cho từng nền tảng (để trống = dùng nội dung chung)</summary>
+            <div id="quickOverrides" class="form" style="margin-top:8px"></div>
+          </details>
         </div>
         <div class="row">
           <label>Cho ai? <select name="target"></select></label>

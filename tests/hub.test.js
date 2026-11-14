@@ -91,7 +91,8 @@ test('hub từ chối việc sai hợp đồng', async () => {
 });
 
 test('giao việc → profile nhận, chạy, báo kết quả → hub ghi nhận xong', async () => {
-  const created = await admin('createTask', { profile_id: profileId, payload: { platform: 'threads', type: 'post', content: 'xin chào', origin: 'local', id: 'gia-mao' } });
+  const created = await admin('createTask', { profile_id: profileId, payload: { platform: 'threads', type: 'post', content: 'xin chào', origin: 'local', id: 'gia-mao',
+    images: ['hub://media/m_ab12/cd34/anh.jpg', 'https://cdn.example.com/b.jpg'] } });
   assert.equal(created.status, 200);
   const future = await admin('createTask', { profile_id: profileId, payload: { platform: 'x', type: 'post', content: 'mai' }, run_at: Date.now() + 3600e3 });
 
@@ -105,6 +106,7 @@ test('giao việc → profile nhận, chạy, báo kết quả → hub ghi nhậ
   assert.equal(run.remote_task_id, created.data.id);
   assert.notEqual(run.id, 'gia-mao');
   assert.equal(run.content, 'xin chào');
+  assert.deepEqual(run.images, [base + '/media/m_ab12/cd34/anh.jpg', 'https://cdn.example.com/b.jpg'], 'tệp trong kho hub được đổi thành địa chỉ thật');
 
   let tasks = (await admin('state')).data.tasks;
   assert.equal(tasks.find(t => t.id === created.data.id).status, 'claimed');
@@ -407,4 +409,101 @@ test('lệch giờ: các việc cùng profile cùng giờ gốc chạy liền nh
   assert.notEqual(times(approved[0].id)[0], times(approved[1].id)[0], 'khác profile: khác thời điểm');
   assert.ok(items.every(i => i.run_at >= baseAt && i.run_at <= baseAt + 600 * 60000));
   await admin('cancelBatch', { id: res.data.batch_id });
+});
+
+test('kho tệp + Đăng: tải lên, hub tự chọn kiểu đăng từng nền tảng, extension nhận địa chỉ thật', async () => {
+  const fs = require('node:fs'), os = require('node:os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'avjp-media-'));
+  const h = createHub({ adminPassword: PASSWORD, dbPath: ':memory:', mediaDir: dir, maxUploadMb: 1,
+    fetch: async url => String(url).includes('ok') ? new Response(Buffer.from('ảnh từ url'), { headers: { 'content-type': 'image/png' } }) : new Response('x', { status: 404 }) });
+  const srv = http.createServer(h.handle);
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const b2 = `http://127.0.0.1:${srv.address().port}`;
+  let ck = '';
+  const adm = async (name, body) => {
+    const res = await fetch(`${b2}/api/admin/${name}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: ck }, body: JSON.stringify(body || {}) });
+    const set = res.headers.get('set-cookie'); if (set) ck = set.split(';')[0];
+    return { status: res.status, data: await res.json() };
+  };
+  const upload = (name, type, bytes, headers) => fetch(`${b2}/api/admin/upload`, { method: 'POST', body: bytes,
+    headers: { 'Content-Type': type, 'X-File-Name': encodeURIComponent(name), 'X-Hub-Upload': '1', Cookie: ck, ...headers } }).then(async r => ({ status: r.status, data: await r.json() }));
+  const ag = (name, body, token) => fetch(`${b2}/api/agent/${name}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify(body) }).then(r => r.json());
+  try {
+    assert.equal((await upload('a.mp4', 'video/mp4', Buffer.from('x'))).status, 401, 'chưa đăng nhập');
+    await adm('login', { username: 'admin', password: PASSWORD });
+    assert.equal((await upload('a.mp4', 'video/mp4', Buffer.from('x'), { 'X-Hub-Upload': '' })).status, 400, 'thiếu header chống CSRF');
+    assert.equal((await upload('virus.exe', 'application/octet-stream', Buffer.from('x'))).status, 415);
+    assert.equal((await upload('to.mp4', 'video/mp4', Buffer.alloc(1024 * 1024 + 10))).status, 413);
+    assert.deepEqual(fs.readdirSync(dir), [], 'tệp bị từ chối không để lại rác');
+
+    const video = Buffer.from('nội dung video giả');
+    const up = await upload('../../Mẹo phối đồ.MP4', 'video/mp4', video);
+    assert.equal(up.status, 200);
+    assert.equal(up.data.media.kind, 'video');
+    assert.match(up.data.media.ref, /^hub:\/\/media\/m_[a-f0-9]+\/[a-f0-9]{32}\/[\w.\-]+\.mp4$/, 'tên tệp được làm sạch, đuôi viết thường');
+    const img = (await adm('importMedia', { url: 'https://cdn.example.com/ok/anh' })).data.media;
+    assert.equal(img.kind, 'image');
+    assert.match(img.ref, /\.png$/, 'đuôi suy từ content-type');
+    assert.equal((await adm('importMedia', { url: 'https://cdn.example.com/missing.png' })).status, 502);
+    assert.equal((await adm('importMedia', { url: 'file:///etc/passwd' })).status, 400);
+
+    // extension tải được bằng token, sai token thì không
+    const httpUrl = up.data.media.ref.replace('hub://', b2 + '/');
+    const got = await fetch(httpUrl);
+    assert.equal(got.status, 200);
+    assert.equal(got.headers.get('content-type'), 'video/mp4');
+    assert.deepEqual(Buffer.from(await got.arrayBuffer()), video);
+    assert.equal((await fetch(httpUrl.replace(/\/[a-f0-9]{32}\//, '/' + '0'.repeat(32) + '/'))).status, 404);
+
+    const nick = (platform, username) => ({ platform, kind: 'nick', username, name: username });
+    const id = 'pf_' + 'e1'.repeat(12);
+    const token = (await ag('register', { profile_id: id })).token;
+    await adm('approve', { id, name: 'Đăng A' });
+    await ag('sync', { profile_id: id, capacity: 0, fb_available: true, accounts: ['instagram', 'tiktok', 'youtube', 'threads', 'x', 'facebook'].map(p => nick(p, 'n_' + p)) }, token);
+
+    const content = { title: 'Mẹo phối đồ mùa đông', text: 'Ba cách phối áo khoác. '.repeat(20).trim(), media: [up.data.media.ref] };
+    assert.equal((await adm('dispatch', { intent: 'post', target: { all: true }, content: { media: [up.data.media.ref, img.ref] } })).status, 400, 'không trộn video với ảnh');
+    assert.equal((await adm('dispatch', { intent: 'post', target: { all: true }, content: {} })).status, 400);
+    assert.equal((await adm('dispatch', { intent: 'post', target: { all: true }, content: { text: 'x', media: ['hub://media/m_00/aa/x.mp4'] } })).status, 400);
+    const res = await adm('dispatch', { intent: 'post', target: { all: true }, content: { ...content, overrides: { tiktok: 'Caption riêng cho TikTok' } } });
+    assert.equal(res.status, 200);
+    assert.equal(res.data.tasks, 6);
+    const tasks = (await ag('sync', { profile_id: id, capacity: 5 }, token)).tasks.concat((await ag('sync', { profile_id: id, capacity: 5 }, token)).tasks);
+    const by = Object.fromEntries(tasks.map(t => [t.payload.platform, t.payload]));
+    assert.equal(by.youtube.type, 'upload');
+    assert.equal(by.youtube.content.split('\n')[0], 'Mẹo phối đồ mùa đông', 'YouTube: dòng đầu là tiêu đề');
+    assert.deepEqual([by.instagram.type, by.threads.type, by.x.type, by.tiktok.type], ['post', 'post', 'post', 'post']);
+    assert.deepEqual(by.instagram.images, [up.data.media.ref]);
+    assert.ok(by.x.content.length <= 280 && by.x.content.endsWith('…'), 'X bị cắt theo giới hạn');
+    assert.ok(by.threads.content.length <= 500);
+    assert.equal(by.tiktok.content, 'Caption riêng cho TikTok');
+    assert.deepEqual([by.facebook.type, by.facebook.feature, by.facebook.config.videoUrl], ['fb_feature', 'fbReels', up.data.media.ref]);
+    assert.match((await adm('state')).data.batches[0].label, /^Đăng video: Mẹo phối đồ/);
+
+    // ảnh: Facebook bỏ qua; chữ: thêm Instagram + TikTok bỏ qua
+    assert.equal((await adm('dispatch', { intent: 'post', target: { all: true }, content: { text: 'ảnh đẹp', media: [img.ref] } })).data.tasks, 5);
+    assert.equal((await adm('dispatch', { intent: 'post', target: { all: true }, content: { text: 'chỉ có chữ' } })).data.tasks, 3);
+
+    assert.equal((await adm('deleteMedia', { id: up.data.media.id })).status, 200);
+    assert.equal((await fetch(httpUrl)).status, 404);
+    assert.equal(fs.readdirSync(dir).length, 1);
+  } finally {
+    await new Promise(r => srv.close(r));
+    h.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('extension: đổi hub://media thành địa chỉ hub đang nối, và tin host của hub khi tải tệp', async () => {
+  require(path.join('..', 'modules', 'kernel', 'media.js'));
+  const blocked = globalThis.AVJP.mediaHostBlocked;
+  assert.equal(blocked('192.168.1.20'), true);
+  assert.equal(blocked('100.101.102.103'), true, 'địa chỉ Tailscale mặc định bị chặn');
+  await S.set({ 'autovjp.remote': { url: 'https://100.101.102.103/hub', token: 't', status: 'approved', accept: true } });
+  await remote.state(); // đọc cấu hình -> đăng ký host tin cậy
+  assert.equal(blocked('100.101.102.103'), false, 'host của hub được phép');
+  assert.equal(blocked('100.101.102.104'), true, 'host nội bộ khác vẫn bị chặn');
+  assert.equal(blocked('192.168.1.20'), true);
+  await remote.disconnect();
+  assert.equal(blocked('100.101.102.103'), true, 'ngắt kết nối thì thôi tin');
 });

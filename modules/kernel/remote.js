@@ -76,10 +76,15 @@
   async function getCfg() {
     const cfg = (await S.get(KEY_CFG)) || {};
     // Người dùng đã bấm "Ngắt kết nối" thì địa chỉ ghi sẵn cũng không tự nối lại.
-    if (cfg.disconnected) return { ...cfg, url: '', token: '', status: 'off', accept: true };
+    if (cfg.disconnected) {
+      globalThis.AVJP.media?.setTrustedHost?.('');
+      return { ...cfg, url: '', token: '', status: 'off', accept: true };
+    }
     if (!cfg.url && DEFAULT_HUB_URL) {
       try { cfg.url = normalizeUrl(DEFAULT_HUB_URL); } catch (_) { /* địa chỉ ghi sẵn hỏng -> coi như chưa cấu hình */ }
     }
+    // (2.18.0) Cho phép tải video/ảnh từ chính hub này dù nó nằm trong mạng riêng.
+    try { globalThis.AVJP.media?.setTrustedHost?.(cfg.url ? new URL(cfg.url).hostname : ''); } catch (_) { /* url hỏng -> không tin host nào */ }
     if (typeof cfg.accept !== 'boolean') cfg.accept = true;
     if (!cfg.status) cfg.status = cfg.url ? 'unregistered' : 'off';
     return cfg;
@@ -188,7 +193,21 @@
     return queue.filter(t => t && t.origin === 'remote').length;
   }
 
+  // (2.18.0) Tệp trong kho của hub được ghi trong task dạng "hub://media/…";
+  // đổi thành địa chỉ thật theo hub mà profile này đang nối.
+  function resolveHubRefs(value, hubUrl) {
+    if (typeof value === 'string') return value.startsWith('hub://media/') ? hubUrl + '/media/' + value.slice('hub://media/'.length) : value;
+    if (Array.isArray(value)) return value.map(v => resolveHubRefs(v, hubUrl));
+    if (value && typeof value === 'object') {
+      const out = {};
+      for (const [k, v] of Object.entries(value)) out[k] = resolveHubRefs(v, hubUrl);
+      return out;
+    }
+    return value;
+  }
+
   async function acceptTasks(tasks) {
+    const hubUrl = (await getCfg()).url;
     const rejected = [];
     for (const item of tasks) {
       const remoteId = String((item && item.id) || '');
@@ -199,7 +218,7 @@
       // chưa có kết quả" để người dùng giao lại) còn hơn chạy trùng hai lần.
       await S.set({ [KEY_SEEN]: seen.concat(remoteId).slice(-MAX_SEEN) });
       try {
-        await globalThis.AVJP.source.enqueue({ ...item.payload, origin: 'remote', remote_task_id: remoteId });
+        await globalThis.AVJP.source.enqueue({ ...resolveHubRefs(item.payload, hubUrl), origin: 'remote', remote_task_id: remoteId });
       } catch (err) {
         rejected.push({
           receipt_id: randomId('rcpt_rej_', 6), remote_task_id: remoteId, origin: 'remote',
@@ -387,6 +406,10 @@
       pendingReports: ((await S.get(KEY_REPORTS)) || []).length
     };
   }
+
+  // Nạp cấu hình một lần lúc khởi động service worker để media.js biết host của
+  // hub trước khi task nào kịp tải tệp.
+  getCfg().catch(() => {});
 
   globalThis.AVJP.remote = {
     ensureProfileId, sync, onReceipt, flushReports,
