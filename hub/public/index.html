@@ -21,9 +21,10 @@
   <header class="top">
     <strong>Auto vjp Hub</strong>
     <nav id="tabs">
-      <button data-tab="profiles" class="active">Profile <span id="pendingCount" class="count" hidden></span></button>
+      <button data-tab="quick" class="active">Giao nhanh</button>
+      <button data-tab="profiles">Profile <span id="pendingCount" class="count" hidden></span></button>
       <button data-tab="nicks">Nick</button>
-      <button data-tab="tasks">Việc</button>
+      <button data-tab="tasks">Việc (nâng cao)</button>
       <button data-tab="launchers">Máy chạy</button>
       <button data-tab="results">Kết quả</button>
     </nav>
@@ -34,7 +35,57 @@
   <p id="flash" class="flash" role="status" hidden></p>
 
   <main>
-    <section data-view="profiles">
+    <section data-view="quick">
+      <h2>Giao nhanh</h2>
+      <form id="quickForm" class="card form">
+        <div>
+          <div class="q-label">Làm gì?</div>
+          <div class="seg" id="quickIntent">
+            <label><input type="radio" name="intent" value="nurture" checked><span>Nuôi nick</span></label>
+            <label><input type="radio" name="intent" value="scan"><span>Quét nick</span></label>
+          </div>
+        </div>
+        <div class="row">
+          <label>Cho ai? <select name="target"></select></label>
+          <label id="quickLevelWrap">Mức độ <select name="level"></select></label>
+        </div>
+        <div>
+          <div class="q-label">Khi nào?</div>
+          <div class="seg" id="quickWhen">
+            <label><input type="radio" name="when" value="now" checked><span>Ngay</span></label>
+            <label><input type="radio" name="when" value="daily"><span>Hằng ngày</span></label>
+            <label><input type="radio" name="when" value="once"><span>Hẹn một lần</span></label>
+          </div>
+        </div>
+        <div class="row" id="quickTimeRow" hidden>
+          <label id="quickDailyWrap">Bắt đầu từ (giờ) <input name="daily_time" type="time" value="09:00"></label>
+          <label id="quickOnceWrap">Chạy lúc <input name="once_at" type="datetime-local"></label>
+          <label>Rải ngẫu nhiên trong (phút) <input name="jitter" type="number" min="0" max="720" value="120"></label>
+        </div>
+        <details>
+          <summary>Thu hẹp nền tảng (mặc định: mọi nền tảng mà nick có)</summary>
+          <div class="toggles" id="quickPlatforms" style="margin-top:8px"></div>
+        </details>
+        <div class="row">
+          <button class="primary" type="submit">Giao</button>
+          <span class="muted" id="quickPreview"></span>
+        </div>
+      </form>
+
+      <div class="row" style="margin-top:24px">
+        <h2 style="margin:0">Các lần giao</h2>
+        <span class="spacer"></span>
+        <span class="muted">Xem chi tiết theo</span>
+        <div class="seg small" id="groupBy">
+          <label><input type="radio" name="groupby" value="nick" checked><span>Nick</span></label>
+          <label><input type="radio" name="groupby" value="profile"><span>Profile Chrome</span></label>
+        </div>
+      </div>
+      <p class="muted" id="batchesEmpty">Chưa có lần giao nào.</p>
+      <div id="batchList"></div>
+    </section>
+
+    <section data-view="profiles" hidden>
       <h2>Chờ duyệt</h2>
       <p class="muted" id="pendingEmpty">Không có profile nào chờ duyệt. Profile mới sẽ hiện ở đây sau khi extension báo danh.</p>
       <div id="pendingList" class="grid"></div>

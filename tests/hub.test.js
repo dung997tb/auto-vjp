@@ -334,3 +334,77 @@ test('hub: nút quét nick giao 5 việc quét; bảng Nick có kết quả gầ
   const mine = state.last_results.filter(r => r.platform === 'threads');
   assert.ok(mine.length >= 1 && mine.every(r => r.received_at > 0 && r.status));
 });
+
+test('giao nhanh: hub tự suy ra nền tảng từ nick của từng profile; gom thành một lần giao', async () => {
+  const agent = (name, body, token) => fetch(`${base}/api/agent/${name}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify(body)
+  }).then(r => r.json());
+  const mk = async (key, name, accounts, extra) => {
+    const id = 'pf_' + key.repeat(12);
+    const token = (await agent('register', { profile_id: id })).token;
+    await admin('approve', { id, name });
+    await agent('sync', { profile_id: id, capacity: 0, accounts, ...extra }, token);
+    return { id, token };
+  };
+  const nick = (platform, username) => ({ platform, kind: 'nick', username, name: username });
+  const A = await mk('d1', 'Nhanh A', [nick('instagram', 'a_ig'), nick('tiktok', 'a_tt'), nick('facebook', 'A'), { platform: 'facebook', kind: 'page', name: 'Page A' }], { fb_available: true });
+  const B = await mk('d2', 'Nhanh B', [nick('threads', 'b_th'), nick('facebook', 'B')], { fb_available: false });
+  const C = await mk('d3', 'Nhanh C', []);
+  assert.equal((await admin('setTags', { id: A.id, tags: ['nuôi mới', ' nuôi mới ', ''] })).data.tags.length, 1);
+  await admin('setTags', { id: B.id, tags: ['nuôi mới'] });
+  await admin('setTags', { id: C.id, tags: ['nuôi mới'] });
+  assert.deepEqual((await admin('state')).data.profiles.find(p => p.id === A.id).tags, ['nuôi mới']);
+
+  assert.equal((await admin('dispatch', { intent: 'dang_bai', target: { all: true } })).status, 400);
+  assert.equal((await admin('dispatch', { intent: 'nurture', target: { tag: 'không có nhóm này' } })).status, 400);
+  assert.equal((await admin('dispatch', { intent: 'nurture', target: { profile_ids: [C.id] } })).status, 400, 'profile chưa có nick thì không có gì để nuôi');
+
+  const res = await admin('dispatch', { intent: 'nurture', target: { tag: 'nuôi mới' }, level: 'light' });
+  assert.equal(res.status, 200);
+  // A: instagram + tiktok + facebook (có lõi FB); B: threads (facebook bị bỏ vì chưa có lõi FB); C: không có nick
+  assert.equal(res.data.tasks, 4);
+  assert.equal(res.data.profiles, 2);
+  assert.deepEqual(res.data.skipped, ['Nhanh C']);
+  const batch = (await admin('state')).data.batches.find(b => b.id === res.data.batch_id);
+  assert.match(batch.label, /Nuôi \(Nhẹ\).*nuôi mới/);
+  assert.deepEqual(batch.items.map(i => i.profile_id === A.id ? 'A:' + i.platform : 'B:' + i.platform).sort(), ['A:facebook', 'A:instagram', 'A:tiktok', 'B:threads']);
+
+  // profile nhận đúng việc theo nền tảng, tham số theo mức Nhẹ
+  const got = (await agent('sync', { profile_id: A.id, capacity: 5 }, A.token)).tasks.map(t => t.payload);
+  const ig = got.find(p => p.platform === 'instagram');
+  assert.equal(ig.type, 'nurture');
+  assert.equal(ig.max_actions, 4);
+  assert.equal(ig.comment_enabled, false);
+  assert.equal(got.find(p => p.platform === 'tiktok').watch_count, 3);
+  const fb = got.find(p => p.platform === 'facebook');
+  assert.deepEqual([fb.type, fb.feature, fb.config.actionMode, fb.config.target], ['fb_feature', 'feed', 'like', 8]);
+
+  // thu hẹp nền tảng + giao lại phần lỗi + huỷ phần chưa chạy
+  const only = await admin('dispatch', { intent: 'nurture', target: { tag: 'nuôi mới' }, platforms: ['threads'], run_at: Date.now() + 3600e3, repeat: 'daily', jitter_minutes: 60 });
+  assert.equal(only.data.tasks, 1);
+  assert.equal((await admin('cancelBatch', { id: only.data.batch_id })).data.cancelled, 1);
+  const first = (await agent('sync', { profile_id: B.id, capacity: 5 }, B.token)).tasks[0];
+  await agent('results', { profile_id: B.id, results: [{ receipt_id: 'qd1', remote_task_id: first.id, origin: 'remote', platform: 'threads', type: 'nurture', status: 'failed', message: 'hỏng' }] }, B.token);
+  assert.equal((await admin('retryBatch', { id: res.data.batch_id })).data.retried, 1);
+  const after = (await admin('state')).data.batches.find(b => b.id === res.data.batch_id);
+  assert.equal(after.items.find(i => i.profile_id === B.id).status, 'queued', 'mục của B hiện việc mới nhất');
+
+  // quét: mọi nền tảng quét được, không cần có nick trước
+  const scan = await admin('dispatch', { intent: 'scan', target: { profile_ids: [C.id] } });
+  assert.equal(scan.data.tasks, 5);
+});
+
+test('lệch giờ: các việc cùng profile cùng giờ gốc chạy liền nhau; profile khác thì khác giờ', async () => {
+  const state = (await admin('state')).data;
+  const approved = state.profiles.filter(p => p.status === 'approved' && p.accounts.some(a => a.kind === 'nick' && a.platform !== 'facebook')).slice(0, 2);
+  assert.equal(approved.length, 2);
+  const baseAt = Date.now() + 5 * 3600e3;
+  const res = await admin('dispatch', { intent: 'scan', target: { profile_ids: approved.map(p => p.id) }, run_at: baseAt, jitter_minutes: 600 });
+  const items = (await admin('state')).data.batches.find(b => b.id === res.data.batch_id).items;
+  const times = id => [...new Set(items.filter(i => i.profile_id === id).map(i => i.run_at))];
+  assert.equal(times(approved[0].id).length, 1, 'cùng profile: một thời điểm');
+  assert.equal(times(approved[1].id).length, 1);
+  assert.notEqual(times(approved[0].id)[0], times(approved[1].id)[0], 'khác profile: khác thời điểm');
+  assert.ok(items.every(i => i.run_at >= baseAt && i.run_at <= baseAt + 600 * 60000));
+  await admin('cancelBatch', { id: res.data.batch_id });
+});

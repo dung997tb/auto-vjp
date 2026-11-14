@@ -107,11 +107,16 @@
       el('p', { class: 'muted', text: 'Lần cuối thấy: ' + ago(p.last_seen_at) + ' · bản ' + (p.version || '?') + ' · ' + queued + ' việc chờ' }),
       p.conflict_at ? el('p', { class: 'error', text: 'Cảnh báo: có vẻ hai nơi đang dùng chung ID này (thư mục profile bị sao chép?). Trên bản sao, bấm "Đăng ký lại" trong extension. Đổi tên profile để tắt cảnh báo.' }) : null,
       accountList(p.accounts),
+      (p.tags || []).length ? el('p', { class: 'muted', text: 'Nhóm: ' + p.tags.join(', ') }) : null,
       p.status === 'approved' ? gemControls(p) : null,
       el('div', { class: 'actions' }, [
         p.status === 'approved' ? el('button', { text: 'Quét nick', onclick: function () {
           act('scanProfile', { id: p.id }, 'Đã giao việc quét nick cho "' + (p.name || p.id) + '". Kết quả hiện sau khi profile chạy xong.');
         } }) : null,
+        el('button', { text: 'Nhóm', onclick: function () {
+          var value = prompt('Nhóm của profile này (cách nhau bằng dấu phẩy), dùng để giao việc theo nhóm:', (p.tags || []).join(', '));
+          if (value !== null) act('setTags', { id: p.id, tags: value.split(',') });
+        } }),
         el('button', { text: 'Đổi tên', onclick: function () {
           var name = prompt('Tên mới cho profile:', p.name || '');
           if (name) act('rename', { id: p.id, name: name });
@@ -124,6 +129,150 @@
         } })
       ])
     ]);
+  }
+
+  /* ---------- Giao nhanh ---------- */
+  var openBatches = {};
+  function radio(name) {
+    var el0 = document.querySelector('input[name=' + name + ']:checked');
+    return el0 ? el0.value : '';
+  }
+  function approvedProfiles() { return state.profiles.filter(function (p) { return p.status === 'approved'; }); }
+  function nickPlatformsOf(p) {
+    var out = [];
+    (p.accounts || []).forEach(function (a) { if (a.kind !== 'page' && out.indexOf(a.platform) < 0) out.push(a.platform); });
+    return out;
+  }
+  function quickTargetProfiles() {
+    var value = $('quickForm').target.value;
+    var list = approvedProfiles();
+    if (value.indexOf('tag:') === 0) return list.filter(function (p) { return (p.tags || []).indexOf(value.slice(4)) >= 0; });
+    if (value.indexOf('one:') === 0) return list.filter(function (p) { return p.id === value.slice(4); });
+    return list;
+  }
+  function quickPlatformFilter() {
+    var boxes = $('quickPlatforms').querySelectorAll('input');
+    var picked = Array.prototype.filter.call(boxes, function (i) { return i.checked; }).map(function (i) { return i.value; });
+    return picked.length === boxes.length ? null : picked;
+  }
+  function syncQuick() {
+    var form = $('quickForm');
+    var approved = approvedProfiles();
+    var tags = [];
+    approved.forEach(function (p) { (p.tags || []).forEach(function (t) { if (tags.indexOf(t) < 0) tags.push(t); }); });
+    tags.sort();
+    fillSelect(form.target, [['all', 'Tất cả (' + approved.length + ' profile)']]
+      .concat(tags.map(function (t) { return ['tag:' + t, 'Nhóm: ' + t]; }))
+      .concat(approved.map(function (p) { return ['one:' + p.id, 'Chỉ: ' + (p.name || p.id)]; })), true);
+    fillSelect(form.level, Object.keys(state.levels || {}).map(function (k) { return [k, state.levels[k]]; }), true);
+    if (!form.level.dataset.init && state.levels && state.levels.medium) { form.level.value = 'medium'; form.level.dataset.init = '1'; }
+    var platforms = Object.keys(state.types);
+    var box = $('quickPlatforms');
+    if (box.getAttribute('data-sig') !== platforms.join('|')) {
+      box.setAttribute('data-sig', platforms.join('|'));
+      box.replaceChildren.apply(box, platforms.map(function (p) {
+        var input = el('input', { type: 'checkbox', value: p });
+        input.checked = true;
+        return el('label', {}, [input, document.createTextNode(PLATFORM_LABEL[p] || p)]);
+      }));
+    }
+    var intent = radio('intent'), when = radio('when');
+    $('quickLevelWrap').hidden = intent !== 'nurture';
+    $('quickTimeRow').hidden = when === 'now';
+    $('quickDailyWrap').hidden = when !== 'daily';
+    $('quickOnceWrap').hidden = when !== 'once';
+    // Xem trước: sẽ giao bao nhiêu việc cho bao nhiêu nick.
+    var only = quickPlatformFilter();
+    var targets = quickTargetProfiles();
+    var tasks = 0, profiles = 0, noNick = 0;
+    targets.forEach(function (p) {
+      var list = intent === 'scan'
+        ? platforms.filter(function (pl) { return state.types[pl].indexOf('scan_account') >= 0; })
+        : nickPlatformsOf(p).filter(function (pl) { return pl === 'facebook' ? p.fb_available : (state.types[pl] || []).indexOf('nurture') >= 0; });
+      if (only) list = list.filter(function (pl) { return only.indexOf(pl) >= 0; });
+      if (list.length) { tasks += list.length; profiles++; } else noNick++;
+    });
+    $('quickPreview').textContent = !targets.length ? 'Chưa có profile nào đã duyệt.'
+      : intent === 'scan' ? 'Sẽ quét ' + tasks + ' lượt trên ' + profiles + ' profile.'
+      : 'Sẽ nuôi ' + tasks + ' nick trên ' + profiles + ' profile.' + (noNick ? ' ' + noNick + ' profile chưa có nick (quét trước).' : '');
+  }
+  function countChips(items) {
+    var counts = {};
+    items.forEach(function (i) { counts[i.status] = (counts[i.status] || 0) + 1; });
+    return ['success', 'claimed', 'queued', 'failed', 'uncertain', 'skipped', 'cancelled'].filter(function (s) { return counts[s]; }).map(function (s) {
+      var meta = STATUS[s] || [s, ''];
+      return el('span', { class: 'chip ' + meta[1], text: counts[s] + ' ' + meta[0].toLowerCase() });
+    });
+  }
+  function nickNameFor(profile, platform) {
+    var names = (profile ? profile.accounts || [] : []).filter(function (a) { return a.platform === platform && a.kind !== 'page'; })
+      .map(function (a) { return a.username ? '@' + a.username : a.name; });
+    return names.length ? names.join(', ') : '(chưa quét)';
+  }
+  function batchDetail(b) {
+    var byId = {};
+    state.profiles.forEach(function (p) { byId[p.id] = p; });
+    var items = b.items.slice().sort(function (x, y) {
+      return String((byId[x.profile_id] || {}).name).localeCompare(String((byId[y.profile_id] || {}).name)) || x.platform.localeCompare(y.platform);
+    });
+    if (radio('groupby') === 'profile') {
+      var groups = {}, order = [];
+      items.forEach(function (i) { if (!groups[i.profile_id]) { groups[i.profile_id] = []; order.push(i.profile_id); } groups[i.profile_id].push(i); });
+      return el('table', {}, [
+        el('thead', {}, [el('tr', {}, [el('th', { text: 'Profile Chrome' }), el('th', { text: 'Từng nền tảng' }), el('th', { text: 'Chạy lúc' })])]),
+        el('tbody', {}, order.map(function (pid) {
+          var p = byId[pid];
+          return el('tr', {}, [
+            el('td', {}, [el('div', { text: p ? (p.name || p.id) : pid }), el('div', { class: 'muted', text: p ? (p.online ? 'đang mở' : 'đang tắt') : '' })]),
+            el('td', {}, [el('div', { class: 'plat-chips' }, groups[pid].map(function (i) {
+              var meta = STATUS[i.status] || [i.status, ''];
+              var c = el('span', { class: 'chip ' + meta[1], text: (PLATFORM_LABEL[i.platform] || i.platform) + ': ' + meta[0].toLowerCase() });
+              if (i.message) c.title = i.message;
+              return c;
+            }))]),
+            el('td', { class: 'nowrap', text: fmtTime(groups[pid][0].run_at) })
+          ]);
+        }))
+      ]);
+    }
+    return el('table', {}, [
+      el('thead', {}, [el('tr', {}, [el('th', { text: 'Nick' }), el('th', { text: 'Nền tảng' }), el('th', { text: 'Profile Chrome' }), el('th', { text: 'Chạy lúc' }), el('th', { text: 'Trạng thái' }), el('th', { text: 'Ghi chú' })])]),
+      el('tbody', {}, items.map(function (i) {
+        var p = byId[i.profile_id];
+        return el('tr', {}, [
+          el('td', { text: i.type === 'scan_account' ? '—' : nickNameFor(p, i.platform) }),
+          el('td', { text: PLATFORM_LABEL[i.platform] || i.platform }),
+          el('td', { text: p ? (p.name || p.id) : i.profile_id }),
+          el('td', { class: 'nowrap', text: fmtTime(i.run_at) }),
+          el('td', {}, [chip(i.status)]),
+          el('td', { class: 'note', text: i.message || '' })
+        ]);
+      }))
+    ]);
+  }
+  function batchCard(b) {
+    var failed = b.items.filter(function (i) { return i.status === 'failed'; }).length;
+    var queued = b.items.filter(function (i) { return i.status === 'queued'; }).length;
+    var d = el('details', { class: 'card batch' }, [
+      el('summary', {}, [el('strong', { text: b.label }), el('span', { class: 'muted', text: fmtTime(b.created_at) + ' · ' + b.items.length + ' việc' })].concat(countChips(b.items))),
+      el('div', { class: 'body' }, [
+        el('div', { class: 'row' }, [
+          failed ? el('button', { text: 'Giao lại ' + failed + ' việc lỗi', onclick: function () { act('retryBatch', { id: b.id }, 'Đã giao lại phần lỗi.'); } }) : null,
+          queued ? el('button', { class: 'danger', text: 'Huỷ ' + queued + ' việc chưa chạy' + (b.params && b.params.repeat ? ' (dừng lặp)' : ''), onclick: function () {
+            if (confirm('Huỷ các việc chưa chạy của lần giao này?')) act('cancelBatch', { id: b.id }, 'Đã huỷ phần chưa chạy.');
+          } }) : null
+        ]),
+        batchDetail(b)
+      ])
+    ]);
+    d.open = Boolean(openBatches[b.id]);
+    d.addEventListener('toggle', function () { openBatches[b.id] = d.open; });
+    return d;
+  }
+  function renderBatches() {
+    var list = state.batches || [];
+    $('batchesEmpty').hidden = list.length > 0;
+    $('batchList').replaceChildren.apply($('batchList'), list.map(batchCard));
   }
 
   /* ---------- Nick ---------- */
@@ -473,6 +622,8 @@
       $('profileList').replaceChildren.apply($('profileList'), mine.map(profileCard));
     }
     renderNicks();
+    if (!typingIn($('quickForm'))) syncQuick();
+    renderBatches();
     var launchers = state.launchers || [];
     $('launchersEmpty').hidden = launchers.length > 0;
     $('launcherList').replaceChildren.apply($('launcherList'), launchers.map(launcherCard));
@@ -517,6 +668,33 @@
     if (!tab) return;
     document.querySelectorAll('#tabs button').forEach(function (b) { b.classList.toggle('active', b === tab); });
     document.querySelectorAll('main > section').forEach(function (s) { s.hidden = s.dataset.view !== tab.dataset.tab; });
+  });
+  $('quickForm').addEventListener('change', syncQuick);
+  $('groupBy').addEventListener('change', renderBatches);
+  $('quickForm').addEventListener('submit', function (event) {
+    event.preventDefault();
+    var form = event.target;
+    var value = form.target.value;
+    var target = value.indexOf('tag:') === 0 ? { tag: value.slice(4) } : value.indexOf('one:') === 0 ? { profile_ids: [value.slice(4)] } : { all: true };
+    var when = radio('when');
+    var body = { intent: radio('intent'), target: target, level: form.level.value, platforms: quickPlatformFilter() };
+    if (when !== 'now') body.jitter_minutes = Number(form.jitter.value) || 0;
+    if (when === 'daily') {
+      var parts = (form.daily_time.value || '09:00').split(':');
+      var at = new Date(); at.setHours(Number(parts[0]), Number(parts[1]), 0, 0);
+      // Giờ bắt đầu hôm nay đã qua thì bắt đầu từ ngày mai.
+      if (at.getTime() + body.jitter_minutes * 60000 < Date.now()) at.setDate(at.getDate() + 1);
+      body.run_at = at.getTime();
+      body.repeat = 'daily';
+    } else if (when === 'once') {
+      if (!form.once_at.value) return flash('Hãy chọn thời điểm chạy.', true);
+      body.run_at = new Date(form.once_at.value).getTime();
+    }
+    api('dispatch', body).then(function (data) {
+      openBatches[data.batch_id] = true;
+      flash('Đã giao ' + data.tasks + ' việc cho ' + data.profiles + ' profile.' + (data.skipped.length ? ' Bỏ qua ' + data.skipped.length + ' profile chưa có nick.' : ''));
+      return refresh();
+    }).catch(function (err) { flash(err.message, true); });
   });
   $('nickPlatform').addEventListener('change', renderNicks);
   $('nickSearch').addEventListener('input', renderNicks);

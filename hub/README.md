@@ -41,6 +41,34 @@ Nếu đặt sau reverse proxy đang có ở một đường dẫn con (ví dụ
 
 Muốn khỏi nhập địa chỉ trên từng profile: điền `DEFAULT_HUB_URL` ở đầu `modules/kernel/remote.js` rồi phát hành bản extension đó.
 
+## Giao nhanh
+
+Mục mặc định của hub. Một lần giao chỉ có ba câu hỏi, không phải chọn nền tảng hay loại việc:
+
+- **Làm gì**: Nuôi nick hoặc Quét nick.
+- **Cho ai**: tất cả profile, một nhóm, hoặc một profile. Nhóm đặt bằng nút **Nhóm** trên thẻ profile.
+- **Khi nào**: ngay, hằng ngày từ một giờ nhất định, hoặc hẹn một lần. Với hai lựa chọn sau, việc được rải ngẫu nhiên trong số phút bạn đặt.
+
+Hub tự suy ra phần còn lại từ bảng Nick: profile có nick ở nền tảng nào thì nhận việc nuôi ở nền tảng đó, đúng kiểu của nền tảng (Facebook là tương tác bảng tin, chỉ thả cảm xúc). Profile chưa có nick bị bỏ qua và được báo lại. Muốn giới hạn thì mở **Thu hẹp nền tảng**.
+
+**Mức độ** thay cho các con số:
+
+| | Nhẹ | Vừa | Mạnh |
+|---|---|---|---|
+| Số hành động tối đa | 4 | 8 | 15 |
+| Thời lượng tối đa (phút) | 6 | 10 | 20 |
+| Video xem (TikTok, YouTube) | 3 | 5 | 10 |
+| Tỉ lệ thích | 60% | 80% | 90% |
+| Bình luận | tắt | 60% | 70% |
+| Lưu (Instagram, TikTok) | tắt | bật | bật |
+| Bài tương tác trên Facebook | 8 | 20 | 40 |
+
+Theo dõi và đăng ký kênh luôn tắt ở cả ba mức. Các mức hiện cố định trong mã (`LEVELS` trong `hub/server.js`), chưa chỉnh được trên giao diện.
+
+**Các lần giao**: mỗi lần giao là một dòng với số việc xong, đang chờ, lỗi. Mở ra để xem chi tiết **theo nick** (mỗi nick một dòng) hoặc **theo profile Chrome** (mỗi profile một dòng, trạng thái từng nền tảng nằm cạnh nhau). Có nút giao lại phần lỗi và huỷ phần chưa chạy; với lần giao lặp hằng ngày, huỷ cũng dừng việc lặp.
+
+Các việc của cùng một profile trong một lần giao được xếp chạy liền nhau, nên profile chỉ phải mở một lần; các profile khác nhau chạy lệch giờ nhau.
+
 ## Nick
 
 Mục **Nick** liệt kê mọi nick trên các profile: nền tảng, tên và username, thuộc profile nào, số người theo dõi, lần quét cuối (đánh dấu "cũ" nếu quá 3 ngày) và kết quả việc gần nhất của profile trên nền tảng đó. Lọc theo nền tảng hoặc tìm theo tên.
@@ -53,7 +81,7 @@ Mục **Nick** liệt kê mọi nick trên các profile: nền tảng, tên và 
 
 ## Giao việc
 
-Mục **Việc** có form theo từng loại, không phải gõ JSON:
+Mục **Việc (nâng cao)** dùng khi cần giao một loại việc cụ thể với tham số riêng. Form đổi theo từng loại, không phải gõ JSON:
 
 - **Giao cho**: tích một hoặc nhiều profile; mỗi profile nhận một việc riêng.
 - **Nuôi nick**: số hành động, thời lượng, bật tắt thích / lưu / theo dõi / bình luận, tỉ lệ từng loại, mẫu bình luận dự phòng. Các trường đổi theo nền tảng (TikTok và YouTube có thêm số video xem, YouTube có từ khoá tìm video).

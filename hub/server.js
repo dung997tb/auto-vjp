@@ -85,7 +85,7 @@ function checkPassword(password, stored) {
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
-const parseJson = (text, fallback) => { try { return JSON.parse(text); } catch (_) { return fallback; } };
+const parseJson = (text, fallback) => { try { return JSON.parse(text) ?? fallback; } catch (_) { return fallback; } };
 
 function createHub(options = {}) {
   const adminPassword = options.adminPassword ?? process.env.HUB_ADMIN_PASSWORD ?? '';
@@ -153,6 +153,13 @@ function createHub(options = {}) {
     db.exec('ALTER TABLE tasks ADD COLUMN base_at INTEGER');
     db.exec('ALTER TABLE tasks ADD COLUMN jitter_ms INTEGER NOT NULL DEFAULT 0');
   }
+  // (2.17.0) Giao nhanh: nhóm profile (nhãn) + lần giao (batch) gom nhiều việc.
+  if (!profileCols.has('tags_json')) db.exec('ALTER TABLE profiles ADD COLUMN tags_json TEXT');
+  if (!taskCols.has('batch_id')) db.exec('ALTER TABLE tasks ADD COLUMN batch_id TEXT');
+  db.exec(`CREATE TABLE IF NOT EXISTS batches (
+    id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, intent TEXT NOT NULL, label TEXT NOT NULL,
+    params_json TEXT, created_at INTEGER NOT NULL
+  )`);
   db.exec(`CREATE TABLE IF NOT EXISTS launchers (
     id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, name TEXT NOT NULL, token_hash TEXT NOT NULL,
     gem_profiles_json TEXT, running_json TEXT, gem_ok INTEGER NOT NULL DEFAULT 0, last_error TEXT,
@@ -227,15 +234,55 @@ function createHub(options = {}) {
     if (JSON.stringify(clean).length > 200 * 1000) throw new HttpError(400, 'payload quá lớn (tối đa 200KB)');
     return clean;
   }
-  // baseAt = giờ hẹn gốc; giờ chạy thật lệch ngẫu nhiên 0..jitterMs sau đó (mỗi
-  // việc, mỗi ngày một độ lệch riêng) để các profile không chạy đúng cùng phút.
-  function insertTask(ownerId, profileId, payload, baseAt, repeat, jitterMs = 0) {
+  // baseAt = giờ hẹn gốc; giờ chạy thật lệch 0..jitterMs sau đó. Độ lệch suy từ
+  // (profile, giờ gốc): mỗi profile một độ lệch khác nhau, mỗi ngày đổi, nhưng
+  // các việc CÙNG profile cùng giờ gốc thì chạy liền nhau — profile chỉ phải mở một lần.
+  function jitterFor(profileId, baseAt, jitter) {
+    if (!jitter) return 0;
+    return crypto.createHash('sha256').update(profileId + '|' + baseAt).digest().readUInt32BE(0) % (jitter + 1);
+  }
+  function insertTask(ownerId, profileId, payload, baseAt, repeat, jitterMs = 0, batchId = null) {
     const id = rid('t_', 10);
     const jitter = Math.max(0, Math.min(12 * 3600 * 1000, Number(jitterMs) || 0));
-    const runAt = baseAt + (jitter ? crypto.randomInt(0, jitter + 1) : 0);
-    q('INSERT INTO tasks (id, owner_id, profile_id, payload_json, run_at, base_at, jitter_ms, repeat, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(id, ownerId, profileId, JSON.stringify(payload), runAt, baseAt, jitter, repeat || null, 'queued', now());
+    const runAt = baseAt + jitterFor(profileId, baseAt, jitter);
+    q('INSERT INTO tasks (id, owner_id, profile_id, payload_json, run_at, base_at, jitter_ms, repeat, status, created_at, batch_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(id, ownerId, profileId, JSON.stringify(payload), runAt, baseAt, jitter, repeat || null, 'queued', now(), batchId);
     return id;
+  }
+
+  /* ---------- Giao nhanh: ý định -> việc cụ thể theo từng nền tảng ---------- */
+  const COMMENT_TEMPLATES = ['Bài chia sẻ hay quá, cảm ơn bạn nhiều nhé!', 'Nội dung hữu ích, mình lưu lại để xem thêm.', 'Cảm ơn bạn đã chia sẻ!'];
+  // Ba mức độ nuôi. Mỗi nền tảng chỉ lấy những trường nó dùng (xem nurturePayload).
+  const LEVELS = {
+    light: { label: 'Nhẹ', max_actions: 4, max_minutes: 6, watch_count: 3, like_pct: 60, save_pct: 20, comment_pct: 0, comment: false, save: false, fb_target: 8 },
+    medium: { label: 'Vừa', max_actions: 8, max_minutes: 10, watch_count: 5, like_pct: 80, save_pct: 50, comment_pct: 60, comment: true, save: true, fb_target: 20 },
+    strong: { label: 'Mạnh', max_actions: 15, max_minutes: 20, watch_count: 10, like_pct: 90, save_pct: 60, comment_pct: 70, comment: true, save: true, fb_target: 40 }
+  };
+  function nurturePayload(platform, levelKey) {
+    const L = LEVELS[levelKey] || LEVELS.medium;
+    const timeout_ms = (L.max_minutes + 15) * 60 * 1000;
+    const social = { like_enabled: true, follow_enabled: false, comment_enabled: L.comment, like_pct: L.like_pct, comment_pct: L.comment_pct,
+      comment_templates: COMMENT_TEMPLATES, max_actions: L.max_actions, max_minutes: L.max_minutes, timeout_ms };
+    switch (platform) {
+      case 'tiktok': return { platform, type: 'nurture', watch_count: L.watch_count, like_enabled: true, save_enabled: L.save, follow_enabled: false, max_minutes: L.max_minutes, timeout_ms };
+      case 'instagram': return { platform, type: 'nurture', ...social, save_enabled: L.save, save_pct: L.save_pct };
+      case 'threads': return { platform, type: 'nurture', ...social };
+      case 'x': return { platform, type: 'nurture', ...social, bookmark_enabled: false };
+      case 'youtube': return { platform, type: 'nurture', ...social, watch_count: L.watch_count, subscribe_enabled: false, search_query: '' };
+      // Facebook: tương tác bảng tin của lõi, chỉ thả cảm xúc (không cần prompt AI).
+      case 'facebook': return { platform, type: 'fb_feature', feature: 'feed', label: 'Nuôi: tương tác bảng tin (' + L.label + ')',
+        config: { source: 'bantin', actionMode: 'like', reaction: 'random', target: L.fb_target, minDelay: 4, maxDelay: 10 } };
+      default: return null;
+    }
+  }
+  const profileTags = p => parseJson(p.tags_json, []).filter(t => typeof t === 'string');
+  // Nền tảng mà profile có nick (theo lần quét gần nhất).
+  function nickPlatforms(p) {
+    const out = [];
+    for (const a of parseJson(p.accounts_json, [])) {
+      if (a && a.kind !== 'page' && a.platform && !out.includes(a.platform)) out.push(a.platform);
+    }
+    return out;
   }
 
   /* ---------- API cho extension ---------- */
@@ -284,7 +331,7 @@ function createHub(options = {}) {
         const json = JSON.stringify(templates);
         if (json.length <= 200 * 1000) q('UPDATE profiles SET fb_templates_json = ? WHERE id = ?').run(json, profile.id);
       }
-      q('UPDATE profiles SET fb_available = ? WHERE id = ?').run(body.fb_available ? 1 : 0, profile.id);
+      if (typeof body.fb_available === 'boolean') q('UPDATE profiles SET fb_available = ? WHERE id = ?').run(body.fb_available ? 1 : 0, profile.id);
       q('UPDATE profiles SET nonce = ?, conflict_at = ?, version = ?, accounts_json = ?, busy = ?, accept = ?, last_seen_at = ? WHERE id = ?')
         .run(nonce, conflict || null,
           body.version ? String(body.version).slice(0, 20) : profile.version,
@@ -301,7 +348,7 @@ function createHub(options = {}) {
             if (task.repeat === 'daily') {
               let next = (task.base_at || task.run_at) + 24 * 3600 * 1000;
               while (next <= now()) next += 24 * 3600 * 1000; // profile tắt nhiều ngày: không dồn việc bù
-              insertTask(task.owner_id, task.profile_id, parseJson(task.payload_json, {}), next, 'daily', task.jitter_ms);
+              insertTask(task.owner_id, task.profile_id, parseJson(task.payload_json, {}), next, 'daily', task.jitter_ms, task.batch_id);
             }
             tasks.push({ id: task.id, payload: parseJson(task.payload_json, {}) });
           }
@@ -463,7 +510,7 @@ function createHub(options = {}) {
         online: Boolean(p.last_seen_at && now() - p.last_seen_at < ONLINE_WINDOW_MS),
         last_seen_at: p.last_seen_at, created_at: p.created_at, conflict_at: p.conflict_at,
         fb_available: Boolean(p.fb_available), fb_templates: parseJson(p.fb_templates_json, []),
-        launcher_id: p.launcher_id, gem_id: p.gem_id, auto_start: Boolean(p.auto_start), launch_fail_at: p.launch_fail_at
+        tags: profileTags(p), launcher_id: p.launcher_id, gem_id: p.gem_id, auto_start: Boolean(p.auto_start), launch_fail_at: p.launch_fail_at
       }));
       const launchers = q('SELECT * FROM launchers WHERE owner_id = ? ORDER BY created_at').all(user.id).map(l => ({
         id: l.id, name: l.name, gem_ok: Boolean(l.gem_ok), last_error: l.last_error || '',
@@ -473,8 +520,21 @@ function createHub(options = {}) {
       }));
       const tasks = q('SELECT * FROM tasks WHERE owner_id = ? ORDER BY created_at DESC LIMIT 200').all(user.id).map(t => ({
         id: t.id, profile_id: t.profile_id, payload: parseJson(t.payload_json, {}), run_at: t.run_at, repeat: t.repeat,
-        status: t.status, message: t.message, created_at: t.created_at, claimed_at: t.claimed_at, finished_at: t.finished_at
+        status: t.status, message: t.message, created_at: t.created_at, claimed_at: t.claimed_at, finished_at: t.finished_at,
+        batch_id: t.batch_id
       }));
+      // Các lần giao nhanh gần đây, mỗi lần kèm việc MỚI NHẤT theo (profile, nền tảng).
+      const batches = q('SELECT * FROM batches WHERE owner_id = ? ORDER BY created_at DESC LIMIT 30').all(user.id).map(b => {
+        const latest = new Map();
+        for (const t of q('SELECT * FROM tasks WHERE batch_id = ? ORDER BY created_at').all(b.id)) {
+          const payload = parseJson(t.payload_json, {});
+          latest.set(t.profile_id + '|' + payload.platform, {
+            task_id: t.id, profile_id: t.profile_id, platform: payload.platform, type: payload.type, status: t.status,
+            message: t.message || '', run_at: t.run_at, finished_at: t.finished_at, repeat: t.repeat
+          });
+        }
+        return { id: b.id, intent: b.intent, label: b.label, params: parseJson(b.params_json, {}), created_at: b.created_at, items: [...latest.values()] };
+      });
       const ids = profiles.filter(p => p.status !== 'pending').map(p => p.id);
       const results = ids.length
         ? q(`SELECT receipt_id, profile_id, task_id, origin, platform, type, status, message, received_at FROM results
@@ -485,7 +545,8 @@ function createHub(options = {}) {
         ? q(`SELECT profile_id, platform, type, status, MAX(received_at) AS received_at FROM results
              WHERE profile_id IN (${ids.map(() => '?').join(',')}) AND type != 'scan_account' GROUP BY profile_id, platform`).all(...ids)
         : [];
-      return { user: { username: user.username, role: user.role }, now: now(), types, last_results: lastResults, fb_features: contract.FB_FEATURES || [], profiles, launchers, tasks, results };
+      return { user: { username: user.username, role: user.role }, now: now(), types, last_results: lastResults, fb_features: contract.FB_FEATURES || [], profiles, launchers, tasks, results, batches,
+        levels: Object.fromEntries(Object.entries(LEVELS).map(([k, v]) => [k, v.label])) };
     },
     approve(user, body) {
       const profile = ownedProfile(user, body.id);
@@ -504,6 +565,84 @@ function createHub(options = {}) {
       }
       q("UPDATE profiles SET status = 'approved', owner_id = ?, name = ?, conflict_at = NULL WHERE id = ?").run(user.id, name, profile.id);
       return { ok: true };
+    },
+    // Nhóm (nhãn) của profile — dùng để giao việc theo nhóm.
+    setTags(user, body) {
+      const profile = ownedProfile(user, body.id);
+      const tags = [...new Set((Array.isArray(body.tags) ? body.tags : []).map(t => String(t).trim().slice(0, 30)).filter(Boolean))].slice(0, 10);
+      q('UPDATE profiles SET tags_json = ? WHERE id = ?').run(JSON.stringify(tags), profile.id);
+      return { ok: true, tags };
+    },
+    /* Giao nhanh: chỉ cần "làm gì" + "cho ai" + "khi nào". Hub tự suy ra nền tảng
+     * từ các nick mỗi profile đang có.
+     *   intent: 'nurture' | 'scan'
+     *   target: {all:true} | {tag:'…'} | {profile_ids:[…]}
+     *   level:  'light' | 'medium' | 'strong'  (cho nurture)
+     *   platforms: tuỳ chọn, thu hẹp nền tảng
+     *   run_at, repeat:'daily', jitter_minutes: như createTask
+     */
+    dispatch(user, body) {
+      const intent = String(body.intent || '');
+      if (!['nurture', 'scan'].includes(intent)) throw new HttpError(400, 'Chưa hỗ trợ loại việc này trong Giao nhanh.');
+      const target = body.target && typeof body.target === 'object' ? body.target : { all: true };
+      let profiles = q("SELECT * FROM profiles WHERE owner_id = ? AND status = 'approved' ORDER BY created_at").all(user.id);
+      let who = 'tất cả profile';
+      if (Array.isArray(target.profile_ids)) {
+        const wanted = new Set(target.profile_ids.map(String));
+        profiles = profiles.filter(p => wanted.has(p.id));
+        who = profiles.length + ' profile đã chọn';
+      } else if (target.tag) {
+        profiles = profiles.filter(p => profileTags(p).includes(String(target.tag)));
+        who = 'nhóm "' + String(target.tag) + '"';
+      }
+      if (!profiles.length) throw new HttpError(400, 'Không có profile nào đã duyệt khớp với lựa chọn.');
+      const only = Array.isArray(body.platforms) && body.platforms.length ? new Set(body.platforms.map(String)) : null;
+      const level = LEVELS[body.level] ? body.level : 'medium';
+      const plan = [];
+      const skipped = [];
+      for (const p of profiles) {
+        let platforms;
+        if (intent === 'scan') platforms = Object.keys(types).filter(pl => types[pl].includes('scan_account'));
+        else platforms = nickPlatforms(p).filter(pl => pl === 'facebook' ? Boolean(p.fb_available) : (types[pl] || []).includes('nurture'));
+        if (only) platforms = platforms.filter(pl => only.has(pl));
+        if (!platforms.length) { skipped.push(p.name || p.id); continue; }
+        for (const platform of platforms) {
+          plan.push({ profile: p, payload: validatePayload(intent === 'scan' ? { platform, type: 'scan_account' } : nurturePayload(platform, level)) });
+        }
+      }
+      if (!plan.length) {
+        throw new HttpError(400, intent === 'nurture'
+          ? 'Chưa profile nào có nick để nuôi. Hãy quét nick trước (Giao nhanh → Quét).'
+          : 'Không có việc nào để giao.');
+      }
+      const runAt = Number(body.run_at) > 0 ? Number(body.run_at) : now();
+      const repeat = body.repeat === 'daily' ? 'daily' : null;
+      const jitterMs = Math.max(0, Number(body.jitter_minutes) || 0) * 60 * 1000;
+      const batchId = rid('b_', 8);
+      const label = (intent === 'scan' ? 'Quét nick' : 'Nuôi (' + LEVELS[level].label + ')') + ' · ' + who + (repeat ? ' · hằng ngày' : '');
+      q('INSERT INTO batches (id, owner_id, intent, label, params_json, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(batchId, user.id, intent, label, JSON.stringify({ level: intent === 'nurture' ? level : null, repeat, jitter_minutes: jitterMs / 60000, run_at: runAt, platforms: only ? [...only] : null }), now());
+      for (const item of plan) insertTask(user.id, item.profile.id, item.payload, runAt, repeat, jitterMs, batchId);
+      return { ok: true, batch_id: batchId, tasks: plan.length, profiles: new Set(plan.map(i => i.profile.id)).size, skipped };
+    },
+    // Huỷ mọi việc chưa giao của một lần giao (kể cả lần lặp kế tiếp).
+    cancelBatch(user, body) {
+      const batch = q('SELECT * FROM batches WHERE id = ? AND owner_id = ?').get(String(body.id || ''), user.id);
+      if (!batch) throw new HttpError(404, 'Không tìm thấy lần giao.');
+      const res = q("UPDATE tasks SET status = 'cancelled', finished_at = ? WHERE batch_id = ? AND status = 'queued'").run(now(), batch.id);
+      return { ok: true, cancelled: Number(res.changes) };
+    },
+    // Giao lại những việc hỏng / không chắc của một lần giao (việc mới, chạy ngay).
+    retryBatch(user, body) {
+      const batch = q('SELECT * FROM batches WHERE id = ? AND owner_id = ?').get(String(body.id || ''), user.id);
+      if (!batch) throw new HttpError(404, 'Không tìm thấy lần giao.');
+      const latest = new Map();
+      for (const t of q('SELECT * FROM tasks WHERE batch_id = ? ORDER BY created_at').all(batch.id)) {
+        latest.set(t.profile_id + '|' + parseJson(t.payload_json, {}).platform, t);
+      }
+      const bad = [...latest.values()].filter(t => t.status === 'failed' || (body.include_uncertain && t.status === 'uncertain'));
+      for (const t of bad) insertTask(user.id, t.profile_id, parseJson(t.payload_json, {}), now(), null, 0, batch.id);
+      return { ok: true, retried: bad.length };
     },
     rename(user, body) {
       const profile = ownedProfile(user, body.id);
