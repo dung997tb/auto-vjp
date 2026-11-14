@@ -50,6 +50,8 @@
       el('remoteName').textContent = r.name ? '— tên trên máy chủ: ' + r.name : '';
       el('remoteBadge').textContent = STATUS_TEXT[r.status] || r.status;
       el('remoteAccept').checked = Boolean(r.accept);
+      el('remoteAutoScan').checked = r.autoScan !== false;
+      el('remoteAutoScan').disabled = r.status === 'off';
       if (document.activeElement !== urlInput) urlInput.value = r.url || '';
       var connected = r.status !== 'off';
       el('remoteSync').disabled = !connected;
@@ -90,6 +92,9 @@
     el('remoteSync').addEventListener('click', function () { act({ action: 'autovjp.remoteSyncNow' }); });
     el('remoteAccept').addEventListener('change', function () {
       act({ action: 'autovjp.remoteSetAccept', accept: el('remoteAccept').checked });
+    });
+    el('remoteAutoScan').addEventListener('change', function () {
+      act({ action: 'autovjp.remoteSetAutoScan', enabled: el('remoteAutoScan').checked });
     });
     el('remoteDisconnect').addEventListener('click', function () {
       act({ action: 'autovjp.remoteDisconnect' }, 'Ngắt kết nối máy chủ? Profile sẽ ngừng nhận việc từ xa và ngừng gửi kết quả. Việc đang trong hàng đợi vẫn chạy.');

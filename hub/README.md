@@ -41,6 +41,16 @@ Nếu đặt sau reverse proxy đang có ở một đường dẫn con (ví dụ
 
 Muốn khỏi nhập địa chỉ trên từng profile: điền `DEFAULT_HUB_URL` ở đầu `modules/kernel/remote.js` rồi phát hành bản extension đó.
 
+## Nick
+
+Mục **Nick** liệt kê mọi nick trên các profile: nền tảng, tên và username, thuộc profile nào, số người theo dõi, lần quét cuối (đánh dấu "cũ" nếu quá 3 ngày) và kết quả việc gần nhất của profile trên nền tảng đó. Lọc theo nền tảng hoặc tìm theo tên.
+
+- Profile tự quét khi vừa được duyệt (đủ 5 nền tảng, mỗi lượt đồng bộ một nền tảng, chỉ khi rảnh). Sau đó nền tảng đã có nick được quét lại mỗi ngày, nền tảng chưa có nick được thử lại mỗi tuần. Tắt được ở thẻ Kết nối máy chủ trong extension.
+- Nút **Quét nick** trên thẻ profile giao ngay 5 việc quét.
+- Nick và Page Facebook lấy từ những gì lõi Facebook đang nhớ: tên nick cá nhân (có sau khi chạy một tính năng Facebook) và danh sách Page đã quét trong popup. Chưa có số người theo dõi và chưa tự quét lại.
+- Nick đã đăng xuất hoặc bị khoá không tự biến mất khỏi danh sách; cột "Quét lúc" cho biết dữ liệu cũ tới đâu.
+- "Việc gần nhất" tính theo profile và nền tảng. Nếu một profile đăng nhập nhiều nick cùng nền tảng, các nick đó hiện chung một kết quả.
+
 ## Giao việc
 
 Mục **Việc** có form theo từng loại, không phải gõ JSON:
@@ -86,7 +96,7 @@ Mọi lệnh là `POST` với JSON. Sau khi báo danh, extension gửi kèm `Aut
 | Đường dẫn | Gửi | Nhận |
 |---|---|---|
 | `/api/agent/register` | `profile_id`, `version`, `accounts` | `status: "pending"`, `token` (chỉ trả một lần) |
-| `/api/agent/sync` | `profile_id`, `version`, `busy`, `accept`, `capacity`, `nonce`, `accounts` | `status`, `name`, `nonce`, `tasks: [{id, payload}]` |
+| `/api/agent/sync` | `profile_id`, `version`, `busy`, `accept`, `capacity`, `nonce`, `accounts` (mỗi mục: `platform`, `kind`, `username`, `name`, `followers`, `scanned_at`) | `status`, `name`, `nonce`, `tasks: [{id, payload}]` |
 | `/api/agent/results` | `profile_id`, `results: [receipt]` | `accepted: [receipt_id]` |
 
 - `sync` chỉ trả việc khi profile đã được duyệt, `accept` là true và `capacity` lớn hơn 0. Việc trả về chuyển sang trạng thái "đã giao".

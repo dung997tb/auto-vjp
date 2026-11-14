@@ -198,3 +198,15 @@ test('templates: lấy từ lịch đã tạo trong popup (kể cả bước c�
     { feature: 'share', label: 'Share tối', config: { groups: ['g2'] } }
   ]);
 });
+
+test('identity: nick cá nhân + Page mà lõi đang nhớ', async () => {
+  assert.deepEqual(await fbtask.identity(), []);
+  await chrome.storage.local.set({ personalActorName: ' Nguyễn Văn A ', managedPages: [
+    { name: 'Shop Áo', url: 'https://www.facebook.com/profile.php?id=1000123' },
+    { name: 'Tiệm Bánh', url: 'https://www.facebook.com/tiembanh/' }, { name: '' }] });
+  assert.deepEqual(await fbtask.identity(), [
+    { platform: 'facebook', kind: 'nick', name: 'Nguyễn Văn A', username: '' },
+    { platform: 'facebook', kind: 'page', name: 'Shop Áo', username: '1000123' },
+    { platform: 'facebook', kind: 'page', name: 'Tiệm Bánh', username: 'tiembanh' }
+  ]);
+});

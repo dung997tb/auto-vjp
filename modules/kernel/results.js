@@ -511,6 +511,8 @@
           return sendResponse({ success: true, remote: await globalThis.AVJP.remote.configure(message.url) });
         case 'autovjp.remoteSetAccept':
           return sendResponse({ success: true, remote: await globalThis.AVJP.remote.setAccept(message.accept) });
+        case 'autovjp.remoteSetAutoScan':
+          return sendResponse({ success: true, remote: await globalThis.AVJP.remote.setAutoScan(message.enabled) });
         case 'autovjp.remoteDisconnect':
           return sendResponse({ success: true, remote: await globalThis.AVJP.remote.disconnect() });
         case 'autovjp.remoteReRegister':

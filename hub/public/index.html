@@ -22,6 +22,7 @@
     <strong>Auto vjp Hub</strong>
     <nav id="tabs">
       <button data-tab="profiles" class="active">Profile <span id="pendingCount" class="count" hidden></span></button>
+      <button data-tab="nicks">Nick</button>
       <button data-tab="tasks">Việc</button>
       <button data-tab="launchers">Máy chạy</button>
       <button data-tab="results">Kết quả</button>
@@ -40,6 +41,21 @@
       <h2>Profile của bạn</h2>
       <p class="muted" id="profilesEmpty">Chưa có profile nào được duyệt.</p>
       <div id="profileList" class="grid"></div>
+    </section>
+
+    <section data-view="nicks" hidden>
+      <h2>Nick trên các profile</h2>
+      <p class="muted">Danh sách lấy từ lần quét gần nhất của từng profile. Profile tự quét khi mới được duyệt và quét lại định kỳ; bấm "Quét nick" trên thẻ profile để quét ngay.</p>
+      <div class="row">
+        <label>Nền tảng <select id="nickPlatform"></select></label>
+        <label>Tìm <input id="nickSearch" type="search" placeholder="Tên nick, username hoặc tên profile…"></label>
+      </div>
+      <p id="nickSummary" class="accounts" style="margin-top:12px"></p>
+      <p class="muted" id="nicksEmpty">Chưa có nick nào. Duyệt profile và chờ lần quét đầu tiên.</p>
+      <div class="table-wrap"><table id="nickTable" hidden>
+        <thead><tr><th>Nền tảng</th><th>Nick</th><th>Loại</th><th>Profile</th><th>Người theo dõi</th><th>Quét lúc</th><th>Việc gần nhất</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
     </section>
 
     <section data-view="tasks" hidden>

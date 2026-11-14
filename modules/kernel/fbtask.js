@@ -227,5 +227,27 @@
     return out;
   }
 
-  globalThis.AVJP.fbtask = { available, validate, start, tick, stop, templates };
+  // (2.16.0) Nick + Page Facebook mà lõi đang nhớ: tên nick cá nhân lõi ghi lại
+  // khi chạy tính năng (personalActorName) và danh sách Page đã quét trong popup
+  // (managedPages). Chỉ đọc; chưa có thì trả rỗng.
+  async function identity() {
+    const out = [];
+    try {
+      const s = await chrome.storage.local.get(['personalActorName', 'managedPages']);
+      const nick = String(s.personalActorName || '').trim();
+      if (nick) out.push({ platform: 'facebook', kind: 'nick', name: nick.slice(0, 80), username: '' });
+      for (const page of (Array.isArray(s.managedPages) ? s.managedPages : []).slice(0, 40)) {
+        const name = String(page?.name || '').trim();
+        if (!name) continue;
+        let ref = '';
+        try { const u = new URL(String(page.url || '')); ref = u.searchParams.get('id') || u.pathname.replace(/^\/+|\/+$/g, ''); } catch (_) { ref = String(page?.id || ''); }
+        out.push({ platform: 'facebook', kind: 'page', name: name.slice(0, 80), username: ref.slice(0, 80) });
+      }
+    } catch (err) {
+      console.debug('[Auto vjp][fbtask] không đọc được nick/Page Facebook:', err);
+    }
+    return out;
+  }
+
+  globalThis.AVJP.fbtask = { available, validate, start, tick, stop, templates, identity };
 })();

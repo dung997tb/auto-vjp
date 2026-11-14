@@ -247,10 +247,14 @@ function createHub(options = {}) {
     if (profile.status === 'revoked') throw new HttpError(403, 'Profile đã bị thu hồi quyền.');
     return profile;
   }
-  const cleanAccounts = list => JSON.stringify((Array.isArray(list) ? list : []).slice(0, 60).map(a => ({
+  const numOrNull = v => (v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null);
+  const cleanAccounts = list => JSON.stringify((Array.isArray(list) ? list : []).slice(0, 100).map(a => ({
     platform: String((a && a.platform) || '').slice(0, 30),
+    kind: a && a.kind === 'page' ? 'page' : 'nick',
     username: String((a && a.username) || '').slice(0, 80),
-    name: String((a && a.name) || '').slice(0, 80)
+    name: String((a && a.name) || '').slice(0, 80),
+    followers: numOrNull(a && a.followers),
+    scanned_at: numOrNull(a && a.scanned_at)
   })));
 
   const agent = {
@@ -476,7 +480,12 @@ function createHub(options = {}) {
         ? q(`SELECT receipt_id, profile_id, task_id, origin, platform, type, status, message, received_at FROM results
              WHERE profile_id IN (${ids.map(() => '?').join(',')}) ORDER BY received_at DESC LIMIT 100`).all(...ids)
         : [];
-      return { user: { username: user.username, role: user.role }, now: now(), types, fb_features: contract.FB_FEATURES || [], profiles, launchers, tasks, results };
+      // Kết quả gần nhất theo (profile, nền tảng) — cho bảng Nick.
+      const lastResults = ids.length
+        ? q(`SELECT profile_id, platform, type, status, MAX(received_at) AS received_at FROM results
+             WHERE profile_id IN (${ids.map(() => '?').join(',')}) AND type != 'scan_account' GROUP BY profile_id, platform`).all(...ids)
+        : [];
+      return { user: { username: user.username, role: user.role }, now: now(), types, last_results: lastResults, fb_features: contract.FB_FEATURES || [], profiles, launchers, tasks, results };
     },
     approve(user, body) {
       const profile = ownedProfile(user, body.id);
@@ -552,6 +561,14 @@ function createHub(options = {}) {
       q('DELETE FROM results WHERE profile_id = ?').run(profile.id);
       q('DELETE FROM profiles WHERE id = ?').run(profile.id);
       return { ok: true };
+    },
+    // Giao việc "Quét tài khoản" cho mọi nền tảng của một profile.
+    scanProfile(user, body) {
+      const profile = ownedProfile(user, body.id);
+      if (profile.status !== 'approved') throw new HttpError(400, 'Profile chưa được duyệt.');
+      const created = Object.keys(types).filter(p => types[p].includes('scan_account'))
+        .map(platform => insertTask(user.id, profile.id, { platform, type: 'scan_account' }, now(), null));
+      return { ok: true, ids: created };
     },
     // Giao một việc cho một hoặc nhiều profile (profile_ids). Kiểm tra hết rồi
     // mới ghi: sai một profile thì không tạo việc nào.

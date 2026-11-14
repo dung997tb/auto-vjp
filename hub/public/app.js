@@ -71,7 +71,8 @@
   function accountList(accounts) {
     if (!accounts || !accounts.length) return el('p', { class: 'muted', text: 'Chưa quét được tài khoản nào trong profile này.' });
     return el('ul', { class: 'accounts' }, accounts.map(function (a) {
-      return el('li', { text: a.platform + ': ' + (a.username || a.name || '?') });
+      var who = a.name && a.username && a.name !== a.username ? a.name + ' (@' + a.username + ')' : (a.name || a.username || '?');
+      return el('li', { text: (PLATFORM_LABEL[a.platform] || a.platform) + (a.kind === 'page' ? ' Page' : '') + ': ' + who + (a.followers !== null && a.followers !== undefined ? ' · ' + fmtCount(a.followers) : '') });
     }));
   }
   function pendingCard(p, approved) {
@@ -108,6 +109,9 @@
       accountList(p.accounts),
       p.status === 'approved' ? gemControls(p) : null,
       el('div', { class: 'actions' }, [
+        p.status === 'approved' ? el('button', { text: 'Quét nick', onclick: function () {
+          act('scanProfile', { id: p.id }, 'Đã giao việc quét nick cho "' + (p.name || p.id) + '". Kết quả hiện sau khi profile chạy xong.');
+        } }) : null,
         el('button', { text: 'Đổi tên', onclick: function () {
           var name = prompt('Tên mới cho profile:', p.name || '');
           if (name) act('rename', { id: p.id, name: name });
@@ -120,6 +124,61 @@
         } })
       ])
     ]);
+  }
+
+  /* ---------- Nick ---------- */
+  function fmtCount(n) {
+    if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace('.0', '').replace('.', ',') + ' tr';
+    if (n >= 1e4) return Math.round(n / 1e3) + 'K';
+    return String(n);
+  }
+  function allNicks() {
+    var rows = [];
+    state.profiles.forEach(function (p) {
+      if (p.status === 'pending') return;
+      (p.accounts || []).forEach(function (a) { rows.push({ profile: p, acc: a }); });
+    });
+    return rows;
+  }
+  function renderNicks() {
+    var rows = allNicks();
+    var platforms = [];
+    rows.forEach(function (r) { if (platforms.indexOf(r.acc.platform) < 0) platforms.push(r.acc.platform); });
+    platforms.sort();
+    fillSelect($('nickPlatform'), [['', 'Tất cả']].concat(platforms.map(function (p) { return [p, PLATFORM_LABEL[p] || p]; })), true);
+    $('nickSummary').replaceChildren.apply($('nickSummary'), platforms.map(function (p) {
+      var n = rows.filter(function (r) { return r.acc.platform === p; }).length;
+      return el('span', { text: (PLATFORM_LABEL[p] || p) + ': ' + n });
+    }));
+    var platform = $('nickPlatform').value;
+    var query = $('nickSearch').value.trim().toLowerCase();
+    var last = {};
+    (state.last_results || []).forEach(function (r) { last[r.profile_id + '|' + r.platform] = r; });
+    var shown = rows.filter(function (r) {
+      if (platform && r.acc.platform !== platform) return false;
+      if (!query) return true;
+      return [r.acc.name, r.acc.username, r.profile.name, r.profile.id].join(' ').toLowerCase().indexOf(query) >= 0;
+    });
+    shown.sort(function (a, b) {
+      return a.acc.platform.localeCompare(b.acc.platform) || String(a.profile.name).localeCompare(String(b.profile.name));
+    });
+    var tbody = $('nickTable').tBodies[0];
+    tbody.replaceChildren.apply(tbody, shown.map(function (r) {
+      var a = r.acc, lr = last[r.profile.id + '|' + a.platform];
+      var stale = a.scanned_at && state.now - a.scanned_at > 3 * 86400 * 1000;
+      return el('tr', {}, [
+        el('td', { text: PLATFORM_LABEL[a.platform] || a.platform }),
+        el('td', {}, [el('div', { text: a.name || a.username || '?' }), a.username && a.username !== a.name ? el('div', { class: 'muted', text: (a.kind === 'page' ? '' : '@') + a.username }) : null]),
+        el('td', { text: a.kind === 'page' ? 'Page' : 'Nick' }),
+        el('td', {}, [el('div', { text: r.profile.name || r.profile.id }),
+          el('div', { class: 'muted', text: r.profile.status === 'revoked' ? 'đã thu hồi' : r.profile.online ? 'đang mở' : 'đang tắt' })]),
+        el('td', { text: a.followers === null || a.followers === undefined ? '—' : fmtCount(a.followers) }),
+        el('td', { class: 'nowrap' }, [document.createTextNode(a.scanned_at ? ago(a.scanned_at) : '—'), stale ? el('span', { class: 'chip warn', text: 'cũ' }) : null]),
+        el('td', {}, lr ? [chip(lr.status), el('div', { class: 'muted', text: (TYPE_LABEL[lr.type] || lr.type) + ' · ' + ago(lr.received_at) })] : [document.createTextNode('—')])
+      ]);
+    }));
+    $('nickTable').hidden = !shown.length;
+    $('nicksEmpty').hidden = rows.length > 0;
   }
 
   /* ---------- GemLogin ---------- */
@@ -413,6 +472,7 @@
     if (!typingIn($('profileList'))) {
       $('profileList').replaceChildren.apply($('profileList'), mine.map(profileCard));
     }
+    renderNicks();
     var launchers = state.launchers || [];
     $('launchersEmpty').hidden = launchers.length > 0;
     $('launcherList').replaceChildren.apply($('launcherList'), launchers.map(launcherCard));
@@ -458,6 +518,8 @@
     document.querySelectorAll('#tabs button').forEach(function (b) { b.classList.toggle('active', b === tab); });
     document.querySelectorAll('main > section').forEach(function (s) { s.hidden = s.dataset.view !== tab.dataset.tab; });
   });
+  $('nickPlatform').addEventListener('change', renderNicks);
+  $('nickSearch').addEventListener('input', renderNicks);
   $('launcherForm').addEventListener('submit', function (event) {
     event.preventDefault();
     var form = event.target;

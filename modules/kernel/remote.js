@@ -97,22 +97,59 @@
     try { return chrome.runtime.getManifest().version; } catch (_) { return ''; }
   }
 
-  // Chỉ các trường nhận diện tài khoản — không gửi nguyên bản ghi quét.
+  // Chỉ các trường nhận diện + số liệu công khai của tài khoản — không gửi
+  // nguyên bản ghi quét. (2.16.0) thêm số người theo dõi, thời điểm quét, và
+  // nick/Page Facebook mà lõi đang nhớ.
   async function accountSummary() {
     const stored = (await S.get(S.KEYS.ACCOUNTS)) || {};
     const out = [];
+    const num = v => (Number.isFinite(Number(v)) && v !== null && v !== '' ? Number(v) : null);
     for (const platform of Object.keys(stored)) {
       for (const acc of (Array.isArray(stored[platform]) ? stored[platform] : [])) {
         if (!acc) continue;
         out.push({
           platform,
+          kind: 'nick',
           username: String(acc.social_username || acc.username || '').slice(0, 80),
-          name: String(acc.social_name || acc.display_name || acc.name || '').slice(0, 80)
+          name: String(acc.social_name || acc.display_name || acc.name || '').slice(0, 80),
+          followers: num(acc.followers_count ?? acc.subscribers_count ?? acc.friends_count),
+          scanned_at: num(acc.scanned_at)
         });
-        if (out.length >= 60) return out;
+        if (out.length >= 60) break;
       }
     }
-    return out;
+    if (globalThis.AVJP.fbtask && globalThis.AVJP.fbtask.identity) {
+      for (const acc of await globalThis.AVJP.fbtask.identity()) out.push({ ...acc, followers: null, scanned_at: null });
+    }
+    return out.slice(0, 100);
+  }
+
+  // (2.16.0) Tự quét nick: lần đầu quét mọi nền tảng; sau đó nền tảng đã có
+  // nick thì mỗi ngày một lần, chưa có thì mỗi tuần một lần. Chỉ khi profile
+  // đang rảnh, mỗi lượt đồng bộ tối đa một nền tảng.
+  const SCAN_DAILY_MS = 24 * 3600 * 1000;
+  const SCAN_WEEKLY_MS = 7 * SCAN_DAILY_MS;
+  async function maybeAutoScan(cfg) {
+    if (cfg.autoScan === false) return null;
+    if (await S.getRun()) return null;
+    if (((await S.get(S.KEYS.QUEUE)) || []).length) return null;
+    const contract = globalThis.AVJP.contract;
+    const stored = (await S.get(S.KEYS.ACCOUNTS)) || {};
+    const scanAt = cfg.scanAt && typeof cfg.scanAt === 'object' ? cfg.scanAt : {};
+    const t = Date.now();
+    for (const platform of contract.platformNames) {
+      if (platform === 'probe' || platform === 'facebook') continue;
+      let supported = false;
+      try { supported = Boolean(contract.PLATFORMS[platform].scripts({ type: 'scan_account' })); } catch (_) { supported = false; }
+      if (!supported) continue;
+      const known = Array.isArray(stored[platform]) && stored[platform].length > 0;
+      const last = Number(scanAt[platform] || 0);
+      if (last && t - last < (known ? SCAN_DAILY_MS : SCAN_WEEKLY_MS)) continue;
+      await patchCfg({ scanAt: { ...scanAt, [platform]: t } });
+      await globalThis.AVJP.source.enqueue({ platform, type: 'scan_account', auto_scan: true });
+      return platform;
+    }
+    return null;
   }
 
   async function call(cfg, path, body, token) {
@@ -283,6 +320,7 @@
       if (cfg.status === 'approved') {
         if (cfg.accept && Array.isArray(res.data.tasks) && res.data.tasks.length) await acceptTasks(res.data.tasks);
         await flushReports().catch(err => console.debug('[Auto vjp][remote] gửi báo cáo lỗi, sẽ thử lại:', err));
+        await maybeAutoScan(cfg).catch(err => console.debug('[Auto vjp][remote] tự quét nick lỗi:', err));
       }
       return cfg;
     } catch (err) {
@@ -307,6 +345,11 @@
   async function setAccept(accept) {
     await patchCfg({ accept: Boolean(accept) });
     sync({ force: true }).catch(() => {});
+    return state();
+  }
+
+  async function setAutoScan(enabled) {
+    await patchCfg({ autoScan: Boolean(enabled) });
     return state();
   }
 
@@ -337,6 +380,7 @@
       urlBuiltIn: Boolean(DEFAULT_HUB_URL) && !stored.url && !stored.disconnected,
       status: cfg.status,
       accept: Boolean(cfg.accept),
+      autoScan: cfg.autoScan !== false,
       name: cfg.name || '',
       lastSyncAt: cfg.lastSyncAt || null,
       lastError: cfg.lastError || '',
@@ -346,6 +390,6 @@
 
   globalThis.AVJP.remote = {
     ensureProfileId, sync, onReceipt, flushReports,
-    configure, setAccept, disconnect, reRegister, state, normalizeUrl
+    configure, setAccept, setAutoScan, disconnect, reRegister, state, normalizeUrl
   };
 })();

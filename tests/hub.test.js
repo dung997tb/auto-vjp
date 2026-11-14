@@ -65,8 +65,9 @@ test('extension chưa cấu hình máy chủ thì không gửi gì', async () =>
 
 let profileId;
 test('báo danh: profile tự sinh ID, hiện ở hub dạng chờ duyệt và chưa nhận việc', async () => {
-  await S.set({ [S.KEYS.ACCOUNTS]: { threads: [{ social_username: 'nick_a', social_name: 'Nick A', cookie: 'BI-MAT' }] } });
+  await S.set({ [S.KEYS.ACCOUNTS]: { threads: [{ social_username: 'nick_a', social_name: 'Nick A', followers_count: 1200, scanned_at: 1700000000000, cookie: 'BI-MAT' }] } });
   const st = await remote.configure(base + '/');
+  await remote.setAutoScan(false); // các test dưới kiểm luồng giao việc; tự quét có test riêng ở cuối
   profileId = st.profileId;
   assert.match(profileId, /^pf_[a-f0-9]{24}$/);
   assert.equal(st.status, 'pending');
@@ -75,7 +76,7 @@ test('báo danh: profile tự sinh ID, hiện ở hub dạng chờ duyệt và c
   assert.equal(profiles.length, 1);
   assert.equal(profiles[0].id, profileId);
   assert.equal(profiles[0].status, 'pending');
-  assert.deepEqual(profiles[0].accounts, [{ platform: 'threads', username: 'nick_a', name: 'Nick A' }]);
+  assert.deepEqual(profiles[0].accounts, [{ platform: 'threads', kind: 'nick', username: 'nick_a', name: 'Nick A', followers: 1200, scanned_at: 1700000000000 }]);
   assert.ok(!JSON.stringify(profiles).includes('BI-MAT'), 'chỉ gửi trường nhận diện tài khoản');
   assert.equal((await admin('createTask', { profile_id: profileId, payload: { platform: 'threads', type: 'post' } })).status, 400);
 });
@@ -271,4 +272,65 @@ test('giao một việc cho nhiều profile + lệch giờ ngẫu nhiên; lặp 
   const next = (await admin('state')).data.tasks.find(t => t.profile_id === ids[0] && t.status === 'queued');
   const nextBase = baseAt + 24 * 3600 * 1000;
   assert.ok(next.run_at >= nextBase && next.run_at <= nextBase + 30 * 60 * 1000);
+});
+
+test('tự quét nick: chỉ khi đã duyệt và rảnh; mỗi lượt một nền tảng; có nick thì 1 ngày, chưa có thì 1 tuần', async () => {
+  await settle(100);
+  mock.reset(); started.length = 0;
+  await S.set({ [S.KEYS.ACCOUNTS]: { threads: [{ social_username: 'nick_a' }] } });
+  const st = await remote.configure(base);
+  assert.equal(st.autoScan, true);
+  await remote.sync({ force: true });
+  await settle();
+  assert.equal(started.length, 0, 'chưa duyệt thì chưa quét');
+  await admin('approve', { id: st.profileId, name: 'Máy quét' });
+
+  const scanned = [];
+  for (let i = 0; i < 7; i++) {
+    await remote.sync({ force: true });
+    await settle();
+    const run = await S.getRun();
+    if (!run) break;
+    assert.equal(run.type, 'scan_account');
+    assert.equal(run.origin, 'local');
+    scanned.push(run.platform);
+    await outbox.deliver({ type: 'scan_account', taskId: run.task_id, platform: run.platform });
+    await settle(150);
+  }
+  assert.deepEqual(scanned.sort(), ['instagram', 'threads', 'tiktok', 'x', 'youtube'], 'lần đầu quét đủ 5 nền tảng, mỗi lượt một cái');
+
+  // tua 2 ngày: chỉ threads (đã có nick) tới hạn quét lại
+  const cfg = await S.get('autovjp.remote');
+  const twoDays = Date.now() - 2 * 24 * 3600 * 1000;
+  await S.set({ 'autovjp.remote': { ...cfg, scanAt: Object.fromEntries(Object.keys(cfg.scanAt).map(k => [k, twoDays])) } });
+  const again = [];
+  for (let i = 0; i < 3; i++) {
+    await remote.sync({ force: true });
+    await settle();
+    const run = await S.getRun();
+    if (!run) break;
+    again.push(run.platform);
+    await outbox.deliver({ type: 'scan_account', taskId: run.task_id, platform: run.platform });
+    await settle(150);
+  }
+  assert.deepEqual(again, ['threads']);
+
+  // tắt tự quét thì thôi
+  await remote.setAutoScan(false);
+  await S.set({ 'autovjp.remote': { ...(await S.get('autovjp.remote')), scanAt: {} } });
+  await remote.sync({ force: true });
+  await settle();
+  assert.equal(await S.getRun(), null);
+});
+
+test('hub: nút quét nick giao 5 việc quét; bảng Nick có kết quả gần nhất theo nền tảng (không tính việc quét)', async () => {
+  const st = await remote.state();
+  const res = await admin('scanProfile', { id: st.profileId });
+  assert.equal(res.status, 200);
+  assert.equal(res.data.ids.length, 5);
+  const state = (await admin('state')).data;
+  assert.ok(Array.isArray(state.last_results));
+  assert.ok(state.last_results.every(r => r.type !== 'scan_account'));
+  const mine = state.last_results.filter(r => r.platform === 'threads');
+  assert.ok(mine.length >= 1 && mine.every(r => r.received_at > 0 && r.status));
 });
