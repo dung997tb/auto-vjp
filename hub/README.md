@@ -41,6 +41,18 @@ Nếu đặt sau reverse proxy đang có ở một đường dẫn con (ví dụ
 
 Muốn khỏi nhập địa chỉ trên từng profile: điền `DEFAULT_HUB_URL` ở đầu `modules/kernel/remote.js` rồi phát hành bản extension đó.
 
+## Giao việc
+
+Mục **Việc** có form theo từng loại, không phải gõ JSON:
+
+- **Giao cho**: tích một hoặc nhiều profile; mỗi profile nhận một việc riêng.
+- **Nuôi nick**: số hành động, thời lượng, bật tắt thích / lưu / theo dõi / bình luận, tỉ lệ từng loại, mẫu bình luận dự phòng. Các trường đổi theo nền tảng (TikTok và YouTube có thêm số video xem, YouTube có từ khoá tìm video).
+- **Đăng bài, Story, bình luận, gắn link, tải video**: nội dung, ảnh hoặc video theo URL, URL bài đích, mẫu trả lời.
+- **Lệch ngẫu nhiên tối đa (phút)**: mỗi profile chạy trễ một khoảng ngẫu nhiên sau giờ hẹn, để các nick không bắt đầu cùng phút. Với việc lặp hằng ngày, mỗi ngày lệch một khoảng khác, tính từ giờ hẹn gốc.
+- **Trường khác (JSON, nâng cao)**: cho loại việc chưa có form (ví dụ `micro_action`) hoặc trường hiếm dùng.
+
+Ví dụ nuôi 20 nick Instagram mỗi ngày: chọn tất cả, nền tảng Instagram, loại Nuôi nick, chạy lúc 09:00, lệch tối đa 180 phút, tích lặp hằng ngày. Kết hợp với launcher GemLogin, mỗi nick tự được mở vào một lúc khác nhau trong khoảng 09:00–12:00, nuôi xong tự đóng.
+
 ## Giao việc Facebook
 
 Cấu hình của tính năng Facebook (danh sách nhóm, nội dung, giới hạn…) khá dài, nên hub không bắt gõ tay:
@@ -87,5 +99,6 @@ Mọi lệnh là `POST` với JSON. Sau khi báo danh, extension gửi kèm `Aut
 - Chưa giao được cả một chuỗi Facebook trong một việc; giao từng bước.
 - Tính năng Facebook dừng giữa chừng được ghi là "Không chắc" (có thể đã làm một phần). Kiểm tra trước khi bấm **Giao lại** để tránh đăng trùng.
 - Việc đã giao mà profile tắt giữa chừng sẽ nằm ở "Đã giao, đang làm"; hub không tự giao lại để tránh chạy trùng, bạn bấm **Giao lại** khi cần.
+- Chưa có giới hạn số phiên mỗi ngày theo nick ở phía hub; mỗi việc là một phiên, bạn tự quyết số việc giao.
 - Hub chưa có màn hình tạo thêm người dùng; dữ liệu đã gắn chủ sở hữu sẵn cho việc đó.
 - Giới hạn số lần đăng nhập sai dựa vào địa chỉ IP; sau reverse proxy cần proxy gửi đúng `X-Forwarded-For`.

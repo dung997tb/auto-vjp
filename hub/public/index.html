@@ -45,13 +45,22 @@
     <section data-view="tasks" hidden>
       <h2>Giao việc</h2>
       <form id="taskForm" class="card form">
+        <fieldset class="pick">
+          <legend>Giao cho</legend>
+          <div class="row">
+            <button type="button" id="pickAll">Chọn tất cả</button>
+            <button type="button" id="pickNone">Bỏ chọn</button>
+            <span class="muted" id="pickCount"></span>
+          </div>
+          <div id="profilePick" class="pick-list"></div>
+        </fieldset>
         <div class="row">
-          <label>Profile <select name="profile" required></select></label>
           <label>Nền tảng <select name="platform" required></select></label>
           <label>Loại việc <select name="type" required></select></label>
         </div>
         <div class="row">
           <label>Chạy lúc <input name="run_at" type="datetime-local"></label>
+          <label>Lệch ngẫu nhiên tối đa (phút) <input name="jitter" type="number" min="0" max="720" value="0"></label>
           <label class="check"><input name="daily" type="checkbox"> Lặp lại hằng ngày</label>
         </div>
         <div class="row" id="fbRow" hidden>
@@ -61,15 +70,15 @@
           <label>Tính năng Facebook <select name="fb_feature"></select></label>
         </div>
         <p class="muted" id="fbHint" hidden></p>
-        <label id="contentLabel">Nội dung (dùng cho đăng bài / bình luận)
-          <textarea name="content" rows="3" placeholder="Nội dung bài viết…"></textarea>
-        </label>
-        <label><span id="extraLabel">Trường khác (JSON, tuỳ loại việc — xem modules/MODULE-CONTRACT.md)</span>
-          <textarea name="extra" rows="3" spellcheck="false" placeholder='{"target_url": "https://…", "images": ["https://…"]}'></textarea>
-        </label>
+        <div id="typeFields" class="form"></div>
+        <p class="muted" id="typeHint" hidden></p>
+        <details id="extraBox">
+          <summary id="extraLabel">Trường khác (JSON, nâng cao)</summary>
+          <textarea name="extra" rows="3" spellcheck="false" placeholder='{"target_url": "https://…"}'></textarea>
+        </details>
         <div class="row">
           <button class="primary" type="submit">Giao việc</button>
-          <span class="muted">Để trống giờ chạy = làm ngay khi profile mở.</span>
+          <span class="muted">Để trống giờ chạy = làm ngay khi profile mở. Có lệch ngẫu nhiên thì mỗi profile, mỗi ngày chạy trễ một khoảng khác nhau.</span>
         </div>
       </form>
       <h2>Danh sách việc</h2>

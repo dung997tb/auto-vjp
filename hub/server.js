@@ -147,6 +147,12 @@ function createHub(options = {}) {
     db.exec('ALTER TABLE profiles ADD COLUMN auto_start INTEGER NOT NULL DEFAULT 1');
     db.exec('ALTER TABLE profiles ADD COLUMN launch_fail_at INTEGER');
   }
+  // (2.15.0) Lệch giờ ngẫu nhiên: base_at = giờ hẹn gốc, run_at = base_at + phần lệch.
+  const taskCols = new Set(q('PRAGMA table_info(tasks)').all().map(c => c.name));
+  if (!taskCols.has('base_at')) {
+    db.exec('ALTER TABLE tasks ADD COLUMN base_at INTEGER');
+    db.exec('ALTER TABLE tasks ADD COLUMN jitter_ms INTEGER NOT NULL DEFAULT 0');
+  }
   db.exec(`CREATE TABLE IF NOT EXISTS launchers (
     id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, name TEXT NOT NULL, token_hash TEXT NOT NULL,
     gem_profiles_json TEXT, running_json TEXT, gem_ok INTEGER NOT NULL DEFAULT 0, last_error TEXT,
@@ -221,10 +227,14 @@ function createHub(options = {}) {
     if (JSON.stringify(clean).length > 200 * 1000) throw new HttpError(400, 'payload quá lớn (tối đa 200KB)');
     return clean;
   }
-  function insertTask(ownerId, profileId, payload, runAt, repeat) {
+  // baseAt = giờ hẹn gốc; giờ chạy thật lệch ngẫu nhiên 0..jitterMs sau đó (mỗi
+  // việc, mỗi ngày một độ lệch riêng) để các profile không chạy đúng cùng phút.
+  function insertTask(ownerId, profileId, payload, baseAt, repeat, jitterMs = 0) {
     const id = rid('t_', 10);
-    q('INSERT INTO tasks (id, owner_id, profile_id, payload_json, run_at, repeat, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(id, ownerId, profileId, JSON.stringify(payload), runAt, repeat || null, 'queued', now());
+    const jitter = Math.max(0, Math.min(12 * 3600 * 1000, Number(jitterMs) || 0));
+    const runAt = baseAt + (jitter ? crypto.randomInt(0, jitter + 1) : 0);
+    q('INSERT INTO tasks (id, owner_id, profile_id, payload_json, run_at, base_at, jitter_ms, repeat, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(id, ownerId, profileId, JSON.stringify(payload), runAt, baseAt, jitter, repeat || null, 'queued', now());
     return id;
   }
 
@@ -285,9 +295,9 @@ function createHub(options = {}) {
           for (const task of due) {
             q("UPDATE tasks SET status = 'claimed', claimed_at = ? WHERE id = ?").run(now(), task.id);
             if (task.repeat === 'daily') {
-              let next = task.run_at + 24 * 3600 * 1000;
+              let next = (task.base_at || task.run_at) + 24 * 3600 * 1000;
               while (next <= now()) next += 24 * 3600 * 1000; // profile tắt nhiều ngày: không dồn việc bù
-              insertTask(task.owner_id, task.profile_id, parseJson(task.payload_json, {}), next, 'daily');
+              insertTask(task.owner_id, task.profile_id, parseJson(task.payload_json, {}), next, 'daily', task.jitter_ms);
             }
             tasks.push({ id: task.id, payload: parseJson(task.payload_json, {}) });
           }
@@ -543,13 +553,21 @@ function createHub(options = {}) {
       q('DELETE FROM profiles WHERE id = ?').run(profile.id);
       return { ok: true };
     },
+    // Giao một việc cho một hoặc nhiều profile (profile_ids). Kiểm tra hết rồi
+    // mới ghi: sai một profile thì không tạo việc nào.
     createTask(user, body) {
-      const profile = ownedProfile(user, body.profile_id);
-      if (profile.status !== 'approved') throw new HttpError(400, 'Profile chưa được duyệt.');
+      const ids = Array.isArray(body.profile_ids) ? [...new Set(body.profile_ids.map(String))] : [String(body.profile_id || '')];
+      if (!ids.length) throw new HttpError(400, 'Chưa chọn profile nào.');
+      if (ids.length > 500) throw new HttpError(400, 'Tối đa 500 profile mỗi lần giao.');
+      const profiles = ids.map(id => ownedProfile(user, id));
+      const notReady = profiles.find(p => p.status !== 'approved');
+      if (notReady) throw new HttpError(400, `Profile "${notReady.name || notReady.id}" chưa được duyệt.`);
       const payload = validatePayload(body.payload);
       const runAt = Number(body.run_at) > 0 ? Number(body.run_at) : now();
       const repeat = body.repeat === 'daily' ? 'daily' : null;
-      return { ok: true, id: insertTask(user.id, profile.id, payload, runAt, repeat) };
+      const jitterMs = Math.max(0, Number(body.jitter_minutes) || 0) * 60 * 1000;
+      const created = profiles.map(p => insertTask(user.id, p.id, payload, runAt, repeat, jitterMs));
+      return { ok: true, id: created[0], ids: created };
     },
     cancelTask(user, body) {
       const task = ownedTask(user, body.id);

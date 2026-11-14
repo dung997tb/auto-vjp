@@ -242,3 +242,33 @@ test('Facebook: profile báo mẫu cấu hình; hub chỉ nhận tính năng h�
   const { tasks } = await agent('sync', { profile_id: id, capacity: 3 }, token);
   assert.deepEqual(tasks, [{ id: ok.data.id, payload: { platform: 'facebook', type: 'fb_feature', feature: 'groupPost', label: 'Đăng nhóm sáng', config: templates[0].config } }]);
 });
+
+test('giao một việc cho nhiều profile + lệch giờ ngẫu nhiên; lặp hằng ngày giữ giờ gốc', async () => {
+  const agent = (name, body, token) => fetch(`${base}/api/agent/${name}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify(body)
+  }).then(r => r.json());
+  const ids = ['c1', 'c2', 'c3'].map(x => 'pf_' + x.repeat(12));
+  const tokens = [];
+  for (const [i, id] of ids.entries()) {
+    tokens.push((await agent('register', { profile_id: id })).token);
+    if (i < 2) await admin('approve', { id, name: 'Nuôi ' + i });
+  }
+  const payload = { platform: 'tiktok', type: 'nurture', watch_count: 5, like_enabled: true, max_minutes: 10 };
+  const baseAt = Date.now() - 60 * 60 * 1000;
+  // một profile chưa duyệt -> không tạo việc nào
+  assert.equal((await admin('createTask', { profile_ids: ids, payload, run_at: baseAt })).status, 400);
+  assert.equal((await admin('createTask', { profile_ids: [], payload })).status, 400);
+  const before = (await admin('state')).data.tasks.length;
+  const res = await admin('createTask', { profile_ids: [ids[0], ids[1], ids[0]], payload, run_at: baseAt, repeat: 'daily', jitter_minutes: 30 });
+  assert.equal(res.status, 200);
+  assert.equal(res.data.ids.length, 2, 'profile trùng chỉ tính một lần');
+  const tasks = (await admin('state')).data.tasks.filter(t => res.data.ids.includes(t.id));
+  assert.equal((await admin('state')).data.tasks.length, before + 2);
+  for (const t of tasks) assert.ok(t.run_at >= baseAt && t.run_at <= baseAt + 30 * 60 * 1000, 'lệch trong 0–30 phút sau giờ gốc');
+  // nhận việc -> lần kế tiếp tính từ GIỜ GỐC + 24h (không cộng dồn độ lệch), vẫn lệch trong 30 phút
+  const got = await agent('sync', { profile_id: ids[0], capacity: 3 }, tokens[0]);
+  assert.deepEqual(got.tasks.map(t => t.payload), [payload]);
+  const next = (await admin('state')).data.tasks.find(t => t.profile_id === ids[0] && t.status === 'queued');
+  const nextBase = baseAt + 24 * 3600 * 1000;
+  assert.ok(next.run_at >= nextBase && next.run_at <= nextBase + 30 * 60 * 1000);
+});
